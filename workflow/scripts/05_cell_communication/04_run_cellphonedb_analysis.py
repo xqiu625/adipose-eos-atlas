@@ -1,5 +1,4 @@
-! source activate /bigdata/godziklab/shared/Xinru/velocyto_env
-
+# Note: Activate conda environment before running: conda activate velocyto_env
 
 import pandas as pd
 import sys

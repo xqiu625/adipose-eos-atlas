@@ -1,6 +1,4 @@
-
-! source activate /bigdata/godziklab/shared/Xinru/cellrank_env 
-
+# Note: Activate conda environment before running: conda activate cellrank_env
 
 import numpy as np
 

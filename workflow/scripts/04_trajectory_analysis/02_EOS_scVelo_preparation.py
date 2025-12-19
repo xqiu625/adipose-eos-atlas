@@ -1,5 +1,4 @@
-
-! source activate /bigdata/godziklab/shared/Xinru/velocyto_env
+# Note: Activate conda environment before running: conda activate velocyto_env
 
 # Import necessary libraries
 
@@ -7,7 +6,7 @@ import anndata
 import scvelo as scv
 import pandas as pd
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import scanpy as sc
 
 # Define paths to .loom files for each sample
@@ -31,6 +30,16 @@ loom_files = {
     "RR1316_16": "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/velocyto/RR1316_16/sample_alignments_W87X0.loom",
     
 }
+
+# Function to replace prefix in cell ID
+def replace_prefix(cellid, new_prefix):
+    """Replace the sample identifier prefix in cell barcode with new prefix."""
+    # Cell IDs typically have format: SampleID_Barcode
+    # We want to replace the sample identifier with the new prefix
+    parts = cellid.split('_')
+    if len(parts) > 1:
+        return f"{new_prefix}_{parts[-1]}"
+    return f"{new_prefix}_{cellid}"
 
 # Function to load and modify the CellID format of an AnnData object
 def load_and_modif_loom(file_path):

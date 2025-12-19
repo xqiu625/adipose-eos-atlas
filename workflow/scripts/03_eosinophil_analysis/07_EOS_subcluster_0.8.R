@@ -1,93 +1,151 @@
-#!/usr/bin/env python
-"""
-step2_regulon_generate.py
-Prune GRNBoost2 adjacencies with cisTarget (new prune2df API) to get regulons.
-"""
+library(Seurat)
+library(dplyr)
+library(ggplot2)
 
-import argparse, logging, sys, time, pathlib
-import pandas as pd
-import scanpy as sc
-from pyscenic.prune import prune2df
-from pyscenic.utils import modules_from_adjacencies      # 关键
-try:
-    from pyscenic.rnkdb import FeatherRankingDatabase as RankingDatabase
-except ModuleNotFoundError:
-    from ctxcore.rnkdb import FeatherRankingDatabase as RankingDatabase  # type: ignore
+dpi = 300
 
-# 有些版本没有 load_motif_annotations，不用它，prune2df 只要文件名
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--input_adata",  required=True)
-    ap.add_argument("--input_adj",    required=True)
-    ap.add_argument("--motif_tbl",    required=True)
-    ap.add_argument("--rankings_db",  required=True, nargs="+")
-    ap.add_argument("--output",       required=True)
-    ap.add_argument("--threads",      type=int, default=8)
-    ap.add_argument("--rank_threshold", type=int,   default=1500)
-    ap.add_argument("--auc_threshold",  type=float, default=0.05)
-    ap.add_argument("--nes_threshold",  type=float, default=3.0)
-    ap.add_argument("--motif_similarity_fdr", type=float, default=0.001)
-    args = ap.parse_args()
+# Load seurat object
+seurat_file <- "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/Mouse_WT_KO_HFD_Infected_merged_clustered.rds"
+seurat_object <- readRDS(seurat_file)
 
-    out_path = pathlib.Path(args.output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+# 1. Subset the eosinophils
+eos_subset <- subset(seurat_object, cell_type == "Eosinophils")
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)]
-    )
+# 2. Normalize the data
+eos_subset <- NormalizeData(eos_subset)
 
-    # 1) load data
-    logging.info(f"Reading AnnData: {args.input_adata}")
-    adata = sc.read_h5ad(args.input_adata)
-    expr_df = pd.DataFrame(
-        data=adata.X.A if hasattr(adata.X, "A") else adata.X,
-        index=adata.obs_names,
-        columns=adata.var_names
-    )
+# 3. Find variable features
+eos_subset <- FindVariableFeatures(eos_subset, selection.method = "vst", nfeatures = 2000)
 
-    logging.info(f"Reading adjacencies: {args.input_adj}")
-    adj = pd.read_csv(args.input_adj)
+# 4. Scale the data
+all_genes <- rownames(eos_subset)
+eos_subset <- ScaleData(eos_subset, features = all_genes)
 
-    # 2) build modules
-    logging.info("Building modules from adjacencies …")
-    modules = list(modules_from_adjacencies(adj, expr_df))
+# 5. Perform PCA
+eos_subset <- RunPCA(eos_subset, features = VariableFeatures(object = eos_subset))
 
-    # 3) load ranking DBs (objects list)
-    logging.info("Loading ranking DBs …")
-    rnkdbs = [RankingDatabase(f, pathlib.Path(f).stem) for f in args.rankings_db]
+# 6. Determine the 'dimensionality' of the dataset
+plot <- ElbowPlot(eos_subset, ndims = 50)
+plot_file <- "/bigdata/nairlab/shared/XQiu/EOS_project/figures/ElbowPlot_EOS_0.8.png"
+ggsave(plot_file, plot = plot, width = 4, height = 4)
 
-    # 4) prune2df
-    logging.info("Running prune2df …")
-    t0 = time.time()
-    pruned = prune2df(
-        rnkdbs,
-        modules,
-        args.motif_tbl,
-        rank_threshold=args.rank_threshold,
-        auc_threshold=args.auc_threshold,
-        nes_threshold=args.nes_threshold,
-        motif_similarity_fdr=args.motif_similarity_fdr,
-        client_or_address="dask_multiprocessing",
-        num_workers=args.threads
-    )
-    logging.info(f"prune2df done in {(time.time()-t0)/60:.1f} min, rows={pruned.shape[0]}")
+# Based on the elbow plot, choose the number of dimensions for clustering
+n_dims <- 20
 
-    # 5) turn pruned df → regulon table
-    lc = {c.lower(): c for c in pruned.columns}
-    tf_col  = lc.get("tf") or lc.get("transcription_factor") or lc.get("regulator") or lc.get("motif")
-    tgt_col = lc.get("target") or lc.get("gene") or lc.get("target_gene") or lc.get("genes")
-    if tf_col is None or tgt_col is None:
-        raise ValueError(f"Cannot find TF/target columns in pruned_df: {pruned.columns.tolist()}")
+# 7. Cluster the cells
+eos_subset <- FindNeighbors(eos_subset, dims = 1:n_dims)
+eos_subset <- FindClusters(eos_subset, resolution = 0.8)
+# Resolution 0.8 yields 7 clusters (C0-C6)
 
-    rows = []
-    for tf, sub in pruned.groupby(tf_col):
-        tgts = sorted(set(sub[tgt_col].astype(str)))
-        rows.append({"regulon": f"{tf}({len(tgts)})", "tf": tf, "target_genes": ";".join(tgts)})
+# 8. Run UMAP for visualization
+eos_subset <- RunUMAP(eos_subset, dims = 1:n_dims)
 
-    pd.DataFrame(rows).sort_values("regulon").to_csv(out_path, index=False)
-    logging.info(f"[✓] regulons written → {out_path}")
+# Save the processed object
+eos_subset_file <- "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/eos_subset_cluster_res0.8.rds"
+saveRDS(eos_subset, file = eos_subset_file)
 
-if __name__ == "__main__":
-    main()
+# Define cluster colors for eosinophil subtypes
+eos_colors <- c(
+    "0" = "#6CA6CD",
+    "1" = "#E84A5F",
+    "2" = "#FF6F1F",
+    "3" = "#CBAACB",
+    "4" = "#B03A48",
+    "5" = "#5BA4A4",
+    "6" = "#2F3C7E"
+)
+
+# Create UMAP plot by cluster
+plot <- DimPlot(eos_subset, reduction = "umap", group.by = "seurat_clusters",
+                label = TRUE, repel = TRUE, cols = eos_colors)
+plot_output_file <- "/bigdata/nairlab/shared/XQiu/EOS_project/figures/EOS_UMAP_plot_by_cluster_0.8.png"
+ggsave(plot_output_file, plot = plot, width = 10, height = 8)
+
+# Create UMAP plot split by condition
+umap_plot <- DimPlot(eos_subset,
+                     reduction = "umap",
+                     split.by = "condition",
+                     ncol = 3,
+                     label = TRUE,
+                     label.size = 6,
+                     pt.size = 1.5,
+                     cols = eos_colors) +
+                     ggtitle("Eosinophil Subclusters by Condition") +
+                     theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+                           legend.text = element_text(size = 12),
+                           axis.title = element_text(size = 14))
+ggsave("/bigdata/nairlab/shared/XQiu/EOS_project/figures/Eos_UMAP_condition_0.8.pdf",
+       plot = umap_plot,
+       width = 12,
+       height = 8,
+       device = cairo_pdf)
+
+# Create UMAP plot split by Sex
+umap_plot <- DimPlot(eos_subset,
+                     reduction = "umap",
+                     split.by = "Sex",
+                     label = TRUE,
+                     label.size = 6,
+                     pt.size = 1.5,
+                     cols = eos_colors) +
+                     ggtitle("Eosinophil Subclusters by Sex") +
+                     theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+                           legend.text = element_text(size = 12),
+                           axis.title = element_text(size = 14))
+ggsave("/bigdata/nairlab/shared/XQiu/EOS_project/figures/Eos_UMAP_Sex_0.8.pdf",
+       plot = umap_plot,
+       width = 10,
+       height = 8,
+       device = cairo_pdf)
+
+# Create UMAP plot split by genotype
+umap_plot <- DimPlot(eos_subset,
+                     reduction = "umap",
+                     split.by = "genotype",
+                     label = TRUE,
+                     label.size = 6,
+                     pt.size = 1.5,
+                     cols = eos_colors) +
+                     ggtitle("Eosinophil Subclusters by Genotype") +
+                     theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+                           legend.text = element_text(size = 12),
+                           axis.title = element_text(size = 14))
+ggsave("/bigdata/nairlab/shared/XQiu/EOS_project/figures/Eos_UMAP_genotype_0.8.pdf",
+       plot = umap_plot,
+       width = 10,
+       height = 8,
+       device = cairo_pdf)
+
+# Create UMAP plot split by infection status
+umap_plot <- DimPlot(eos_subset,
+                     reduction = "umap",
+                     split.by = "infection_status",
+                     label = TRUE,
+                     label.size = 6,
+                     pt.size = 1.5,
+                     cols = eos_colors) +
+                     ggtitle("Eosinophil Subclusters by Infection Status") +
+                     theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+                           legend.text = element_text(size = 12),
+                           axis.title = element_text(size = 14))
+ggsave("/bigdata/nairlab/shared/XQiu/EOS_project/figures/Eos_UMAP_infection_status_0.8.pdf",
+       plot = umap_plot,
+       width = 10,
+       height = 8,
+       device = cairo_pdf)
+
+# 9. Find markers for each cluster
+eos_markers <- FindAllMarkers(eos_subset, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+# Save all markers
+write.csv(eos_markers, "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/eos_subset_cluster_res0.8_all_markers.csv", row.names = FALSE)
+
+# View top markers for each cluster
+top_markers <- eos_markers %>%
+    group_by(cluster) %>%
+    top_n(n = 5, wt = avg_log2FC)
+
+print(top_markers)
+
+# Save top markers
+write.csv(top_markers, "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/eos_subset_cluster_res0.8_top5_markers.csv", row.names = FALSE)

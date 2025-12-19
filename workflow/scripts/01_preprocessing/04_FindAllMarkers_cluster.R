@@ -1,7 +1,7 @@
 
 library(Seurat)
 library(ggplot2)
-libary(dplyr)
+library(dplyr)
 
 seurat_file <- "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/Mouse_WT_KO_HFD_Infected_merged_singleR_clustered.rds"
 seurat_object <- readRDS(file = seurat_file)

@@ -1,5 +1,5 @@
-! source activate /bigdata/godziklab/shared/Xinru/velocyto_env
-cd /bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/CellphoneDB
+# Note: Activate conda environment before running: conda activate velocyto_env
+# Working directory: /bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/CellphoneDB
 
 import pandas as pd
 import anndata as ad
