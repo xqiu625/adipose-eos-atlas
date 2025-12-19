@@ -1,10 +1,9 @@
-# Adipose Eosinophil and Macrophage Single-Cell Atlas
 
 Single-cell RNA sequencing analysis of eosinophils and macrophages in adipose tissue under metabolic stress conditions, with focus on RELMα function in obesity.
 
 ## Overview
 
-This project investigates immune cell heterogeneity and cell-cell communication in adipose tissue using scRNA-seq. We characterize eosinophil and macrophage subpopulations across different metabolic conditions and genotypes.
+
 
 ### Study Design
 
@@ -16,20 +15,6 @@ This project investigates immune cell heterogeneity and cell-cell communication 
 | Challenge | HFD + Infection |
 
 ## Repository Structure
-
-```
-├── scripts/
-│   ├── R01_initial_analysis/     # Core analysis pipeline
-│   │   ├── Eosinophil/           # Eosinophil-specific analyses
-│   │   ├── R/                    # Integration and preprocessing
-│   │   └── python/               # Python utilities
-│   ├── R05-R21/                  # Progressive analyses and figures
-│   └── ...
-├── data/
-│   └── public_datasets/          # Published reference datasets
-├── results/                      # Output files and figures
-└── Memo/                         # Analysis notes
-```
 
 ## Analysis Pipeline
 
@@ -46,11 +31,6 @@ This project investigates immune cell heterogeneity and cell-cell communication 
 - RNA velocity (scVelo)
 - Trajectory analysis (Monocle3, CellRank2)
 - Gene regulatory networks (pySCENIC)
-
-**Macrophages**
-- Subtype classification (LAM, ProInflam, PVM, Metabolic, etc.)
-- M1/M2 polarization scoring
-- Trajectory and regulon analysis
 
 ### 3. Cell-Cell Communication
 - CellChat pathway prediction
