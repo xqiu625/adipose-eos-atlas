@@ -1,0 +1,131 @@
+# =============================================================================
+# Snakemake Workflow: Adipose Eosinophil and Macrophage Single-Cell Atlas
+# =============================================================================
+# Ruggiero-Ruff and Qiu et al. 2025
+# "An intra-adipose network of eosinophil subtypes is regulated by sex and
+#  RELMα and drives macrophage polarization in obesity-induced inflammation"
+# =============================================================================
+
+configfile: "config/config.yaml"
+
+# Include rule modules
+include: "rules/preprocessing.smk"
+include: "rules/cell_annotation.smk"
+include: "rules/eosinophil_analysis.smk"
+include: "rules/trajectory_analysis.smk"
+include: "rules/cell_communication.smk"
+include: "rules/scenic_grn.smk"
+include: "rules/integration.smk"
+include: "rules/figure_generation.smk"
+
+# =============================================================================
+# Target Rules
+# =============================================================================
+
+rule all:
+    """
+    Main target rule - generates all final outputs
+    """
+    input:
+        # Preprocessing outputs
+        "results/01_preprocessing/seurat_processed.rds",
+        "results/01_preprocessing/umap_all_cells.pdf",
+        "results/01_preprocessing/cluster_markers.csv",
+
+        # Cell annotation
+        "results/02_annotation/cell_type_assignments.csv",
+        "results/02_annotation/umap_annotated.pdf",
+
+        # Eosinophil analysis
+        "results/03_eosinophil/subclusters_res0.8.rds",
+        "results/03_eosinophil/deg_results/",
+        "results/03_eosinophil/gsva_scores.csv",
+        "results/03_eosinophil/m1_m2_scores.csv",
+
+        # Trajectory analysis
+        "results/04_trajectory/scvelo_dynamics.h5ad",
+        "results/04_trajectory/cellrank_terminal_states.csv",
+        "results/04_trajectory/pseudotime_heatmap.pdf",
+
+        # Cell communication
+        "results/05_cellchat/cellchat_eos_mac.rds",
+        "results/05_cellchat/ccl_pathway_analysis.pdf",
+        "results/05_cellphonedb/significant_means.txt",
+
+        # SCENIC
+        "results/06_scenic/regulons.csv",
+        "results/06_scenic/grn_eosinophil.pdf",
+        "results/06_scenic/grn_macrophage.pdf",
+
+        # Integration
+        "results/07_integration/harmony_integrated.rds",
+        "results/07_integration/combined_umap.pdf",
+
+        # Publication figures
+        "results/08_figures/Figure2_eosinophil_atlas.pdf",
+        "results/08_figures/Figure3_trajectory.pdf",
+        "results/08_figures/Figure4_cellchat.pdf",
+        "results/08_figures/Figure5_scenic.pdf"
+
+
+rule preprocessing:
+    """Run preprocessing pipeline only"""
+    input:
+        "results/01_preprocessing/seurat_processed.rds",
+        "results/01_preprocessing/cluster_markers.csv"
+
+
+rule eosinophil:
+    """Run eosinophil-focused analysis"""
+    input:
+        "results/03_eosinophil/subclusters_res0.8.rds",
+        "results/03_eosinophil/deg_results/",
+        "results/03_eosinophil/gsva_scores.csv"
+
+
+rule trajectory:
+    """Run trajectory analysis"""
+    input:
+        "results/04_trajectory/scvelo_dynamics.h5ad",
+        "results/04_trajectory/cellrank_terminal_states.csv"
+
+
+rule communication:
+    """Run cell-cell communication analysis"""
+    input:
+        "results/05_cellchat/cellchat_eos_mac.rds",
+        "results/05_cellphonedb/significant_means.txt"
+
+
+rule scenic:
+    """Run SCENIC gene regulatory network analysis"""
+    input:
+        "results/06_scenic/regulons.csv",
+        "results/06_scenic/grn_eosinophil.pdf"
+
+
+rule figures:
+    """Generate publication figures"""
+    input:
+        "results/08_figures/Figure2_eosinophil_atlas.pdf",
+        "results/08_figures/Figure3_trajectory.pdf"
+
+
+# =============================================================================
+# Utility Rules
+# =============================================================================
+
+rule clean:
+    """Remove all generated files"""
+    shell:
+        "rm -rf results/"
+
+
+rule report:
+    """Generate analysis report"""
+    input:
+        rules.all.input
+    output:
+        "results/analysis_report.html"
+    script:
+        "scripts/generate_report.Rmd"
