@@ -1,6 +1,3 @@
-# Pseudobulk Analysis for Single-Cell RNA-seq Data
-# This script aggregates single-cell data to pseudobulk for proper statistical analysis
-
 library(Seurat)
 library(dplyr)
 library(Matrix)
@@ -11,136 +8,167 @@ library(tibble)
 # Load the seurat object
 seurat_object <- readRDS("/bigdata/nairlab/shared/XQiu/EOS_project/R07_20250702/03_cellchat_eos_mac/seurat_object_for_cellchat.rds")
 
-out_dir <- '/bigdata/nairlab/shared/XQiu/EOS_project/R07_20250702/04_PCA_MDSv2'
+out_dir <- '/bigdata/nairlab/shared/XQiu/EOS_project/R07_20250702/05_pseudobulk_cluster'
 dir.create(out_dir, recursive = TRUE)
 
-# Subset Seurat object to only include Macrophages
-mac_seurat <- subset(seurat_object, subset = cell_type == "Macrophages")
-eos_seurat <- subset(seurat_object, subset = cell_type == "Eosinophils")
-
-
-
-
-
 # ===============================================
-# PSEUDOBULK FUNCTION
+# PSEUDOBULK FUNCTION FOR PCA (averaged log-normalized expression)
 # ===============================================
 
-create_pseudobulk <- function(seurat_obj, group_by = "orig.ident") {
-  
-  # Get raw counts
-  counts <- GetAssayData(seurat_obj, assay = "RNA", slot = "counts")
-  
-  # Get metadata
+create_pseudobulk_for_pca <- function(seurat_obj, group_by = "orig.ident", assay = "RNA", slot = "data") {
+  expr <- GetAssayData(seurat_obj, assay = assay, slot = slot)
   meta <- seurat_obj@meta.data
   meta$group <- meta[[group_by]]
   
-  # Create pseudobulk by summing counts within each group
   pseudobulk_list <- list()
-  
-  for(group in unique(meta$group)) {
-    cells_in_group <- rownames(meta)[meta$group == group]
-    if(length(cells_in_group) > 1) {
-      pseudobulk_list[[group]] <- Matrix::rowSums(counts[, cells_in_group])
+  for (group in unique(meta$group)) {
+    cells <- rownames(meta)[meta$group == group]
+    if (length(cells) > 1) {
+      pseudobulk_list[[group]] <- Matrix::rowMeans(expr[, cells])
     } else {
-      pseudobulk_list[[group]] <- counts[, cells_in_group]
+      pseudobulk_list[[group]] <- expr[, cells]
     }
   }
   
-  # Combine into matrix
   pseudobulk_matrix <- do.call(cbind, pseudobulk_list)
-  
   return(pseudobulk_matrix)
 }
 
+# Helper function to create pseudobulk and metadata
+create_pseudobulk_and_metadata <- function(seurat_obj, output_prefix) {
+  cat("Creating pseudobulk matrix for", output_prefix, "...\n")
+  
+  # Create pseudobulk matrix
+  pseudobulk_matrix <- create_pseudobulk_for_pca(seurat_obj, group_by = "orig.ident")
+  
+  # Filter genes with zero variance
+  gene_vars <- apply(pseudobulk_matrix, 1, var)
+  pseudobulk_filtered <- pseudobulk_matrix[gene_vars > 0, ]
+  cat(output_prefix, ": Removed", sum(gene_vars == 0), "zero-variance genes\n")
+  
+  # Create sample metadata
+  sample_metadata <- seurat_obj@meta.data %>%
+    group_by(orig.ident) %>%
+    summarise(
+      genotype = first(genotype),
+      Sex = first(Sex),
+      condition = first(condition),
+      infection_status = first(infection_status),
+      n_cells = n(),
+      .groups = 'drop'
+    ) %>%
+    column_to_rownames("orig.ident")
+  
+  # Align metadata with pseudobulk columns
+  sample_metadata <- sample_metadata[colnames(pseudobulk_filtered), ]
+  
+  # Save files
+  saveRDS(pseudobulk_filtered, file.path(out_dir, paste0("pseudobulk_", output_prefix, ".rds")))
+  saveRDS(sample_metadata, file.path(out_dir, paste0("sample_metadata_", output_prefix, ".rds")))
+  
+  cat(output_prefix, "pseudobulk matrix dimensions:", dim(pseudobulk_filtered), "\n")
+  cat(output_prefix, "samples:", ncol(pseudobulk_filtered), "\n\n")
+  
+  return(list(pseudobulk = pseudobulk_filtered, metadata = sample_metadata))
+}
+
 # ===============================================
-# CREATE PSEUDOBULK FOR ALL CELL TYPES
+# 1. ALL CELLS - THREE CONDITIONS
 # ===============================================
 
-print("Creating overall pseudobulk...")
-pseudobulk_all <- create_pseudobulk(seurat_object, group_by = "orig.ident")
+# 1a. All cells - All samples (16 samples)
+all_cells_all <- create_pseudobulk_and_metadata(seurat_object, "all_cells_all_samples")
 
-# Create sample metadata
-sample_metadata <- seurat_object@meta.data %>%
-  group_by(orig.ident) %>%
-  summarise(
-    genotype = first(genotype),
-    Sex = first(Sex),
-    condition = first(condition),
-    infection_status = first(infection_status),
-    n_cells = n(),
-    .groups = 'drop'
-  ) %>%
-  column_to_rownames("orig.ident")
+# 1b. All cells - Not infected samples only
+seurat_not_infected <- subset(seurat_object, subset = infection_status == "Not_Infected")
+all_cells_not_infected <- create_pseudobulk_and_metadata(seurat_not_infected, "all_cells_not_infected")
 
-sample_metadata <- sample_metadata[colnames(pseudobulk_all), ]
-
-print(paste("Overall pseudobulk:", nrow(pseudobulk_all), "genes x", ncol(pseudobulk_all), "samples"))
+# 1c. All cells - Infected samples only
+seurat_infected <- subset(seurat_object, subset = infection_status == "Infected")
+all_cells_infected <- create_pseudobulk_and_metadata(seurat_infected, "all_cells_infected")
 
 # ===============================================
-# CREATE CELL TYPE-SPECIFIC PSEUDOBULK
+# 2. EOSINOPHILS - THREE CONDITIONS
 # ===============================================
 
-# Macrophages
-print("Creating macrophage pseudobulk...")
-mac_seurat <- subset(seurat_object, subset = cell_type == "Macrophages")
-pseudobulk_mac <- create_pseudobulk(mac_seurat, group_by = "orig.ident")
-
-mac_metadata <- mac_seurat@meta.data %>%
-  group_by(orig.ident) %>%
-  summarise(
-    genotype = first(genotype),
-    Sex = first(Sex),
-    infection_status = first(infection_status),
-    n_cells = n(),
-    .groups = 'drop'
-  ) %>%
-  column_to_rownames("orig.ident")
-
-mac_metadata <- mac_metadata[colnames(pseudobulk_mac), ]
-
-print(paste("Macrophage pseudobulk:", nrow(pseudobulk_mac), "genes x", ncol(pseudobulk_mac), "samples"))
-
-# Eosinophils
-print("Creating eosinophil pseudobulk...")
+# Subset to eosinophils
 eos_seurat <- subset(seurat_object, subset = cell_type == "Eosinophils")
-pseudobulk_eos <- create_pseudobulk(eos_seurat, group_by = "orig.ident")
 
-eos_metadata <- eos_seurat@meta.data %>%
-  group_by(orig.ident) %>%
-  summarise(
-    genotype = first(genotype),
-    Sex = first(Sex),
-    infection_status = first(infection_status),
-    n_cells = n(),
-    .groups = 'drop'
-  ) %>%
-  column_to_rownames("orig.ident")
+# 2a. Eosinophils - All samples
+eos_all <- create_pseudobulk_and_metadata(eos_seurat, "eosinophils_all_samples")
 
-eos_metadata <- eos_metadata[colnames(pseudobulk_eos), ]
+# 2b. Eosinophils - Not infected samples only
+eos_seurat_not_infected <- subset(eos_seurat, subset = infection_status == "Not_Infected")
+eos_not_infected <- create_pseudobulk_and_metadata(eos_seurat_not_infected, "eosinophils_not_infected")
 
-print(paste("Eosinophil pseudobulk:", nrow(pseudobulk_eos), "genes x", ncol(pseudobulk_eos), "samples"))
+# 2c. Eosinophils - Infected samples only
+eos_seurat_infected <- subset(eos_seurat, subset = infection_status == "Infected")
+eos_infected <- create_pseudobulk_and_metadata(eos_seurat_infected, "eosinophils_infected")
 
 # ===============================================
-# SAVE RESULTS
+# 3. MACROPHAGES - THREE CONDITIONS
 # ===============================================
 
-# Save all pseudobulk data
-saveRDS(pseudobulk_all, file.path(out_dir, "pseudobulk_all_celltypes.rds"))
-saveRDS(sample_metadata, file.path(out_dir, "sample_metadata_all.rds"))
+# Subset to macrophages
+mac_seurat <- subset(seurat_object, subset = cell_type == "Macrophages")
 
-saveRDS(pseudobulk_mac, file.path(out_dir, "pseudobulk_macrophages.rds"))
-saveRDS(mac_metadata, file.path(out_dir, "sample_metadata_macrophages.rds"))
+# 3a. Macrophages - All samples
+mac_all <- create_pseudobulk_and_metadata(mac_seurat, "macrophages_all_samples")
 
-saveRDS(pseudobulk_eos, file.path(out_dir, "pseudobulk_eosinophils.rds"))
-saveRDS(eos_metadata, file.path(out_dir, "sample_metadata_eosinophils.rds"))
+# 3b. Macrophages - Not infected samples only
+mac_seurat_not_infected <- subset(mac_seurat, subset = infection_status == "Not_Infected")
+mac_not_infected <- create_pseudobulk_and_metadata(mac_seurat_not_infected, "macrophages_not_infected")
 
-print("Pseudobulk analysis complete!")
-print(paste("Results saved in:", out_dir))
-print("Files created:")
-print("- pseudobulk_all_celltypes.rds")
-print("- sample_metadata_all.rds")
-print("- pseudobulk_macrophages.rds") 
-print("- sample_metadata_macrophages.rds")
-print("- pseudobulk_eosinophils.rds")
-print("- sample_metadata_eosinophils.rds")
+# 3c. Macrophages - Infected samples only
+mac_seurat_infected <- subset(mac_seurat, subset = infection_status == "Infected")
+mac_infected <- create_pseudobulk_and_metadata(mac_seurat_infected, "macrophages_infected")
+
+# ===============================================
+# SUMMARY
+# ===============================================
+
+cat("\n=== COMPREHENSIVE PSEUDOBULK SUMMARY ===\n")
+cat("Output directory:", out_dir, "\n\n")
+
+cat("1. ALL CELLS:\n")
+cat("   - All samples (16):", dim(all_cells_all$pseudobulk), "\n")
+cat("   - Not infected:", dim(all_cells_not_infected$pseudobulk), "\n")
+cat("   - Infected:", dim(all_cells_infected$pseudobulk), "\n\n")
+
+cat("2. EOSINOPHILS:\n")
+cat("   - All samples:", dim(eos_all$pseudobulk), "\n")
+cat("   - Not infected:", dim(eos_not_infected$pseudobulk), "\n")
+cat("   - Infected:", dim(eos_infected$pseudobulk), "\n\n")
+
+cat("3. MACROPHAGES:\n")
+cat("   - All samples:", dim(mac_all$pseudobulk), "\n")
+cat("   - Not infected:", dim(mac_not_infected$pseudobulk), "\n")
+cat("   - Infected:", dim(mac_infected$pseudobulk), "\n\n")
+
+cat("FILES CREATED:\n")
+files_created <- c(
+  "pseudobulk_all_cells_all_samples.rds",
+  "pseudobulk_all_cells_not_infected.rds", 
+  "pseudobulk_all_cells_infected.rds",
+  "pseudobulk_eosinophils_all_samples.rds",
+  "pseudobulk_eosinophils_not_infected.rds",
+  "pseudobulk_eosinophils_infected.rds",
+  "pseudobulk_macrophages_all_samples.rds",
+  "pseudobulk_macrophages_not_infected.rds",
+  "pseudobulk_macrophages_infected.rds",
+  "sample_metadata_all_cells_all_samples.rds",
+  "sample_metadata_all_cells_not_infected.rds",
+  "sample_metadata_all_cells_infected.rds",
+  "sample_metadata_eosinophils_all_samples.rds",
+  "sample_metadata_eosinophils_not_infected.rds",
+  "sample_metadata_eosinophils_infected.rds",
+  "sample_metadata_macrophages_all_samples.rds",
+  "sample_metadata_macrophages_not_infected.rds",
+  "sample_metadata_macrophages_infected.rds"
+)
+
+for (file in files_created) {
+  cat("   -", file, "\n")
+}
+
+cat("\nTotal files created:", length(files_created), "\n")

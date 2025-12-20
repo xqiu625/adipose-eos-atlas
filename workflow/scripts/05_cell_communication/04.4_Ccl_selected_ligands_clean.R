@@ -96,7 +96,8 @@ cat("Total interactions extracted:", nrow(all_interactions), "\n\n")
 cat("APPLYING FILTERS\n")
 cat("========================================\n\n")
 
-selected_ligands <- c("Ccl6", "Ccl9", "Ccl24", "Ccl2", "Ccl7", "Ccl8")
+# UPDATED: Removed Ccl8, reordered to CCL6, CCL9, CCL2, CCL7, CCL24
+selected_ligands <- c("Ccl6", "Ccl9", "Ccl2", "Ccl7", "Ccl24")
 
 cat("Selected ligands:", paste(selected_ligands, collapse=", "), "\n")
 cat("Original total interactions:", nrow(all_interactions), "\n")
@@ -288,7 +289,6 @@ if(ncol(sender_matrix) > 0 && nrow(sender_matrix) > 0) {
 
 cat("========================================\n")
 cat("HEATMAP 4: CCL Ligands Receivers\n")
-cat("(Custom column order to match senders heatmap)\n")
 cat("========================================\n\n")
 
 receiver_matrix <- ligand_cell_data %>%
@@ -305,31 +305,6 @@ if(length(existing_ligands) > 0) {
     receiver_matrix <- receiver_matrix[existing_ligands, , drop=FALSE]
 }
 
-# Define custom column order to match senders heatmap
-# Order: Eos C3, Eos C6, Eos C5, Eos C1, Eos C4, Eos C0, Eos C2, M1_Mac, M2_Functional, M2_Surface
-# Try multiple possible naming conventions for Mac subtypes
-custom_col_order <- c("Eos_C3", "Eos_C6", "Eos_C5", "Eos_C1", "Eos_C4", "Eos_C0", "Eos_C2",
-                      "M1_Mac", "M2_Functional", "M2_Surface")
-
-# Alternative names in case naming differs
-alt_names <- list(
-  "M1" = "M1_Mac",
-  "M1_Macrophages" = "M1_Mac"
-)
-
-# Filter to only include columns that exist in the data
-available_cols <- colnames(receiver_matrix)
-ordered_cols <- custom_col_order[custom_col_order %in% available_cols]
-
-# Add any remaining columns not in custom order (in case there are extras)
-remaining_cols <- setdiff(available_cols, ordered_cols)
-final_col_order <- c(ordered_cols, remaining_cols)
-
-# Reorder the matrix columns
-receiver_matrix <- receiver_matrix[, final_col_order, drop=FALSE]
-
-cat("Custom column order applied:\n")
-cat("  ", paste(final_col_order, collapse=", "), "\n\n")
 cat("Receiver heatmap dimensions:", nrow(receiver_matrix), "ligands x", ncol(receiver_matrix), "cell types\n")
 
 if(ncol(receiver_matrix) > 0 && nrow(receiver_matrix) > 0) {
@@ -340,9 +315,9 @@ if(ncol(receiver_matrix) > 0 && nrow(receiver_matrix) > 0) {
     pheatmap(receiver_matrix,
              color = colorRampPalette(c("white", "lightblue", "blue", "darkblue"))(100),
              cluster_rows = FALSE,
-             cluster_cols = FALSE,  # DISABLED clustering to preserve custom column order
+             cluster_cols = TRUE,
              scale = "none",
-             main = "CCL Ligand Receivers: Eos Subclusters and Mac Subtypes\n(Selected ligands, excluding other Mac, custom order)",
+             main = "CCL Ligand Receivers: Eos Subclusters and Mac Subtypes\n(Selected ligands, excluding other Mac)",
              fontsize = 10,
              fontsize_row = 10,
              fontsize_col = 9,
@@ -392,14 +367,15 @@ cat("  ", output_dir, "\n\n")
 
 cat("Filters applied:\n")
 cat("  - Excluded: other Mac cell types\n")
-cat("  - Selected ligands: CCL6, CCL9, CCL24, CCL2, CCL7, CCL8\n\n")
+cat("  - Selected ligands: CCL6, CCL9, CCL2, CCL7, CCL24 (CCL8 removed)\n")
+cat("  - Ligand order: CCL6 → CCL9 → CCL2 → CCL7 → CCL24\n\n")
 
 cat("Generated files:\n")
 cat("  HEATMAPS:\n")
 cat("    1. Heatmap1_Eos_to_Mac_selected_CCL.pdf\n")
 cat("    2. Heatmap2_Mac_to_Eos_selected_CCL.pdf\n")
 cat("    3. CCL_ligands_senders_heatmap_filtered.pdf\n")
-cat("    4. CCL_ligands_receivers_heatmap_filtered.pdf (CUSTOM ORDER)\n\n")
+cat("    4. CCL_ligands_receivers_heatmap_filtered.pdf\n\n")
 
 cat("  DATA MATRICES:\n")
 cat("    - Matrix1_Eos_to_Mac_selected_CCL.csv\n")
@@ -412,11 +388,7 @@ cat("    - CCL_selected_ligands_interactions.csv\n")
 cat("    - Summary_selected_CCL_ligands.csv\n\n")
 
 cat("========================================\n")
-cat("All 4 heatmaps show only the 6 selected CCL ligands\n")
+cat("All 4 heatmaps show only the 5 selected CCL ligands\n")
+cat("(CCL6, CCL9, CCL2, CCL7, CCL24) in the specified order\n")
 cat("and exclude all other Mac interactions!\n")
-cat("\n")
-cat("NOTE: CCL_ligands_receivers_heatmap_filtered.pdf now has\n")
-cat("custom x-axis order matching senders heatmap:\n")
-cat("Eos C3, Eos C6, Eos C5, Eos C1, Eos C4, Eos C0, Eos C2,\n")
-cat("M1, M2 Functional, M2 Surface\n")
 cat("========================================\n")
