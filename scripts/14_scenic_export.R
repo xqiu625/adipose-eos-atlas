@@ -20,7 +20,7 @@ suppressPackageStartupMessages({
   library(reticulate)
 })
 
-SCRIPTS <- dirname(sys.frame(1)$ofile)
+SCRIPTS <- dirname(sub("--file=", "", grep("--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]))
 source(file.path(SCRIPTS, "00_theme.R"))
 
 use_condaenv("/bigdata/godziklab/shared/Xinru/cellrank_env")

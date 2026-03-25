@@ -25,7 +25,7 @@ suppressPackageStartupMessages({
   library(Matrix)
 })
 
-SCRIPTS <- dirname(sys.frame(1)$ofile)
+SCRIPTS <- dirname(sub("--file=", "", grep("--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]))
 source(file.path(SCRIPTS, "00_theme.R"))
 
 BASE <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
