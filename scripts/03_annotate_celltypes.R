@@ -182,6 +182,66 @@ cluster_to_type <- setNames(cluster_assignments$celltype,
 sobj$celltype <- cluster_to_type[as.character(Idents(sobj))]
 sobj$broad_celltype <- broad_map[sobj$celltype]
 
+# ── Step 3b: Transfer previous round annotations by barcode matching ──────────
+cat("\n========================================\n")
+cat("Step 3b: Transfer previous round annotations\n")
+cat("========================================\n\n")
+
+prev_meta_file <- file.path(dirname(BASE), "dataset/processed_data/302025_metadata.csv")
+prev_uce_file  <- file.path(dirname(BASE), "dataset/processed_data/predicted_cell_types_metadata_mouseKidney.csv")
+
+# Previous manual annotations (Eosinophils, Macrophages)
+if (file.exists(prev_meta_file)) {
+  cat("Loading previous manual annotations:", prev_meta_file, "\n")
+  prev_meta <- read.csv(prev_meta_file, row.names = 1, stringsAsFactors = FALSE)
+
+  # Match barcodes — previous barcodes are condition_barcode (same format as ours)
+  shared_barcodes <- intersect(colnames(sobj), rownames(prev_meta))
+  cat(sprintf("  Shared barcodes: %d / %d (%.1f%%)\n",
+              length(shared_barcodes), ncol(sobj),
+              100 * length(shared_barcodes) / ncol(sobj)))
+
+  sobj@meta.data$prev_celltype <- NA_character_
+  if (length(shared_barcodes) > 0) {
+    sobj@meta.data[shared_barcodes, "prev_celltype"] <- prev_meta[shared_barcodes, "cell_type"]
+  }
+  cat("Previous cell type labels transferred:\n")
+  print(table(sobj$prev_celltype, useNA = "ifany"))
+} else {
+  cat("Previous metadata not found:", prev_meta_file, "\n")
+}
+
+# UCE predicted cell types (mouse kidney reference)
+if (file.exists(prev_uce_file)) {
+  cat("\nLoading UCE predictions:", prev_uce_file, "\n")
+  prev_uce <- read.csv(prev_uce_file, stringsAsFactors = FALSE)
+  uce_map <- setNames(prev_uce$predicted_group, prev_uce$cell_barcode)
+
+  shared_uce <- intersect(colnames(sobj), names(uce_map))
+  cat(sprintf("  Shared barcodes: %d / %d (%.1f%%)\n",
+              length(shared_uce), ncol(sobj),
+              100 * length(shared_uce) / ncol(sobj)))
+
+  sobj@meta.data$uce_celltype <- NA_character_
+  if (length(shared_uce) > 0) {
+    sobj@meta.data[shared_uce, "uce_celltype"] <- uce_map[shared_uce]
+  }
+  cat("UCE predicted cell types transferred:\n")
+  print(table(sobj$uce_celltype, useNA = "ifany"))
+} else {
+  cat("UCE predictions not found:", prev_uce_file, "\n")
+}
+
+# Cross-tabulate: new module-score annotation vs previous labels
+if ("prev_celltype" %in% colnames(sobj@meta.data)) {
+  cat("\nCross-tabulation: new annotation vs previous manual labels:\n")
+  print(table(New = sobj$celltype, Previous = sobj$prev_celltype, useNA = "no"))
+}
+if ("uce_celltype" %in% colnames(sobj@meta.data)) {
+  cat("\nCross-tabulation: new annotation vs UCE predictions:\n")
+  print(table(New = sobj$celltype, UCE = sobj$uce_celltype, useNA = "no"))
+}
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 cat("\n========================================\n")
 cat("Cell type summary\n")
