@@ -128,18 +128,11 @@ cat(sprintf("Combined matrix: %d genes x %d cells\n", nrow(all_counts), ncol(all
 # Create Seurat object
 sobj <- CreateSeuratObject(counts = all_counts, project = "adipose_atlas")
 
-# Assign orig.ident based on barcode prefix
-ident_vec <- sapply(strsplit(colnames(sobj), "_(?=[^_]+$)", perl = TRUE),
-                    function(x) {
-                      # Reconstruct condition from barcode prefix
-                      # Barcodes are: condition_originalbarcode
-                      paste(head(x, -1), collapse = "_")
-                    })
-# Actually, we named them condition_barcode, so extract condition part
-# The condition can have underscores, and the barcode is the last element after the last _
-# Since barcodes can contain dashes but not underscores, split on last underscore
+# Assign metadata directly via @meta.data to avoid Seurat v5 name-matching issues
+# Barcodes are: condition_originalbarcode (e.g. WT_Male_HFD_1_ACGTACGT-1)
+# Extract condition by removing barcode suffix after the last underscore
 ident_vec <- sub("_[^_]+$", "", colnames(sobj))
-sobj$orig.ident <- ident_vec
+sobj@meta.data$orig.ident <- ident_vec
 
 cat(sprintf("Seurat object: %d genes x %d cells\n", nrow(sobj), ncol(sobj)))
 
@@ -147,17 +140,17 @@ cat(sprintf("Seurat object: %d genes x %d cells\n", nrow(sobj), ncol(sobj)))
 cat("\nAdding metadata columns...\n")
 
 # Condition = orig.ident without trailing replicate number
-sobj$condition <- sub("_\\d+$", "", sobj$orig.ident)
+sobj@meta.data$condition <- sub("_\\d+$", "", ident_vec)
 
-# Parse genotype, sex, infection from orig.ident
-meta_parsed <- do.call(rbind, lapply(sobj$orig.ident, parse_metadata))
-sobj$genotype  <- meta_parsed$genotype
-sobj$sex       <- meta_parsed$sex
-sobj$infection <- meta_parsed$infection
+# Parse genotype, sex, infection from condition string
+meta_parsed <- do.call(rbind, lapply(ident_vec, parse_metadata))
+sobj@meta.data$genotype  <- meta_parsed$genotype
+sobj@meta.data$sex       <- meta_parsed$sex
+sobj@meta.data$infection <- meta_parsed$infection
 
 # GEM reaction
 sample_to_gem <- setNames(gem_lookup, sample_info$condition)
-sobj$gem_reaction <- sample_to_gem[sobj$orig.ident]
+sobj@meta.data$gem_reaction <- unname(sample_to_gem[ident_vec])
 
 cat("Metadata columns added: condition, genotype, sex, infection, gem_reaction\n")
 cat(sprintf("Samples: %s\n", paste(unique(sobj$orig.ident), collapse = ", ")))
