@@ -247,6 +247,30 @@ cat("Saving integrated object ...\n")
 saveRDS(combined, file.path(outdir, "qiu_gurtner_integrated.rds"))
 cat("  Saved qiu_gurtner_integrated.rds\n")
 
+# --- Export for CellRank (Python) ---------------------------------------------
+cat("Exporting data for CellRank ...\n")
+export_dir <- file.path(outdir, "for_cellrank")
+dir.create(export_dir, showWarnings = FALSE, recursive = TRUE)
+
+# Counts matrix (sparse)
+counts_mat <- GetAssayData(combined, layer = "counts")
+Matrix::writeMM(counts_mat, file.path(export_dir, "counts.mtx"))
+
+# Gene names and cell barcodes
+writeLines(rownames(combined), file.path(export_dir, "genes.txt"))
+writeLines(colnames(combined), file.path(export_dir, "barcodes.txt"))
+
+# Metadata
+write.csv(combined@meta.data, file.path(export_dir, "metadata.csv"))
+
+# Harmony embeddings
+write.csv(Embeddings(combined, "harmony"), file.path(export_dir, "harmony_embeddings.csv"))
+
+# UMAP embeddings
+write.csv(Embeddings(combined, "umap"), file.path(export_dir, "umap_embeddings.csv"))
+
+cat("  Exported to:", export_dir, "\n")
+
 cat("\n========== Gurtner integration complete ==========\n")
 cat("Output directory:", outdir, "\n")
 sessionInfo()

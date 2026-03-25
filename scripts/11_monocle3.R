@@ -68,8 +68,8 @@ cat("Learning trajectory graph ...\n")
 cds <- learn_graph(cds)
 cat("  Trajectory graph learned\n")
 
-# --- Identify root: cluster with highest Siglecf expression (immature eos) ---
-cat("Identifying root based on Siglecf expression ...\n")
+# --- Identify root: cluster with lowest Siglecf expression (most immature) ---
+cat("Identifying root based on Siglecf expression (lowest = most immature) ...\n")
 
 # Helper: get_earliest_principal_node using marker gene
 get_earliest_principal_node <- function(cds, marker_gene = "Siglecf") {
@@ -94,11 +94,11 @@ get_earliest_principal_node <- function(cds, marker_gene = "Siglecf") {
     return(root_pr_node)
   }
 
-  # Compute mean expression per cluster
+  # Compute mean expression per cluster — root = lowest Siglecf (most immature/progenitor-like)
   cell_clusters <- clusters(cds)
   cluster_means <- tapply(marker_expr, cell_clusters, mean)
-  root_cluster <- names(which.max(cluster_means))
-  cat("  Root cluster (highest Siglecf):", root_cluster, "\n")
+  root_cluster <- names(which.min(cluster_means))
+  cat("  Root cluster (lowest Siglecf = most immature):", root_cluster, "\n")
 
   # Map root cluster cells to closest principal graph node
   cell_ids_root <- names(cell_clusters)[cell_clusters == root_cluster]

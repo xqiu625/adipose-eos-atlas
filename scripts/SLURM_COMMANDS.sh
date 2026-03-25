@@ -9,6 +9,7 @@
 # Pipeline DAG:
 #   00 → 01 → 02 → 03 → {04, 06} parallel
 #   04 → {05, 07, 11, 12, 13, 14} parallel
+#   13 → 13b (CellRank on Gurtner integration)
 #   07 → 08
 #   06 + 04 → 09 → 10
 #   14 → 15 (grn → ctx → aucell) → 16
@@ -158,6 +159,16 @@ sbatch --job-name=08_pathway --partition=batch \
   --mem=64G --cpus-per-task=4 --time=2:00:00 \
   --output=${LOGS}/08_pathway_%j.out --error=${LOGS}/08_pathway_%j.err \
   --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/08_pathway_eos.R"
+
+# >>> Wait for 13 to complete, then: <<<
+
+# ==============================================================================
+# BLOCK 7b: CellRank on Gurtner integration (depends on 13)
+# ==============================================================================
+sbatch --job-name=13b_cellrank --partition=batch \
+  --mem=64G --cpus-per-task=8 --time=4:00:00 \
+  --output=${LOGS}/13b_cellrank_%j.out --error=${LOGS}/13b_cellrank_%j.err \
+  --wrap="source activate ${CONDA} && python ${SCRIPTS}/13b_cellrank_gurtner.py"
 
 # >>> Wait for 09 to complete, then: <<<
 
