@@ -103,9 +103,15 @@ for (i in seq_len(nrow(sample_info))) {
                             background = raw_counts,
                             verbose    = FALSE)
 
-    # Extract results
-    decon_counts <- decontXcounts(decon_result)
-    contamination <- decon_result$decontX_contamination
+    # Extract results (handle both SCE and list return types)
+    if (is(decon_result, "SingleCellExperiment")) {
+      decon_counts <- decontXcounts(decon_result)
+      contamination <- colData(decon_result)$decontX_contamination
+    } else {
+      # decontX returns a list when given matrix input
+      decon_counts <- decon_result$decontXcounts
+      contamination <- decon_result$contamination
+    }
 
     cat(sprintf("  Mean contamination: %.4f\n", mean(contamination)))
     cat(sprintf("  Cells above threshold (%.1f): %d / %d (%.1f%%)\n",
