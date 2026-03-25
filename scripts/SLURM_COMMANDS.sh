@@ -223,6 +223,14 @@ sbatch --job-name=22_scenic_cond --partition=batch \
   --wrap="source activate ${CONDA} && python ${SCRIPTS}/22_scenic_by_condition.py"
 
 # ==============================================================================
+# BLOCK 11: Hu mast marker validation (depends on 04 + Hu data)
+# ==============================================================================
+sbatch --job-name=23_mast --partition=batch \
+  --mem=64G --cpus-per-task=4 --time=2:00:00 \
+  --output=${LOGS}/23_mast_%j.out --error=${LOGS}/23_mast_%j.err \
+  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/23_hu_mast_marker_validation.R"
+
+# ==============================================================================
 # Monitor jobs:
 #   squeue -u $USER
 #   sacct --format=JobID,JobName,State,Elapsed,MaxRSS -j <JOB_IDs>

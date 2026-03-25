@@ -42,9 +42,9 @@ cat("  Our cells:", ncol(eos), "\n")
 # --- Load Hu reference data --------------------------------------------------
 cat("Searching for Hu reference data ...\n")
 hu_candidates <- c(
+  "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/hu_2026/hu_adipose_eos.rds",
   "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/integration/hu_adipose_eos.rds",
-  "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/hu_eos/hu_adipose_eos.rds",
-  "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/hu_adipose_eos.rds"
+  "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/hu_eos/hu_adipose_eos.rds"
 )
 
 hu <- NULL
