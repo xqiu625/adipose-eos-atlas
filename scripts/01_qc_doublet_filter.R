@@ -39,6 +39,7 @@ gem_lookup <- c(rep("GEM1", 4), rep("GEM2", 4), rep("GEM3", 4), rep("GEM4", 4))
 
 # ── Load Scrublet via reticulate ───────────────────────────────────────────────
 cat("Importing Scrublet via reticulate...\n")
+use_condaenv("/bigdata/godziklab/shared/Xinru/cellrank_env", required = TRUE)
 scrublet <- tryCatch({
   import("scrublet")
 }, error = function(e) {
