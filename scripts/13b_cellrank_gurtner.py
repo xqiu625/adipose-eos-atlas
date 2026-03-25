@@ -43,7 +43,19 @@ EOS_COLORS = {
 }
 DATASET_COLORS = {
     "Qiu_2025_Adipose": "#E63946",
-    "Gurtner_Blood_BM": "#1D3557",
+    "Gurtner_2022": "#1D3557",
+}
+ORGAN_COLORS = {
+    "Adipose": "#E63946",
+    "Bone Marrow": "#1D3557",
+    "Blood": "#457B9D",
+    "Colon": "#2A9D8F",
+    "Small Intestine": "#E9C46A",
+    "Spleen": "#F4A261",
+    "Stomach": "#264653",
+    "Lung": "#A8DADC",
+    "Uterus": "#CDB4DB",
+    "Unknown": "#999999",
 }
 
 # --- Paths -------------------------------------------------------------------
@@ -116,32 +128,34 @@ print("Computing fate probabilities ...")
 g.compute_fate_probabilities()
 
 # --- Compute DPT (diffusion pseudotime) from BM root -----------------------
-print("Computing diffusion pseudotime rooted on Gurtner BM cells ...")
+print("Computing diffusion pseudotime rooted on Gurtner bone marrow cells ...")
 
-# Find the BM-enriched root cell: Gurtner cell with highest CytoTRACE score
-gurtner_mask = adata.obs["dataset"] == "Gurtner_Blood_BM"
-if gurtner_mask.sum() > 0:
-    # Among Gurtner cells, find the one with highest CytoTRACE (most immature)
-    gurtner_ct = adata.obs.loc[gurtner_mask, "ct_score"]
-    root_cell_idx = adata.obs_names.get_loc(gurtner_ct.idxmax())
+# Find root cell: Bone Marrow cell with highest CytoTRACE score (most immature)
+bm_mask = adata.obs["organ"] == "Bone Marrow"
+print(f"  Bone Marrow cells: {bm_mask.sum()}")
+if bm_mask.sum() > 0:
+    bm_ct = adata.obs.loc[bm_mask, "ct_score"]
+    root_cell_idx = adata.obs_names.get_loc(bm_ct.idxmax())
     adata.uns["iroot"] = root_cell_idx
     sc.tl.diffmap(adata, n_comps=15)
     sc.tl.dpt(adata)
     print(f"  DPT range: {adata.obs['dpt_pseudotime'].min():.3f} - {adata.obs['dpt_pseudotime'].max():.3f}")
     has_dpt = True
 else:
-    print("  WARNING: No Gurtner cells found. Skipping DPT.")
+    print("  WARNING: No Bone Marrow cells found. Skipping DPT.")
     has_dpt = False
 
 # --- Figures -----------------------------------------------------------------
 print("Generating figures ...")
 
-# Figure 1: CytoTRACE score on UMAP
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+# Figure 1: CytoTRACE score on UMAP + organ labels
+fig, axes = plt.subplots(1, 3, figsize=(20, 6))
 sc.pl.embedding(adata, basis="umap", color="ct_score", cmap="viridis",
                 title="CytoTRACE Score\n(high = progenitor-like)", ax=axes[0], show=False)
+sc.pl.embedding(adata, basis="umap", color="organ", palette=ORGAN_COLORS,
+                title="Organ / Tissue", ax=axes[1], show=False)
 sc.pl.embedding(adata, basis="umap", color="dataset", palette=DATASET_COLORS,
-                title="Dataset", ax=axes[1], show=False)
+                title="Dataset", ax=axes[2], show=False)
 plt.tight_layout()
 fig.savefig(os.path.join(FIG_DIR, "13b_cytotrace_umap.pdf"))
 plt.close()

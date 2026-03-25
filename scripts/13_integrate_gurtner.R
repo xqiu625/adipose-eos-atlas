@@ -43,9 +43,9 @@ cat("  Our cells:", ncol(eos), "\n")
 # --- Load Gurtner reference data ---------------------------------------------
 cat("Searching for Gurtner reference data (GSE182001) ...\n")
 gurtner_candidates <- c(
-  "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/integration/gurtner_eos.rds",
-  "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/gurtner/gurtner_eos.rds",
-  "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/gurtner_eos.rds"
+  "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/Nature/Gurtner_eosinophil_subset.rds",
+  "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/Nature/GSE182001_eosinophil_subset.rds",
+  "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data/Nature/Gurtner_merged_tissues_seurat_object.rds"
 )
 
 gurtner <- NULL
@@ -72,7 +72,7 @@ cat("  Gurtner cells:", ncol(gurtner), "\n")
 # --- Add dataset labels -------------------------------------------------------
 cat("Adding dataset labels ...\n")
 eos$dataset     <- "Qiu_2025_Adipose"
-gurtner$dataset <- "Gurtner_Blood_BM"
+gurtner$dataset <- "Gurtner_2022"
 
 # Preserve original cluster identities
 eos$original_cluster <- as.character(Idents(eos))
@@ -82,9 +82,13 @@ if ("seurat_clusters" %in% colnames(gurtner@meta.data)) {
   gurtner$original_cluster <- as.character(Idents(gurtner))
 }
 
-# Add tissue source label
-eos$tissue     <- "Adipose"
-gurtner$tissue <- "Blood_BoneMarrow"
+# Preserve organ labels from Gurtner (Bone Marrow, Blood, Colon, etc.)
+eos$organ <- "Adipose"
+if (!"organ" %in% colnames(gurtner@meta.data)) {
+  gurtner$organ <- "Unknown"
+}
+cat("  Gurtner organ distribution:\n")
+print(table(gurtner$organ))
 
 # --- Merge objects ------------------------------------------------------------
 cat("Merging datasets ...\n")
@@ -129,7 +133,7 @@ pdf(file.path(outdir, "gurtner_integration_umap_dataset.pdf"), width = 14, heigh
 tryCatch({
   p1 <- DimPlot(combined, reduction = "umap", group.by = "dataset",
                  cols = c("Qiu_2025_Adipose" = "#E63946",
-                          "Gurtner_Blood_BM" = "#1D3557"),
+                          "Gurtner_2022" = "#1D3557"),
                  pt.size = 0.3) +
     ggtitle("Combined: Adipose vs Blood/BM eosinophils") +
     theme_umap()
@@ -137,7 +141,7 @@ tryCatch({
   p2 <- DimPlot(combined, reduction = "umap", group.by = "dataset",
                  split.by = "dataset",
                  cols = c("Qiu_2025_Adipose" = "#E63946",
-                          "Gurtner_Blood_BM" = "#1D3557"),
+                          "Gurtner_2022" = "#1D3557"),
                  pt.size = 0.3) +
     ggtitle("Split by dataset") +
     theme_umap()
@@ -212,7 +216,7 @@ tryCatch({
   p <- ggplot(comp_df, aes(x = seurat_clusters, y = frac, fill = dataset)) +
     geom_bar(stat = "identity", position = "stack") +
     scale_fill_manual(values = c("Qiu_2025_Adipose" = "#E63946",
-                                  "Gurtner_Blood_BM" = "#1D3557")) +
+                                  "Gurtner_2022" = "#1D3557")) +
     labs(x = "Integrated cluster", y = "Fraction",
          title = "Dataset composition per integrated cluster") +
     theme_pub()
