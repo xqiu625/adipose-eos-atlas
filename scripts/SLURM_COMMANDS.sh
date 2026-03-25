@@ -46,7 +46,7 @@ sbatch --job-name=00_decontx --partition=batch \
 sbatch --job-name=01_qc --partition=batch \
   --mem=128G --cpus-per-task=8 --time=4:00:00 \
   --output=${LOGS}/01_qc_%j.out --error=${LOGS}/01_qc_%j.err \
-  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/01_qc_doublet_filter.R"
+  --wrap="source activate ${CONDA} && module load R/4.5.0 && Rscript ${SCRIPTS}/01_qc_doublet_filter.R"
 
 # >>> Wait for 01 to complete <<<
 
