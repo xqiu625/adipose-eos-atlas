@@ -91,6 +91,12 @@ for (i in seq_len(nrow(sample_info))) {
     cat(sprintf("  Raw: %d genes x %d cells\n",
                 nrow(raw_counts), ncol(raw_counts)))
 
+    # Subset raw to same genes as filtered (DecontX requires matching rows)
+    shared_genes <- intersect(rownames(filtered_counts), rownames(raw_counts))
+    filtered_counts <- filtered_counts[shared_genes, ]
+    raw_counts <- raw_counts[shared_genes, ]
+    cat(sprintf("  Shared genes: %d\n", length(shared_genes)))
+
     # Run DecontX
     cat("  Running DecontX...\n")
     decon_result <- decontX(x          = filtered_counts,
