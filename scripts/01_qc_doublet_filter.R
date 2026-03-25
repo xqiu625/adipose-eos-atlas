@@ -202,7 +202,7 @@ for (s in samples) {
 
   tryCatch({
     # Extract counts for this sample
-    counts_sub <- GetAssayData(sobj, slot = "counts")[, cells_idx]
+    counts_sub <- GetAssayData(sobj, layer = "counts")[, cells_idx]
 
     # Convert to scipy sparse matrix (CSC format expected by Scrublet)
     counts_t <- t(counts_sub)  # Scrublet expects cells x genes
