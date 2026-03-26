@@ -38,7 +38,7 @@ cat("Loading annotated object...\n")
 obj <- readRDS(file.path(BASE, "all_cells_annotated.rds"))
 
 cat("Subsetting macrophages...\n")
-mac <- subset(obj, broad_celltype == "Macrophage")
+mac <- subset(obj, celltype == "Macrophages")
 cat(sprintf("  %d macrophages extracted\n", ncol(mac)))
 rm(obj); gc()
 

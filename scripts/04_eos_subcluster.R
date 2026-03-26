@@ -32,7 +32,7 @@ cat("Loading annotated object...\n")
 obj <- readRDS(file.path(BASE, "all_cells_annotated.rds"))
 
 cat("Subsetting eosinophils...\n")
-eos <- subset(obj, broad_celltype == "Eosinophil")
+eos <- subset(obj, celltype == "Eosinophils")
 cat(sprintf("  %d eosinophils extracted\n", ncol(eos)))
 rm(obj); gc()
 
