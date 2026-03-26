@@ -187,60 +187,82 @@ cat("\n========================================\n")
 cat("Step 3b: Transfer previous round annotations\n")
 cat("========================================\n\n")
 
-prev_meta_file <- file.path(dirname(BASE), "dataset/processed_data/302025_metadata.csv")
-prev_uce_file  <- file.path(dirname(BASE), "dataset/processed_data/predicted_cell_types_metadata_mouseKidney.csv")
+# Use the fully labeled object from R02 draft (13 cell types, 97,061 cells)
+prev_labeled_file <- file.path(dirname(BASE), "R02_draft_v1/data/processed/seurat_object_labeled.rds")
 
-# Previous manual annotations (Eosinophils, Macrophages)
-if (file.exists(prev_meta_file)) {
-  cat("Loading previous manual annotations:", prev_meta_file, "\n")
-  prev_meta <- read.csv(prev_meta_file, row.names = 1, stringsAsFactors = FALSE)
+if (file.exists(prev_labeled_file)) {
+  cat("Loading previous labeled object:", prev_labeled_file, "\n")
+  prev_obj <- readRDS(prev_labeled_file)
+  cat(sprintf("  Previous object: %d cells, %d cell types\n",
+              ncol(prev_obj), length(unique(na.omit(prev_obj$cell_type)))))
 
-  # Match barcodes — previous barcodes are condition_barcode (same format as ours)
-  shared_barcodes <- intersect(colnames(sobj), rownames(prev_meta))
+  # Build barcode -> cell_type map from previous object
+  prev_labels <- setNames(prev_obj$cell_type, colnames(prev_obj))
+  rm(prev_obj); gc(verbose = FALSE)
+
+  # Match barcodes
+  shared_barcodes <- intersect(colnames(sobj), names(prev_labels))
   cat(sprintf("  Shared barcodes: %d / %d (%.1f%%)\n",
               length(shared_barcodes), ncol(sobj),
               100 * length(shared_barcodes) / ncol(sobj)))
 
   sobj@meta.data$prev_celltype <- NA_character_
   if (length(shared_barcodes) > 0) {
-    sobj@meta.data[shared_barcodes, "prev_celltype"] <- prev_meta[shared_barcodes, "cell_type"]
+    sobj@meta.data[shared_barcodes, "prev_celltype"] <- prev_labels[shared_barcodes]
   }
-  cat("Previous cell type labels transferred:\n")
+  cat("\nPrevious cell type labels transferred:\n")
   print(table(sobj$prev_celltype, useNA = "ifany"))
+
+  # Cross-tabulate: module-score annotation vs previous labels
+  cat("\nCross-tabulation: module-score annotation vs previous labels:\n")
+  print(table(ModuleScore = sobj$celltype, Previous = sobj$prev_celltype, useNA = "no"))
+
+  # Use previous labels as primary where available, fall back to module score
+  sobj@meta.data$celltype_final <- ifelse(
+    !is.na(sobj@meta.data$prev_celltype),
+    sobj@meta.data$prev_celltype,
+    sobj@meta.data$celltype
+  )
+  # Keep module-score annotation as secondary
+  sobj@meta.data$celltype_module <- sobj@meta.data$celltype
+
+  # Replace celltype with final consensus
+  sobj@meta.data$celltype <- sobj@meta.data$celltype_final
+
+  cat("\nFinal cell type labels (previous + module-score fallback):\n")
+  print(sort(table(sobj$celltype), decreasing = TRUE))
 } else {
-  cat("Previous metadata not found:", prev_meta_file, "\n")
+  cat("Previous labeled object not found:", prev_labeled_file, "\n")
+  cat("Using module-score annotations only.\n")
 }
 
-# UCE predicted cell types (mouse kidney reference)
-if (file.exists(prev_uce_file)) {
-  cat("\nLoading UCE predictions:", prev_uce_file, "\n")
-  prev_uce <- read.csv(prev_uce_file, stringsAsFactors = FALSE)
-  uce_map <- setNames(prev_uce$predicted_group, prev_uce$cell_barcode)
-
-  shared_uce <- intersect(colnames(sobj), names(uce_map))
-  cat(sprintf("  Shared barcodes: %d / %d (%.1f%%)\n",
-              length(shared_uce), ncol(sobj),
-              100 * length(shared_uce) / ncol(sobj)))
-
-  sobj@meta.data$uce_celltype <- NA_character_
-  if (length(shared_uce) > 0) {
-    sobj@meta.data[shared_uce, "uce_celltype"] <- uce_map[shared_uce]
-  }
-  cat("UCE predicted cell types transferred:\n")
-  print(table(sobj$uce_celltype, useNA = "ifany"))
-} else {
-  cat("UCE predictions not found:", prev_uce_file, "\n")
-}
-
-# Cross-tabulate: new module-score annotation vs previous labels
-if ("prev_celltype" %in% colnames(sobj@meta.data)) {
-  cat("\nCross-tabulation: new annotation vs previous manual labels:\n")
-  print(table(New = sobj$celltype, Previous = sobj$prev_celltype, useNA = "no"))
-}
-if ("uce_celltype" %in% colnames(sobj@meta.data)) {
-  cat("\nCross-tabulation: new annotation vs UCE predictions:\n")
-  print(table(New = sobj$celltype, UCE = sobj$uce_celltype, useNA = "no"))
-}
+# Update broad_celltype based on final celltype
+broad_map_full <- c(
+  Eosinophils            = "Granulocyte",
+  Macrophages            = "Myeloid",
+  "Endothelial cells"    = "Stromal",
+  "Dendritic cells"      = "Myeloid",
+  "Mesenchymal stem cells" = "Stromal",
+  Pericytes              = "Stromal",
+  "B cells"              = "Lymphoid",
+  "NK cells"             = "Lymphoid",
+  "Mesothelial cells"    = "Stromal",
+  "Mast cells"           = "Granulocyte",
+  Adipocytes             = "Stromal",
+  Neutrophils            = "Granulocyte",
+  "Epithelial cells"     = "Stromal",
+  # Module-score fallbacks
+  Eosinophil   = "Granulocyte",
+  Macrophage   = "Myeloid",
+  T_cell       = "Lymphoid",
+  B_cell       = "Lymphoid",
+  NK_cell      = "Lymphoid",
+  Dendritic    = "Myeloid",
+  Neutrophil   = "Granulocyte",
+  Other_immune = "Other"
+)
+sobj@meta.data$broad_celltype <- broad_map_full[sobj$celltype]
+sobj@meta.data$broad_celltype[is.na(sobj$broad_celltype)] <- "Other"
 
 # ── Summary ────────────────────────────────────────────────────────────────────
 cat("\n========================================\n")
@@ -263,31 +285,34 @@ cat("\n========================================\n")
 cat("Step 4: Generating figures\n")
 cat("========================================\n\n")
 
-# UMAP colored by celltype
-cat("UMAP colored by celltype...\n")
-# Map celltype names to broad_celltype_colors keys (replace underscores with spaces)
-celltype_display <- setNames(
-  gsub("_", " ", names(table(sobj$celltype))),
-  names(table(sobj$celltype))
-)
-sobj$celltype_display <- celltype_display[sobj$celltype]
+# UMAP colored by celltype (final labels)
+cat("UMAP colored by celltype (final labels)...\n")
 
-# Build color mapping for actual cell types present
-ct_levels <- sort(unique(sobj$celltype_display))
+# Build color mapping for cell types present
+ct_levels <- sort(unique(sobj$celltype))
 ct_colors <- broad_celltype_colors[ct_levels]
 # Fall back to grey for any unmatched types
 ct_colors[is.na(ct_colors)] <- "grey50"
 
-p1 <- DimPlot(sobj, group.by = "celltype_display", label = TRUE, repel = TRUE,
+p1 <- DimPlot(sobj, group.by = "celltype", label = TRUE, repel = TRUE,
               pt.size = 0.3, cols = ct_colors) +
-  ggtitle("Cell Type Annotation") + theme_umap()
+  ggtitle("Cell Type Annotation (Final)") + theme_umap()
 
 save_pdf(p1, file.path(fig_dir, "umap_celltype.pdf"),
          width = 10, height = 8)
 
+# UMAP colored by broad celltype
+cat("UMAP colored by broad celltype...\n")
+p1b <- DimPlot(sobj, group.by = "broad_celltype", label = TRUE, repel = TRUE,
+               pt.size = 0.3) +
+  ggtitle("Broad Cell Type") + theme_umap()
+
+save_pdf(p1b, file.path(fig_dir, "umap_broad_celltype.pdf"),
+         width = 10, height = 8)
+
 # Stacked bar plot by condition
 cat("Stacked bar by condition...\n")
-ct_counts <- as.data.frame(table(sobj$condition, sobj$celltype_display))
+ct_counts <- as.data.frame(table(sobj$condition, sobj$celltype))
 colnames(ct_counts) <- c("condition", "celltype", "count")
 
 p2 <- ggplot(ct_counts, aes(x = condition, y = count, fill = celltype)) +
