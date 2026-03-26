@@ -12,7 +12,7 @@ for (g in c("Igha", "Retnla")) {
   cat(sprintf("\n=== %s ===\n", g))
   if (g %in% rownames(obj)) {
     vals <- GetAssayData(obj, layer = "counts")[g, ]
-    cat(sprintf("Total counts: %d, Cells expressing: %.1f%%\n",
+    cat(sprintf("Total counts: %.1f, Cells expressing: %.1f%%\n",
                 sum(vals), 100 * mean(vals > 0)))
     ct <- obj$celltype
     for (t in sort(unique(ct))) {
