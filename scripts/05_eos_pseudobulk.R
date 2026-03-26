@@ -3,7 +3,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 .libPaths(c(lib_path, .libPaths()))
 
 ## Pseudobulk analysis: all immune cells (Fig 1B) + eosinophils only
-## Aggregates ALL genes per sample, then VST → PCA/MDS
+## Aggregates ALL genes per sample, then rlog → PCA/MDS (top 500 variable genes)
 ## SLURM: --mem=128G --cpus-per-task=4 --time=2:00:00 -p batch
 
 # ── Libraries ──────────────────────────────────────────────────────────────────
@@ -92,23 +92,23 @@ run_pseudobulk <- function(sobj, label, prefix) {
     row.names = samples
   )
 
-  # DESeq2 VST on ALL genes
-  cat("Running DESeq2 VST (blind=TRUE) on all genes...\n")
+  # DESeq2 rlog on ALL genes (recommended over VST for n < 30)
+  cat("Running DESeq2 rlog (blind=TRUE) on all genes...\n")
   dds <- DESeqDataSetFromMatrix(countData = round(pb_counts),
                                 colData   = col_data,
                                 design    = ~ 1)
-  vst_obj <- vst(dds, blind = TRUE)
-  vst_mat <- assay(vst_obj)
-  cat(sprintf("  VST matrix: %d genes x %d samples\n",
-              nrow(vst_mat), ncol(vst_mat)))
+  rlog_obj <- rlog(dds, blind = TRUE)
+  rlog_mat <- assay(rlog_obj)
+  cat(sprintf("  rlog matrix: %d genes x %d samples\n",
+              nrow(rlog_mat), ncol(rlog_mat)))
 
   # PCA on top 500 most variable genes (standard DESeq2 approach)
-  gene_vars <- apply(vst_mat, 1, var)
+  gene_vars <- apply(rlog_mat, 1, var)
   ntop <- min(500, sum(gene_vars > 0))
   top_genes <- names(sort(gene_vars, decreasing = TRUE))[1:ntop]
   cat(sprintf("  Using top %d variable genes for PCA (of %d total)\n",
               ntop, sum(gene_vars > 0)))
-  pca_res <- prcomp(t(vst_mat[top_genes, ]), scale. = FALSE)
+  pca_res <- prcomp(t(rlog_mat[top_genes, ]), scale. = FALSE)
 
   pca_df <- as.data.frame(pca_res$x[, 1:min(5, ncol(pca_res$x))])
   pca_df$sample    <- rownames(pca_df)
@@ -119,7 +119,7 @@ run_pseudobulk <- function(sobj, label, prefix) {
 
   # MDS on top 500 variable genes (1 - Spearman correlation)
   cat("Computing MDS (1 - Spearman correlation) on top variable genes...\n")
-  cor_mat  <- cor(vst_mat[top_genes, ], method = "spearman")
+  cor_mat  <- cor(rlog_mat[top_genes, ], method = "spearman")
   dist_mat <- as.dist(1 - cor_mat)
   mds_res  <- cmdscale(dist_mat, k = 2, eig = TRUE)
 
@@ -152,7 +152,7 @@ run_pseudobulk <- function(sobj, label, prefix) {
   cat("Plotting MDS...\n")
   pdf(file.path(fig_dir, sprintf("%s_mds.pdf", prefix)), width = 9, height = 7)
   print(fig1b_plot(mds_df, "MDS1", "MDS2",
-                   "First MDS dimension", "Second MDS dimension", label))
+                   "Dimension 1", "Dimension 2", label))
   dev.off()
 
   # PCA plot (Fig 1B style)
@@ -161,7 +161,7 @@ run_pseudobulk <- function(sobj, label, prefix) {
   print(fig1b_plot(pca_df, "PC1", "PC2",
                    sprintf("PC1 (%.1f%%)", pct_var[1]),
                    sprintf("PC2 (%.1f%%)", pct_var[2]),
-                   sprintf("%s PCA", label)))
+                   label))
   dev.off()
 
   # Save pseudobulk counts
