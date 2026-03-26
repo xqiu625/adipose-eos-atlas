@@ -70,10 +70,10 @@ broad_celltype_colors <- c(
   "Eosinophils"      = "#E07B5F",   # salmon/coral
   "Macrophages"      = "#D4A0C8",   # pink/lavender
   "Dendritic cells"  = "#4D8D8D",   # teal/green
-  "B cells"          = "#8CB84B",   # olive/yellow-green
-  "NK cells"         = "#3D7D7D",   # darker teal
+  "B cells"          = "#A8D5A2",   # light green
+  "NK cells"         = "#8B6914",   # brown
   "Neutrophils"      = "#2F3C7E",   # dark blue/navy
-  "Mast cells"       = "#CBAACB"    # light purple/mauve
+  "Mast cells"       = "#F0D264"    # yellow
 )
 
 # --- Volcano plot colors (Fig 1E-H) ------------------------------------------
