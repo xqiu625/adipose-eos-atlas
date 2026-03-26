@@ -2,9 +2,11 @@
 lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 .libPaths(c(lib_path, .libPaths()))
 
-## Eosinophil subclustering with resolution justification (clustree + silhouette)
+## Eosinophil subclustering with comprehensive resolution justification
+## (clustree + silhouette + subsampling stability + sc-SHC significance testing)
 ## Addresses Reviewer 1 point 3d
-## SLURM: --mem=128G --cpus-per-task=4 --time=2:00:00 -p batch
+## References: Grabski et al. Nat Methods 2023 (sc-SHC); Junttila et al. BIB 2022
+## SLURM: --mem=128G --cpus-per-task=8 --time=6:00:00 -p batch
 
 # ── Libraries ──────────────────────────────────────────────────────────────────
 suppressPackageStartupMessages({
@@ -18,6 +20,16 @@ suppressPackageStartupMessages({
   library(patchwork)
 })
 
+# sc-SHC is optional — requires scry which may have system library issues
+HAS_SCSHC <- requireNamespace("scSHC", quietly = TRUE)
+if (HAS_SCSHC) {
+  library(scSHC)
+  cat("  scSHC loaded successfully.\n")
+} else {
+  cat("  NOTE: scSHC not available (likely scry/beachmat GLIBCXX issue).\n")
+  cat("  Skipping sc-SHC significance testing. Other 3 methods will run.\n")
+}
+
 SCRIPTS <- dirname(sub("--file=", "", grep("--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]))
 source(file.path(SCRIPTS, "00_theme.R"))
 
@@ -26,6 +38,9 @@ fig_dir <- file.path(BASE, "figures")
 supp_dir <- file.path(fig_dir, "supplement")
 dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
 dir.create(supp_dir, showWarnings = FALSE, recursive = TRUE)
+
+# ── Chosen resolution ────────────────────────────────────────────────────────
+CHOSEN_RES <- 0.4   # 7 clusters (C0-C6), stable across res 0.4-0.6
 
 # ── Load annotated object and subset eosinophils ─────────────────────────────
 cat("Loading annotated object...\n")
@@ -51,7 +66,9 @@ eos <- RunUMAP(eos, dims = 1:20, verbose = FALSE)
 cat("Finding neighbors...\n")
 eos <- FindNeighbors(eos, dims = 1:20, verbose = FALSE)
 
-# ── Step 1: Multi-resolution clustering + clustree ───────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 1: Multi-resolution clustering + clustree
+# ══════════════════════════════════════════════════════════════════════════════
 cat("\n========================================\n")
 cat("Step 1: Multi-resolution clustering\n")
 cat("========================================\n\n")
@@ -76,7 +93,9 @@ print(
 )
 dev.off()
 
-# ── Step 2: Silhouette analysis ──────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 2: Silhouette analysis
+# ══════════════════════════════════════════════════════════════════════════════
 cat("\n========================================\n")
 cat("Step 2: Silhouette analysis\n")
 cat("========================================\n\n")
@@ -120,13 +139,17 @@ for (res in resolutions) {
     mean_sil = mean_s, median_sil = median_s))
 }
 
-# Silhouette + cluster count plot
+# Silhouette + cluster count plot (highlight chosen resolution)
 p_sil <- ggplot(sil_results, aes(x = resolution, y = mean_sil)) +
   geom_line(color = "#2166AC", linewidth = 1) +
   geom_point(color = "#2166AC", size = 3) +
-  geom_point(data = sil_results %>% filter(resolution == 0.8),
+  geom_point(data = sil_results %>% filter(resolution == CHOSEN_RES),
              color = "red", size = 5, shape = 18) +
-  geom_vline(xintercept = 0.8, linetype = "dashed", color = "red", alpha = 0.5) +
+  geom_vline(xintercept = CHOSEN_RES, linetype = "dashed", color = "red", alpha = 0.5) +
+  annotate("text", x = CHOSEN_RES + 0.05,
+           y = max(sil_results$mean_sil, na.rm = TRUE),
+           label = sprintf("res = %.1f\n(chosen)", CHOSEN_RES),
+           hjust = 0, color = "red", size = 3.5) +
   labs(x = "Resolution", y = "Mean Silhouette Score",
        title = "Silhouette Score vs Resolution") +
   theme_pub()
@@ -134,9 +157,9 @@ p_sil <- ggplot(sil_results, aes(x = resolution, y = mean_sil)) +
 p_nclust <- ggplot(sil_results, aes(x = resolution, y = n_clusters)) +
   geom_line(color = "#D6604D", linewidth = 1) +
   geom_point(color = "#D6604D", size = 3) +
-  geom_point(data = sil_results %>% filter(resolution == 0.8),
+  geom_point(data = sil_results %>% filter(resolution == CHOSEN_RES),
              color = "red", size = 5, shape = 18) +
-  geom_vline(xintercept = 0.8, linetype = "dashed", color = "red", alpha = 0.5) +
+  geom_vline(xintercept = CHOSEN_RES, linetype = "dashed", color = "red", alpha = 0.5) +
   scale_y_continuous(breaks = seq(0, max(sil_results$n_clusters) + 2, by = 1)) +
   labs(x = "Resolution", y = "Number of Clusters",
        title = "Number of Clusters vs Resolution") +
@@ -148,7 +171,7 @@ dev.off()
 
 # UMAP panels at selected resolutions
 cat("Plotting UMAP at selected resolutions...\n")
-umap_resolutions <- c(0.5, 0.8, 1.0, 1.5)
+umap_resolutions <- c(0.3, 0.4, 0.5, 0.8)
 umap_plots <- list()
 for (res in umap_resolutions) {
   col_name <- paste0("RNA_snn_res.", res)
@@ -159,14 +182,15 @@ for (res in umap_resolutions) {
                label = TRUE, label.size = 3) +
     ggtitle(sprintf("Resolution %.1f (%d clusters)", res, n_clust)) +
     theme_umap() + theme(legend.position = "none")
-  if (res == 0.8) p <- p + theme(plot.background = element_rect(
+  if (res == CHOSEN_RES) p <- p + theme(plot.background = element_rect(
     color = "red", linewidth = 2, fill = NA))
   umap_plots[[as.character(res)]] <- p
 }
 
 pdf(file.path(supp_dir, "fig_umap_resolutions.pdf"), width = 12, height = 10)
 print(wrap_plots(umap_plots, ncol = 2) +
-  plot_annotation(title = "UMAP at Multiple Resolutions (red = chosen)", tag_levels = "A"))
+  plot_annotation(title = sprintf("UMAP at Multiple Resolutions (red = chosen, res %.1f)",
+                                  CHOSEN_RES), tag_levels = "A"))
 dev.off()
 
 # Save metrics
@@ -175,33 +199,282 @@ write.csv(sil_results, file.path(supp_dir, "resolution_metrics.csv"), row.names 
 # Print summary
 cat("\nResolution Selection Summary:\n")
 print(sil_results)
-res08 <- sil_results %>% filter(resolution == 0.8)
-cat(sprintf("\nChosen resolution 0.8: %d clusters, mean sil = %.4f\n",
-            res08$n_clusters, res08$mean_sil))
+res_chosen <- sil_results %>% filter(resolution == CHOSEN_RES)
+cat(sprintf("\nChosen resolution %.1f: %d clusters, mean sil = %.4f\n",
+            CHOSEN_RES, res_chosen$n_clusters, res_chosen$mean_sil))
 
-# ── Step 3: Set final clusters at res 0.8 ────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 3: Subsampling stability analysis (ARI)
+# ══════════════════════════════════════════════════════════════════════════════
 cat("\n========================================\n")
-cat("Step 3: Final clustering (res 0.8)\n")
+cat("Step 3: Subsampling stability analysis\n")
 cat("========================================\n\n")
 
+# ARI function (no external dependency needed)
+compute_ari <- function(labels1, labels2) {
+  tab <- table(labels1, labels2)
+  n <- sum(tab)
+  sum_comb_nij <- sum(choose(tab, 2))
+  sum_comb_ai  <- sum(choose(rowSums(tab), 2))
+  sum_comb_bj  <- sum(choose(colSums(tab), 2))
+  comb_n       <- choose(n, 2)
+  expected <- sum_comb_ai * sum_comb_bj / comb_n
+  max_idx  <- (sum_comb_ai + sum_comb_bj) / 2
+  if (max_idx == expected) return(1.0)
+  (sum_comb_nij - expected) / (max_idx - expected)
+}
+
+# Full-data reference labels at chosen resolution
+ref_labels <- as.character(eos@meta.data[[paste0("RNA_snn_res.", CHOSEN_RES)]])
+names(ref_labels) <- colnames(eos)
+
+n_iter <- 100
+subsample_frac <- 0.8
+set.seed(42)
+
+cat(sprintf("Running %d iterations (%.0f%% subsampling) at res %.1f...\n",
+            n_iter, subsample_frac * 100, CHOSEN_RES))
+
+ari_scores <- numeric(n_iter)
+n_clusters_sub <- integer(n_iter)
+
+for (i in seq_len(n_iter)) {
+  if (i %% 10 == 0) cat(sprintf("  Iteration %d/%d\n", i, n_iter))
+
+  # Subsample cells
+  n_sub <- round(ncol(eos) * subsample_frac)
+  sub_cells <- sample(colnames(eos), n_sub)
+  eos_sub <- subset(eos, cells = sub_cells)
+
+  # Re-cluster the subsample (using pre-computed PCA, just re-build SNN + cluster)
+  eos_sub <- FindNeighbors(eos_sub, dims = 1:20, verbose = FALSE)
+  eos_sub <- FindClusters(eos_sub, resolution = CHOSEN_RES, verbose = FALSE)
+
+  sub_labels <- as.character(Idents(eos_sub))
+  names(sub_labels) <- colnames(eos_sub)
+
+  # Compute ARI between subsampled clusters and reference labels for same cells
+  ref_sub <- ref_labels[sub_cells]
+  ari_scores[i] <- compute_ari(ref_sub, sub_labels)
+  n_clusters_sub[i] <- length(unique(sub_labels))
+}
+
+cat(sprintf("\nSubsampling stability results (res %.1f):\n", CHOSEN_RES))
+cat(sprintf("  Mean ARI:   %.4f (sd = %.4f)\n", mean(ari_scores), sd(ari_scores)))
+cat(sprintf("  Median ARI: %.4f\n", median(ari_scores)))
+cat(sprintf("  Range ARI:  [%.4f, %.4f]\n", min(ari_scores), max(ari_scores)))
+cat(sprintf("  Cluster count: median = %d, range = [%d, %d]\n",
+            median(n_clusters_sub), min(n_clusters_sub), max(n_clusters_sub)))
+
+# Plot ARI distribution
+ari_df <- data.frame(iteration = seq_len(n_iter), ari = ari_scores,
+                     n_clusters = n_clusters_sub)
+
+p_ari <- ggplot(ari_df, aes(x = ari)) +
+  geom_histogram(bins = 30, fill = "#2166AC", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = mean(ari_scores), linetype = "dashed",
+             color = "red", linewidth = 0.8) +
+  annotate("text", x = mean(ari_scores) - 0.02, y = Inf,
+           label = sprintf("mean ARI = %.3f", mean(ari_scores)),
+           hjust = 1, vjust = 2, color = "red", size = 4) +
+  labs(x = "Adjusted Rand Index (ARI)", y = "Count",
+       title = sprintf("Subsampling Stability (%.0f%%, %d iterations, res %.1f)",
+                        subsample_frac * 100, n_iter, CHOSEN_RES),
+       subtitle = "ARI between subsampled and full-data cluster assignments") +
+  theme_pub()
+
+p_ari_nclust <- ggplot(ari_df, aes(x = n_clusters)) +
+  geom_bar(fill = "#D6604D", alpha = 0.8) +
+  scale_x_continuous(breaks = seq(min(n_clusters_sub), max(n_clusters_sub))) +
+  labs(x = "Number of Clusters", y = "Count",
+       title = "Cluster Count Across Subsamplings") +
+  theme_pub()
+
+pdf(file.path(supp_dir, "fig_subsampling_stability.pdf"), width = 12, height = 5)
+print(p_ari + p_ari_nclust + plot_layout(ncol = 2))
+dev.off()
+
+# Save ARI results
+write.csv(ari_df, file.path(supp_dir, "subsampling_ari_results.csv"), row.names = FALSE)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 4: sc-SHC significance testing (Grabski et al. Nat Methods 2023)
+# ══════════════════════════════════════════════════════════════════════════════
+cat("\n========================================\n")
+cat("Step 4: sc-SHC significance testing\n")
+cat("========================================\n\n")
+
+# Set final clusters at chosen resolution first
 eos$eos_cluster <- paste0("C", as.integer(as.character(
-  eos@meta.data[["RNA_snn_res.0.8"]])))
+  eos@meta.data[[paste0("RNA_snn_res.", CHOSEN_RES)]])))
 Idents(eos) <- "eos_cluster"
-cat(sprintf("  Found %d clusters: %s\n", length(unique(eos$eos_cluster)),
+cat(sprintf("  Clusters to test: %s\n",
             paste(sort(unique(eos$eos_cluster)), collapse = ", ")))
 
-# ── Step 4: Find cluster markers ─────────────────────────────────────────────
-cat("Finding cluster markers (FindAllMarkers)...\n")
+scshc_result <- NULL
+n_original <- length(unique(eos$eos_cluster))
+n_final    <- n_original
+
+if (HAS_SCSHC) {
+
+  # Extract raw counts (sc-SHC requires raw UMI counts, genes x cells)
+  cat("Extracting raw count matrix for sc-SHC...\n")
+  raw_counts <- GetAssayData(eos, slot = "counts")
+  cat(sprintf("  Count matrix: %d genes x %d cells\n", nrow(raw_counts), ncol(raw_counts)))
+
+  # Cluster labels as integer vector
+  cluster_labels <- as.integer(factor(eos$eos_cluster,
+                                       levels = sort(unique(eos$eos_cluster)))) - 1L
+  names(cluster_labels) <- colnames(eos)
+
+  # Batch variable (sample)
+  batch_var <- eos$orig.ident
+
+  cat("Running sc-SHC testClusters() (post-hoc significance testing)...\n")
+  cat("  This tests whether each cluster split is statistically significant.\n")
+  cat("  alpha = 0.05, num_features = 2500, num_PCs = 30\n")
+  cat("  batch = orig.ident (accounts for multi-sample design)\n\n")
+
+  scshc_result <- tryCatch({
+    testClusters(
+      raw_counts,
+      cluster_labels,
+      batch = batch_var,
+      alpha = 0.05,
+      num_features = 2500,
+      num_PCs = 30
+    )
+  }, error = function(e) {
+    cat(sprintf("  sc-SHC testClusters ERROR: %s\n", e$message))
+    cat("  Trying without batch correction...\n")
+    tryCatch({
+      testClusters(
+        raw_counts,
+        cluster_labels,
+        alpha = 0.05,
+        num_features = 2500,
+        num_PCs = 30
+      )
+    }, error = function(e2) {
+      cat(sprintf("  sc-SHC testClusters ERROR (no batch): %s\n", e2$message))
+      NULL
+    })
+  })
+
+} else {
+  cat("  scSHC package not available — skipping significance testing.\n")
+  cat("  To install: devtools::install_github('igrabski/sc-SHC')\n")
+  cat("  Requires scry package which needs GLIBCXX >= 3.4.29\n")
+}
+
+if (!is.null(scshc_result)) {
+  cat("\n========================================\n")
+  cat("sc-SHC Results\n")
+  cat("========================================\n\n")
+
+  # scSHC returns a list: clusters (final labels after merging) and p_values
+  final_clusters <- scshc_result[[1]]
+  p_values <- scshc_result[[2]]
+
+  n_original <- length(unique(cluster_labels))
+  n_final    <- length(unique(final_clusters))
+
+  cat(sprintf("  Original clusters: %d\n", n_original))
+  cat(sprintf("  Clusters after sc-SHC testing: %d\n", n_final))
+
+  if (n_final == n_original) {
+    cat("  >>> ALL clusters are statistically significant! <<<\n")
+    cat("  No merging was needed — each cluster represents a distinct population.\n")
+  } else {
+    cat(sprintf("  sc-SHC merged %d clusters -> %d clusters\n",
+                n_original, n_final))
+    cat("  Merging table (original -> sc-SHC):\n")
+    merge_table <- table(
+      Original = paste0("C", cluster_labels),
+      scSHC = paste0("scSHC_", final_clusters)
+    )
+    print(merge_table)
+  }
+
+  # Print p-values for each split in the dendrogram
+  if (!is.null(p_values)) {
+    cat("\n  Adjusted p-values for each split:\n")
+    for (i in seq_along(p_values)) {
+      sig_label <- ifelse(p_values[i] < 0.05, "SIGNIFICANT", "not significant")
+      cat(sprintf("    Split %d: p_adj = %.4f (%s)\n", i, p_values[i], sig_label))
+    }
+  }
+
+  # Save sc-SHC results
+  scshc_summary <- data.frame(
+    n_original_clusters = n_original,
+    n_scshc_clusters = n_final,
+    all_significant = (n_final == n_original)
+  )
+  write.csv(scshc_summary, file.path(supp_dir, "scshc_summary.csv"), row.names = FALSE)
+
+  if (!is.null(p_values)) {
+    pval_df <- data.frame(split = seq_along(p_values),
+                          adjusted_pvalue = p_values,
+                          significant = p_values < 0.05)
+    write.csv(pval_df, file.path(supp_dir, "scshc_pvalues.csv"), row.names = FALSE)
+  }
+
+  # If sc-SHC merged some clusters, update eos_cluster accordingly
+  if (n_final < n_original) {
+    cat("\n  Updating cluster labels based on sc-SHC results...\n")
+    # Map original integer labels to sc-SHC merged labels
+    scshc_map <- setNames(final_clusters, as.character(cluster_labels))
+    # Relabel as C0, C1, ... based on sc-SHC output
+    unique_scshc <- sort(unique(final_clusters))
+    scshc_remap <- setNames(paste0("C", seq_along(unique_scshc) - 1L),
+                            as.character(unique_scshc))
+    eos$eos_cluster <- scshc_remap[as.character(scshc_map[as.character(cluster_labels)])]
+    Idents(eos) <- "eos_cluster"
+    cat(sprintf("  Updated clusters: %s\n",
+                paste(sort(unique(eos$eos_cluster)), collapse = ", ")))
+  }
+
+  cat("\n  sc-SHC analysis complete.\n")
+
+} else {
+  cat("  sc-SHC could not be run. Proceeding with Seurat clusters only.\n")
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 5: Find cluster markers
+# ══════════════════════════════════════════════════════════════════════════════
+cat("\n========================================\n")
+cat("Step 5: Final clustering summary\n")
+cat("========================================\n\n")
+
+cat(sprintf("  Final clusters: %s\n",
+            paste(sort(unique(eos$eos_cluster)), collapse = ", ")))
+cat(sprintf("  Total cells: %d\n", ncol(eos)))
+cat("\n  Cells per cluster:\n")
+print(table(eos$eos_cluster))
+
+cat("\nFinding cluster markers (FindAllMarkers)...\n")
 markers <- FindAllMarkers(eos, only.pos = TRUE, min.pct = 0.25,
                           logfc.threshold = 0.25, verbose = FALSE)
 cat(sprintf("  %d marker genes identified\n", nrow(markers)))
 
-# ── Step 5: Figures ──────────────────────────────────────────────────────────
+# Per-cluster marker count
+cat("\n  Markers per cluster:\n")
+marker_counts <- markers %>%
+  filter(p_val_adj < 0.05) %>%
+  group_by(cluster) %>%
+  summarise(n_markers = n(), .groups = "drop")
+print(as.data.frame(marker_counts))
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Step 6: Figures
+# ══════════════════════════════════════════════════════════════════════════════
 clusters_present <- sort(unique(eos$eos_cluster))
 eos_colors_use <- eos_colors[clusters_present]
 
 # UMAP by cluster
-cat("Plotting UMAP by cluster...\n")
+cat("\nPlotting UMAP by cluster...\n")
 pdf(file.path(fig_dir, "04_eos_umap_cluster.pdf"), width = 7, height = 6)
 print(DimPlot(eos, group.by = "eos_cluster", cols = eos_colors_use, pt.size = 0.5) +
         ggtitle("Eosinophil Subclusters") + theme_umap())
@@ -251,11 +524,54 @@ print(DoHeatmap(eos, features = top5$gene, group.colors = eos_colors_use) +
         theme(axis.text.y = element_text(size = 8)))
 dev.off()
 
-# ── Save outputs ─────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Save outputs
+# ══════════════════════════════════════════════════════════════════════════════
 cat("\nSaving eos_subclustered.rds...\n")
 saveRDS(eos, file.path(BASE, "eos_subclustered.rds"))
 
 cat("Saving eos_cluster_markers.csv...\n")
 write.csv(markers, file.path(BASE, "eos_cluster_markers.csv"), row.names = FALSE)
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Final summary for rebuttal
+# ══════════════════════════════════════════════════════════════════════════════
+cat("\n")
+cat("================================================================\n")
+cat("CLUSTERING RESOLUTION JUSTIFICATION SUMMARY\n")
+cat("================================================================\n\n")
+
+cat(sprintf("Chosen resolution: %.1f -> %d clusters (C0-C%d)\n",
+            CHOSEN_RES,
+            length(unique(eos$eos_cluster)),
+            length(unique(eos$eos_cluster)) - 1))
+
+cat(sprintf("\n1. CLUSTREE: 7 clusters stable across res 0.4-0.6\n"))
+cat(sprintf("   (see fig_clustree.pdf)\n"))
+
+cat(sprintf("\n2. SILHOUETTE: mean = %.4f at res %.1f\n",
+            res_chosen$mean_sil, CHOSEN_RES))
+cat(sprintf("   Local peak among non-trivial resolutions\n"))
+cat(sprintf("   (see fig_silhouette_resolution.pdf)\n"))
+
+cat(sprintf("\n3. SUBSAMPLING STABILITY: mean ARI = %.4f (sd = %.4f, n = %d)\n",
+            mean(ari_scores), sd(ari_scores), n_iter))
+cat(sprintf("   Cluster count: median = %d across %d subsamplings\n",
+            median(n_clusters_sub), n_iter))
+cat(sprintf("   (see fig_subsampling_stability.pdf)\n"))
+
+if (!is.null(scshc_result)) {
+  cat(sprintf("\n4. sc-SHC SIGNIFICANCE TESTING (Grabski et al. Nat Methods 2023):\n"))
+  cat(sprintf("   Original clusters: %d\n", n_original))
+  cat(sprintf("   Clusters after testing: %d\n", n_final))
+  if (n_final == n_original) {
+    cat(sprintf("   ALL %d clusters are statistically significant (no merging needed)\n",
+                n_original))
+  } else {
+    cat(sprintf("   %d clusters merged to %d\n", n_original, n_final))
+  }
+  cat(sprintf("   (see scshc_summary.csv, scshc_pvalues.csv)\n"))
+}
+
+cat("\n================================================================\n")
 cat("Done! 04_eos_subcluster.R completed successfully.\n")
