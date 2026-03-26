@@ -196,8 +196,8 @@ if (file.exists(prev_labeled_file)) {
   cat(sprintf("  Previous object: %d cells, %d cell types\n",
               ncol(prev_obj), length(unique(na.omit(prev_obj$cell_type)))))
 
-  # Build barcode -> cell_type map from previous object
-  prev_labels <- setNames(prev_obj$cell_type, colnames(prev_obj))
+  # Build barcode -> cell_type map from previous object (as.character to avoid factor levels)
+  prev_labels <- setNames(as.character(prev_obj$cell_type), colnames(prev_obj))
   rm(prev_obj); gc(verbose = FALSE)
 
   # Match barcodes
