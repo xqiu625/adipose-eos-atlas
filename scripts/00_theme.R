@@ -64,16 +64,16 @@ cond_labels <- c(
   "KO_Female_HFDInfected"  = "KO \u2640 Inf"
 )
 
-# --- All-cell-type broad palette (Fig 1C) ------------------------------------
+# --- All-cell-type broad palette (Fig 1C, matching manuscript) ----------------
+# Names match label-transfer output (plural forms from R02 object)
 broad_celltype_colors <- c(
-  "Eosinophil"     = "#E84A5F",
-  "Macrophage"     = "#8FC50E",
-  "Dendritic Cell" = "#F4A460",
-  "B Cell"         = "#6CA6CD",
-  "Mast Cell"      = "#CBAACB",
-  "NK Cell"        = "#5BA4A4",
-  "Neutrophil"     = "#2F3C7E",
-  "T Cell"         = "#FF6F1F"
+  "Eosinophils"      = "#E07B5F",   # salmon/coral
+  "Macrophages"      = "#D4A0C8",   # pink/lavender
+  "Dendritic cells"  = "#4D8D8D",   # teal/green
+  "B cells"          = "#8CB84B",   # olive/yellow-green
+  "NK cells"         = "#3D7D7D",   # darker teal
+  "Neutrophils"      = "#2F3C7E",   # dark blue/navy
+  "Mast cells"       = "#CBAACB"    # light purple/mauve
 )
 
 # --- Volcano plot colors (Fig 1E-H) ------------------------------------------

@@ -156,33 +156,45 @@ cat("\nCell type proportions per condition:\n")
 prop_table <- prop.table(table(sobj$condition, sobj$celltype), margin = 1)
 print(round(prop_table, 3))
 
-# ── Step 4: Figures ──────────────────────────────────────────────────────────
+# ── Step 4: Figures (Fig 1C style — immune cells only) ────────────────────────
 cat("\n========================================\n")
 cat("Step 4: Generating figures\n")
 cat("========================================\n\n")
 
-# Build color mapping
-ct_levels <- sort(unique(sobj$celltype))
-ct_colors <- broad_celltype_colors[ct_levels]
-ct_colors[is.na(ct_colors)] <- "grey50"
+# 7 immune cell types shown in manuscript Fig 1C
+immune_types <- c("Eosinophils", "Macrophages", "Dendritic cells",
+                  "B cells", "NK cells", "Neutrophils", "Mast cells")
 
-# UMAP colored by cell type
-cat("UMAP colored by celltype...\n")
-p1 <- DimPlot(sobj, group.by = "celltype", label = TRUE, repel = TRUE,
+# Subset to immune cells only for UMAP (matching manuscript Fig 1C)
+immune_cells <- colnames(sobj)[sobj$celltype %in% immune_types]
+sobj_immune <- subset(sobj, cells = immune_cells)
+cat(sprintf("Immune cells for Fig 1C UMAP: %d / %d\n",
+            ncol(sobj_immune), ncol(sobj)))
+
+# Color mapping (from broad_celltype_colors in 00_theme.R)
+ct_colors <- broad_celltype_colors[immune_types]
+
+# UMAP colored by cell type (immune only, Fig 1C style)
+cat("UMAP colored by celltype (immune only, Fig 1C)...\n")
+sobj_immune$celltype <- factor(sobj_immune$celltype, levels = immune_types)
+p1 <- DimPlot(sobj_immune, group.by = "celltype", label = TRUE, repel = TRUE,
               pt.size = 0.3, cols = ct_colors) +
-  ggtitle("Cell Type (Label Transfer)") + theme_umap()
+  ggtitle("Immune Cells") + theme_umap()
 save_pdf(p1, file.path(fig_dir, "umap_celltype.pdf"), width = 10, height = 8)
 
-# UMAP colored by broad cell type
-cat("UMAP colored by broad celltype...\n")
-p1b <- DimPlot(sobj, group.by = "broad_celltype", label = TRUE, repel = TRUE,
-               pt.size = 0.3) +
-  ggtitle("Broad Cell Type") + theme_umap()
-save_pdf(p1b, file.path(fig_dir, "umap_broad_celltype.pdf"), width = 10, height = 8)
+# UMAP with ALL cell types (for reference, non-immune in grey)
+cat("UMAP colored by celltype (all cells, non-immune grey)...\n")
+all_ct <- sort(unique(sobj$celltype))
+all_colors <- setNames(rep("grey85", length(all_ct)), all_ct)
+all_colors[names(ct_colors)] <- ct_colors
+p1_all <- DimPlot(sobj, group.by = "celltype", label = TRUE, repel = TRUE,
+                  pt.size = 0.2, cols = all_colors) +
+  ggtitle("All Cells (non-immune in grey)") + theme_umap()
+save_pdf(p1_all, file.path(fig_dir, "umap_celltype_all.pdf"), width = 10, height = 8)
 
-# Stacked bar plot by condition
-cat("Stacked bar by condition...\n")
-ct_counts <- as.data.frame(table(sobj$condition, sobj$celltype))
+# Stacked bar plot by condition (immune cells only)
+cat("Stacked bar by condition (immune only)...\n")
+ct_counts <- as.data.frame(table(sobj_immune$condition, sobj_immune$celltype))
 colnames(ct_counts) <- c("condition", "celltype", "count")
 
 p2 <- ggplot(ct_counts, aes(x = condition, y = count, fill = celltype)) +
