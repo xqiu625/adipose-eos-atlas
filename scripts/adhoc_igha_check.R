@@ -109,6 +109,64 @@ plot_gene_by_celltype <- function(obj, gene_name, display_name, filename) {
   cat(sprintf("  Saved: %s\n", filename))
 }
 
+# --- Bar plot faceted by condition ---
+plot_gene_by_celltype_condition <- function(obj, gene_name, display_name, filename) {
+  cat(sprintf("\n=== %s expression by cell type x condition ===\n", display_name))
+
+  if (!gene_name %in% rownames(obj)) {
+    cat(sprintf("  %s NOT in gene list\n", gene_name))
+    return(invisible(NULL))
+  }
+
+  vals <- GetAssayData(obj, layer = "counts")[gene_name, ]
+
+  df <- data.frame(celltype = obj$celltype, condition = obj$condition,
+                   expr = vals) %>%
+    group_by(condition, celltype) %>%
+    summarise(
+      n = n(),
+      pct_expr = 100 * mean(expr > 0),
+      .groups = "drop"
+    )
+
+  # Use overall ordering (by mean pct across conditions)
+  ct_order <- df %>%
+    group_by(celltype) %>%
+    summarise(mean_pct = mean(pct_expr), .groups = "drop") %>%
+    arrange(desc(mean_pct)) %>%
+    pull(celltype)
+
+  df$category <- ifelse(df$celltype %in% immune_types,
+                        "Immune", "Stromal/Epithelial")
+  df$celltype <- factor(df$celltype, levels = rev(ct_order))
+
+  p <- ggplot(df, aes(x = pct_expr, y = celltype, fill = category)) +
+    geom_col(width = 0.7) +
+    facet_wrap(~ condition, nrow = 1) +
+    scale_fill_manual(values = c("Immune" = "#E02020",
+                                 "Stromal/Epithelial" = "#1E88C7"),
+                      name = "Cell Category") +
+    labs(x = sprintf("%% Cells Expressing %s", display_name),
+         y = "Cell Type",
+         title = sprintf("%s Expression by Cell Type and Condition", display_name)) +
+    theme_classic(base_size = 11) +
+    theme(
+      plot.title = element_text(face = "bold", size = 14),
+      axis.text.y = element_text(size = 9),
+      axis.text.x = element_text(size = 8),
+      axis.title = element_text(size = 11, face = "bold"),
+      strip.text = element_text(face = "bold", size = 8),
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold"),
+      panel.grid.major.x = element_line(color = "grey90")
+    )
+
+  pdf(file.path(fig_dir, filename), width = 18, height = 7)
+  print(p)
+  dev.off()
+  cat(sprintf("  Saved: %s\n", filename))
+}
+
 # Find SiglecF gene name
 siglec_gene <- grep("^Siglec[fF]", rownames(obj), value = TRUE)
 if (length(siglec_gene) == 0) siglec_gene <- intersect(c("Siglecf", "SiglecF"), rownames(obj))
@@ -119,5 +177,12 @@ if (length(siglec_gene) >= 1) {
 }
 plot_gene_by_celltype(obj, "Igha", "Igha", "adhoc_igha_by_celltype.pdf")
 plot_gene_by_celltype(obj, "Retnla", "Retnla", "adhoc_retnla_by_celltype.pdf")
+
+# Per-condition plots
+if (length(siglec_gene) >= 1) {
+  plot_gene_by_celltype_condition(obj, siglec_gene[1], "SiglecF", "adhoc_siglecf_by_celltype_condition.pdf")
+}
+plot_gene_by_celltype_condition(obj, "Igha", "Igha", "adhoc_igha_by_celltype_condition.pdf")
+plot_gene_by_celltype_condition(obj, "Retnla", "Retnla", "adhoc_retnla_by_celltype_condition.pdf")
 
 cat("\nDone.\n")
