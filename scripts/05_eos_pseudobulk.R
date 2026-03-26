@@ -32,8 +32,17 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
 
 # --- Load eosinophil object ---------------------------------------------------
-cat("Loading eos_subclustered.rds...\n")
-eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
+# Use subclustered if available, otherwise subset from annotated object
+eos_file <- file.path(BASE, "eos_subclustered.rds")
+if (!file.exists(eos_file)) {
+  cat("eos_subclustered.rds not found, subsetting from all_cells_annotated.rds...\n")
+  obj <- readRDS(file.path(BASE, "all_cells_annotated.rds"))
+  eos <- subset(obj, celltype == "Eosinophils")
+  rm(obj); gc()
+} else {
+  cat("Loading eos_subclustered.rds...\n")
+  eos <- readRDS(eos_file)
+}
 
 # --- Derive GEM reaction mapping from sample names ----------------------------
 cat("Deriving GEM reaction assignments...\n")
@@ -66,7 +75,7 @@ print(table(sample_meta$orig.ident, sample_meta$gem_reaction))
 
 # --- Aggregate raw counts per sample (pseudobulk) ----------------------------
 cat("Aggregating raw counts per sample...\n")
-counts_mat <- GetAssayData(eos, slot = "counts")
+counts_mat <- GetAssayData(eos, layer = "counts")
 samples <- unique(eos$orig.ident)
 
 pb_list <- lapply(samples, function(s) {
