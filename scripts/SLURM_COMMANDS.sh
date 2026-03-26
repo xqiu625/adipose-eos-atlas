@@ -17,7 +17,7 @@
 #   15 → 22
 # ==============================================================================
 
-SCRIPTS="/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas/scripts"
+SCRIPTS="/bigdata/nairlab/shared/XQiu/EOS_project/adipose-eos-subtype-atlas/scripts"
 LOGS="/bigdata/godziklab/shared/Xinru/302025/06_LOGS"
 CONDA="/bigdata/godziklab/shared/Xinru/cellrank_env"
 BASE="/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
