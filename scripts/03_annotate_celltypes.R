@@ -188,7 +188,7 @@ cat("Step 3b: Transfer previous round annotations\n")
 cat("========================================\n\n")
 
 # Use the fully labeled object from R02 draft (13 cell types, 97,061 cells)
-prev_labeled_file <- file.path(dirname(BASE), "R02_draft_v1/data/processed/seurat_object_labeled.rds")
+prev_labeled_file <- "/bigdata/nairlab/shared/XQiu/EOS_project/R02_draft_v1/data/processed/seurat_object_labeled.rds"
 
 if (file.exists(prev_labeled_file)) {
   cat("Loading previous labeled object:", prev_labeled_file, "\n")
