@@ -102,9 +102,12 @@ run_pseudobulk <- function(sobj, label, prefix) {
   cat(sprintf("  VST matrix: %d genes x %d samples\n",
               nrow(vst_mat), ncol(vst_mat)))
 
-  # PCA on ALL genes
-  cat("Running PCA on all genes...\n")
-  pca_res <- prcomp(t(vst_mat), scale. = TRUE)
+  # PCA on ALL genes (drop zero-variance genes first)
+  gene_vars <- apply(vst_mat, 1, var)
+  vst_mat_filt <- vst_mat[gene_vars > 0, ]
+  cat(sprintf("  Removed %d zero-variance genes, %d remain for PCA\n",
+              sum(gene_vars == 0), nrow(vst_mat_filt)))
+  pca_res <- prcomp(t(vst_mat_filt), scale. = TRUE)
 
   pca_df <- as.data.frame(pca_res$x[, 1:min(5, ncol(pca_res$x))])
   pca_df$sample    <- rownames(pca_df)
