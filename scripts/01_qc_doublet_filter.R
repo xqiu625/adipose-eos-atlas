@@ -18,7 +18,7 @@ source(file.path(SCRIPTS, "00_theme.R"))
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 BASE <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
-CONTAM_THRESHOLD <- 0.3
+CONTAM_THRESHOLD <- 0.2
 
 # Sample-to-condition mapping
 sample_info <- data.frame(
