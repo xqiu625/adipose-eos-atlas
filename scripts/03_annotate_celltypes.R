@@ -179,8 +179,8 @@ for (i in seq_len(nrow(cluster_assignments))) {
 # Add celltype and broad_celltype to Seurat object
 cluster_to_type <- setNames(cluster_assignments$celltype,
                             cluster_assignments$cluster)
-sobj$celltype <- cluster_to_type[as.character(Idents(sobj))]
-sobj$broad_celltype <- broad_map[sobj$celltype]
+sobj@meta.data$celltype <- unname(cluster_to_type[as.character(Idents(sobj))])
+sobj@meta.data$broad_celltype <- unname(broad_map[sobj$celltype])
 
 # ── Step 3b: Transfer previous round annotations by barcode matching ──────────
 cat("\n========================================\n")
