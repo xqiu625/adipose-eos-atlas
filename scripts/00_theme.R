@@ -95,7 +95,7 @@ viridis_palette <- colorRampPalette(
 
 # --- Publication theme (matches manuscript) -----------------------------------
 theme_pub <- function(base_size = 12) {
-  theme_classic(base_size = base_size, base_family = "Arial") %+replace%
+  theme_classic(base_size = base_size, base_family = "") %+replace%
     theme(
       # Title
       plot.title    = element_text(size = rel(1.2), face = "bold", hjust = 0,
