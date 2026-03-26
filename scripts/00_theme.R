@@ -11,9 +11,9 @@ library(ggplot2)
 
 # --- Eosinophil cluster palette (Fig 2A) -------------------------------------
 eos_colors <- c(
-
   "C0" = "#6CA6CD", "C1" = "#E84A5F", "C2" = "#FF6F1F",
-  "C3" = "#CBAACB", "C4" = "#B03A48", "C5" = "#5BA4A4", "C6" = "#2F3C7E"
+  "C3" = "#CBAACB", "C4" = "#B03A48", "C5" = "#5BA4A4",
+  "C6" = "#2F3C7E", "C7" = "#F0C05A"
 )
 
 # Prefixed version for CellChat (Eos_C0, etc.)
