@@ -44,7 +44,7 @@ run_mast <- function(seu, group_col, test_level, ref_level, sample_col = "orig.i
               sum(seu_sub@meta.data[[group_col]] == ref_level), ref_level))
 
   # Get normalized data and create SCE
-  norm_mat <- GetAssayData(seu_sub, slot = "data")
+  norm_mat <- GetAssayData(seu_sub, layer = "data")
   sce <- SingleCellExperiment(
     assays = list(logcounts = norm_mat),
     colData = seu_sub@meta.data
@@ -126,8 +126,14 @@ plot_volcano <- function(deg_df, title, filename, top_n = 20) {
 }
 
 # --- Load eosinophil object ---------------------------------------------------
-cat("Loading eos_subclustered.rds...\n")
-eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
+cat("Loading all_cells_annotated.rds and subsetting eosinophils...\n")
+obj <- readRDS(file.path(BASE, "all_cells_annotated.rds"))
+eos <- subset(obj, celltype == "Eosinophils")
+cat(sprintf("  %d eosinophils\n", ncol(eos)))
+rm(obj); gc()
+
+# Normalize
+eos <- NormalizeData(eos, verbose = FALSE)
 
 # --- Define comparisons -------------------------------------------------------
 comparisons <- list(
