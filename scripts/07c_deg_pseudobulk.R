@@ -1,0 +1,251 @@
+#!/usr/bin/env Rscript
+lib_path <- "/bigdata/godziklab/shared/Xinru/R"
+.libPaths(c(lib_path, .libPaths()))
+
+# ==============================================================================
+# 07c_deg_pseudobulk.R
+# Pseudobulk DESeq2 DEG analysis for eosinophils (4 comparisons)
+# Aggregates counts per sample, runs DESeq2, compares with MAST results
+# SLURM: --mem=64G --cpus-per-task=4 --time=2:00:00 -p batch
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(DESeq2)
+  library(ggplot2)
+  library(dplyr)
+  library(ggrepel)
+})
+
+SCRIPTS <- dirname(sub("--file=", "", grep("--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]))
+source(file.path(SCRIPTS, "00_theme.R"))
+
+BASE <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
+deg_dir <- file.path(BASE, "deg")
+fig_dir <- file.path(BASE, "figures")
+dir.create(deg_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
+
+# --- Helper: pseudobulk DESeq2 ------------------------------------------------
+run_pseudobulk_deseq2 <- function(seu, group_col, test_level, ref_level,
+                                   sample_col = "orig.ident") {
+  # Subset to the two groups
+  cells_use <- colnames(seu)[seu@meta.data[[group_col]] %in% c(test_level, ref_level)]
+  seu_sub <- subset(seu, cells = cells_use)
+
+  cat(sprintf("    Cells: %d test (%s), %d ref (%s)\n",
+              sum(seu_sub@meta.data[[group_col]] == test_level), test_level,
+              sum(seu_sub@meta.data[[group_col]] == ref_level), ref_level))
+
+  # Aggregate raw counts per sample
+  counts_mat <- GetAssayData(seu_sub, layer = "counts")
+  meta <- seu_sub@meta.data
+  meta$group <- meta[[group_col]]
+  meta$sample <- meta[[sample_col]]
+
+  samples <- unique(meta$sample)
+  pb_list <- lapply(samples, function(s) {
+    cells <- which(meta$sample == s)
+    Matrix::rowSums(counts_mat[, cells, drop = FALSE])
+  })
+  pb_counts <- do.call(cbind, pb_list)
+  colnames(pb_counts) <- samples
+
+  # Sample-level metadata
+  sample_group <- meta %>%
+    select(sample, group) %>%
+    distinct()
+  col_data <- data.frame(
+    sample = samples,
+    group  = sample_group$group[match(samples, sample_group$sample)],
+    row.names = samples
+  )
+  col_data$group <- factor(col_data$group, levels = c(ref_level, test_level))
+
+  cat(sprintf("    Samples: %d test, %d ref\n",
+              sum(col_data$group == test_level),
+              sum(col_data$group == ref_level)))
+
+  # Filter lowly expressed genes (keep genes with >= 10 counts total)
+  pb_counts <- pb_counts[rowSums(pb_counts) >= 10, ]
+  cat(sprintf("    Genes tested: %d\n", nrow(pb_counts)))
+
+  # DESeq2
+  cat("    Running DESeq2...\n")
+  dds <- DESeqDataSetFromMatrix(countData = round(pb_counts),
+                                colData   = col_data,
+                                design    = ~ group)
+  dds <- DESeq(dds)
+
+  res <- results(dds, contrast = c("group", test_level, ref_level))
+  res_df <- as.data.frame(res) %>%
+    tibble::rownames_to_column("gene") %>%
+    rename(log2FC = log2FoldChange, pval = pvalue, padj = padj) %>%
+    arrange(padj)
+
+  cat(sprintf("    Total genes with results: %d\n", sum(!is.na(res_df$padj))))
+  return(res_df)
+}
+
+# --- Helper: volcano plot -----------------------------------------------------
+plot_volcano <- function(deg_df, title, filename,
+                         fc_cutoff = 0.5, padj_cutoff = 0.05, top_n = 20) {
+  deg_df <- deg_df %>%
+    filter(!is.na(padj)) %>%
+    mutate(
+      sig = case_when(
+        padj < padj_cutoff & log2FC >  fc_cutoff ~ "Up",
+        padj < padj_cutoff & log2FC < -fc_cutoff ~ "Down",
+        TRUE                                      ~ "NS"
+      )
+    )
+
+  top_genes <- deg_df %>%
+    filter(sig != "NS") %>%
+    arrange(padj) %>%
+    head(top_n)
+
+  p <- ggplot(deg_df, aes(x = log2FC, y = -log10(pval), color = sig)) +
+    geom_point(size = 0.8, alpha = 0.7) +
+    geom_text_repel(data = top_genes,
+                    aes(label = gene), size = 2.5, max.overlaps = 25,
+                    fontface = "italic", color = "black") +
+    scale_color_manual(values = vol_colors) +
+    geom_vline(xintercept = c(-fc_cutoff, fc_cutoff), linetype = "dashed", color = "grey40") +
+    geom_hline(yintercept = -log10(padj_cutoff), linetype = "dashed", color = "grey40") +
+    labs(x = "log2 Fold Change",
+         y = expression(-log[10](italic(p)-value)),
+         title = title, color = "Significance") +
+    theme_pub()
+
+  pdf(file.path(fig_dir, filename), width = 8, height = 7)
+  print(p)
+  dev.off()
+}
+
+# --- Load eosinophil object ---------------------------------------------------
+cat("Loading all_cells_annotated.rds and subsetting eosinophils...\n")
+obj <- readRDS(file.path(BASE, "all_cells_annotated.rds"))
+eos <- subset(obj, celltype == "Eosinophils")
+cat(sprintf("  %d eosinophils\n", ncol(eos)))
+rm(obj); gc()
+
+# --- Define comparisons -------------------------------------------------------
+comparisons <- list(
+  sex_effect = list(
+    name      = "sex_effect",
+    desc      = "WT_Female_HFD vs WT_Male_HFD (sex effect)",
+    subset_conditions = c("WT_Female_HFD", "WT_Male_HFD"),
+    group_col = "condition",
+    test      = "WT_Female_HFD",
+    ref       = "WT_Male_HFD"
+  ),
+  genotype_female = list(
+    name      = "genotype_female",
+    desc      = "KO_Female_HFD vs WT_Female_HFD (genotype effect, female)",
+    subset_conditions = c("KO_Female_HFD", "WT_Female_HFD"),
+    group_col = "condition",
+    test      = "KO_Female_HFD",
+    ref       = "WT_Female_HFD"
+  ),
+  genotype_male = list(
+    name      = "genotype_male",
+    desc      = "KO_Male_HFD vs WT_Male_HFD (genotype effect, male)",
+    subset_conditions = c("KO_Male_HFD", "WT_Male_HFD"),
+    group_col = "condition",
+    test      = "KO_Male_HFD",
+    ref       = "WT_Male_HFD"
+  ),
+  infection_female = list(
+    name      = "infection_female",
+    desc      = "Infected vs non-infected females",
+    subset_conditions = c("WT_Female_HFDInfected", "KO_Female_HFDInfected",
+                          "WT_Female_HFD", "KO_Female_HFD"),
+    group_col = "infection_status",
+    test      = "Infected",
+    ref       = "NonInfected"
+  )
+)
+
+# --- Run pseudobulk DESeq2 for each comparison --------------------------------
+cat("\n============================================================\n")
+cat("Pseudobulk DESeq2 DEG Analysis\n")
+cat("============================================================\n")
+
+for (comp in comparisons) {
+  cat(sprintf("\n=== Comparison: %s ===\n", comp$desc))
+
+  # Subset to relevant conditions
+  eos_sub <- subset(eos, condition %in% comp$subset_conditions)
+
+  # For infection comparison, create a binary group variable
+  if (comp$name == "infection_female") {
+    eos_sub$infection_status <- ifelse(
+      grepl("Infected", eos_sub$condition), "Infected", "NonInfected"
+    )
+  }
+
+  cat(sprintf("  Total cells in comparison: %d\n", ncol(eos_sub)))
+
+  tryCatch({
+    deg_res <- run_pseudobulk_deseq2(eos_sub,
+                                      group_col = comp$group_col,
+                                      test_level = comp$test,
+                                      ref_level  = comp$ref)
+
+    # Report at multiple thresholds
+    for (fc in c(0.5, 0.25)) {
+      for (pcut in c(0.05, 0.1)) {
+        sig_res <- deg_res %>%
+          filter(!is.na(padj), padj < pcut, abs(log2FC) > fc)
+        cat(sprintf("  DEGs (padj < %.2f, |log2FC| > %.2f): %d (Up: %d, Down: %d)\n",
+                    pcut, fc, nrow(sig_res),
+                    sum(sig_res$log2FC > 0), sum(sig_res$log2FC < 0)))
+      }
+    }
+
+    # Save full results
+    out_file <- file.path(deg_dir, sprintf("deg_pseudobulk_%s.csv", comp$name))
+    write.csv(deg_res, out_file, row.names = FALSE)
+    cat(sprintf("  Saved: %s\n", out_file))
+
+    # Volcano plots at standard threshold
+    plot_volcano(deg_res,
+                 title    = comp$desc,
+                 filename = sprintf("07c_volcano_pb_%s.pdf", comp$name))
+    cat("  Volcano plot saved.\n")
+
+  }, error = function(e) {
+    cat(sprintf("  ERROR in comparison %s: %s\n", comp$name, e$message))
+  })
+}
+
+# --- Compare with MAST results -----------------------------------------------
+cat("\n============================================================\n")
+cat("Comparison: Pseudobulk DESeq2 vs MAST mixed-effects\n")
+cat("============================================================\n")
+
+for (comp in comparisons) {
+  mast_file <- file.path(deg_dir, sprintf("deg_%s.csv", comp$name))
+  pb_file   <- file.path(deg_dir, sprintf("deg_pseudobulk_%s.csv", comp$name))
+
+  if (file.exists(mast_file) && file.exists(pb_file)) {
+    mast <- read.csv(mast_file)
+    pb   <- read.csv(pb_file)
+
+    mast_sig <- mast %>% filter(padj < 0.05, abs(log2FC) > 0.5)
+    pb_sig   <- pb %>% filter(!is.na(padj), padj < 0.05, abs(log2FC) > 0.5)
+
+    overlap <- intersect(mast_sig$gene, pb_sig$gene)
+
+    cat(sprintf("\n%s:\n", comp$desc))
+    cat(sprintf("  MAST sig DEGs:       %d\n", nrow(mast_sig)))
+    cat(sprintf("  Pseudobulk sig DEGs: %d\n", nrow(pb_sig)))
+    cat(sprintf("  Overlap:             %d\n", length(overlap)))
+    if (length(overlap) > 0) {
+      cat(sprintf("  Shared genes: %s\n", paste(overlap, collapse = ", ")))
+    }
+  }
+}
+
+cat("\nDone! 07c_deg_pseudobulk.R completed successfully.\n")
