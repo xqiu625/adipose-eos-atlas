@@ -53,8 +53,10 @@ for (from in names(rename_map)) {
 }
 
 # ── Apply renaming ───────────────────────────────────────────────────────────
-eos$eos_cluster <- rename_map[eos$eos_cluster]
-Idents(eos) <- "eos_cluster"
+new_labels <- rename_map[eos$eos_cluster]
+names(new_labels) <- colnames(eos)
+eos$eos_cluster <- new_labels
+Idents(eos) <- factor(new_labels, levels = paste0("C", 0:6))
 
 cat("\n  After renaming:\n")
 print(table(eos$eos_cluster))
