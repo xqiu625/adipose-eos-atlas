@@ -640,6 +640,50 @@ if (!is.null(old_eos_labels) && length(old_eos_labels) > 0) {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Step 5c: Rename clusters to match manuscript numbering (C0-C6)
+# ══════════════════════════════════════════════════════════════════════════════
+cat("\n========================================\n")
+cat("Step 5c: Rename clusters to match manuscript\n")
+cat("========================================\n\n")
+
+# Mapping: new Seurat label -> manuscript label (based on dominant old cluster)
+# New C0 -> Old C1 (69%) => rename to C1
+# New C1 -> Old C0 (34%) => rename to C0
+# New C2 -> Old C4 (44%) => rename to C4
+# New C3 -> Old C2 (60%) => rename to C2
+# New C4 -> Old C5 (82%) => rename to C5
+# New C5 -> Old C3 (43%) => rename to C3
+# New C6 -> Old C6 (100%) => rename to C6
+
+rename_map <- c(
+  "C0" = "C1",
+  "C1" = "C0",
+  "C2" = "C4",
+  "C3" = "C2",
+  "C4" = "C5",
+  "C5" = "C3",
+  "C6" = "C6"
+)
+
+cat("  Renaming map (Seurat -> Manuscript):\n")
+for (from in names(rename_map)) {
+  cat(sprintf("    %s -> %s\n", from, rename_map[from]))
+}
+
+# Apply renaming
+old_labels_before <- eos$eos_cluster
+eos$eos_cluster <- rename_map[eos$eos_cluster]
+Idents(eos) <- "eos_cluster"
+
+cat("\n  Cluster sizes after renaming:\n")
+print(table(eos$eos_cluster))
+
+# Verify: compare renamed distribution with manuscript distribution
+cat("\n  Manuscript reference distribution:\n")
+cat("    C0=3092, C1=1899, C2=1831, C3=1338, C4=1143, C5=1126, C6=269\n")
+cat("  (New has fewer cells due to DecontX filtering)\n")
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Step 6: Figures
 # ══════════════════════════════════════════════════════════════════════════════
 clusters_present <- sort(unique(eos$eos_cluster))
@@ -699,6 +743,12 @@ dev.off()
 # ══════════════════════════════════════════════════════════════════════════════
 # Save outputs
 # ══════════════════════════════════════════════════════════════════════════════
+# Re-run FindAllMarkers with renamed cluster labels
+cat("\nRe-running FindAllMarkers with manuscript cluster names...\n")
+markers <- FindAllMarkers(eos, only.pos = TRUE, min.pct = 0.25,
+                          logfc.threshold = 0.25, verbose = FALSE)
+cat(sprintf("  %d marker genes identified\n", nrow(markers)))
+
 cat("\nSaving eos_subclustered.rds...\n")
 saveRDS(eos, file.path(BASE, "eos_subclustered.rds"))
 
@@ -746,15 +796,15 @@ if (!is.null(scshc_result)) {
 }
 
 if (exists("dominant_map") && !is.null(dominant_map)) {
-  cat(sprintf("\n5. CLUSTER CORRESPONDENCE (new res 0.4 vs manuscript C0-C6):\n"))
+  cat(sprintf("\n5. CLUSTER CORRESPONDENCE & RENAMING:\n"))
   cat(sprintf("   Old: no DecontX (10,698 eos) | New: DecontX + QC (7,475 eos)\n"))
-  cat(sprintf("   ARI = %.4f\n", ari_old_new))
-  for (i in seq_len(nrow(dominant_map))) {
-    row <- dominant_map[i, ]
-    cat(sprintf("   New %s (n=%d) -> Old %s (%.0f%%)\n",
-                row$new_cluster, row$n_cells,
-                row$primary_old_cluster, row$primary_fraction * 100))
+  cat(sprintf("   ARI (before renaming) = %.4f\n", ari_old_new))
+  cat(sprintf("   Clusters renamed to match manuscript numbering:\n"))
+  for (from in names(rename_map)) {
+    cat(sprintf("     Seurat %s -> Manuscript %s\n", from, rename_map[from]))
   }
+  cat(sprintf("\n   Final cluster sizes (manuscript labels):\n"))
+  print(table(eos$eos_cluster))
   cat(sprintf("   (see fig_cluster_correspondence.pdf, cluster_correspondence_new_vs_old.csv)\n"))
 }
 
