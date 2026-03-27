@@ -67,9 +67,9 @@ cat("========================================\n\n")
 
 if (length(ig_present) > 0) {
   # Raw counts
-  counts_mat <- GetAssayData(eos, slot = "counts")
+  counts_mat <- GetAssayData(eos, layer = "counts")
   # Normalized
-  norm_mat <- GetAssayData(eos, slot = "data")
+  norm_mat <- GetAssayData(eos, layer = "data")
 
   ig_summary <- data.frame(gene = character(), pct_expressing = numeric(),
                            mean_raw = numeric(), mean_norm = numeric(),
@@ -389,7 +389,7 @@ cat("Step 5: Multi-Ig gene co-expression check\n")
 cat("========================================\n\n")
 
 if (length(ig_present) >= 2) {
-  counts_mat <- GetAssayData(eos, slot = "counts")
+  counts_mat <- GetAssayData(eos, layer = "counts")
 
   # For each cell, count how many Ig genes are expressed
   ig_expr_mat <- as.matrix(counts_mat[ig_present, , drop = FALSE])
@@ -450,7 +450,7 @@ cat("Step 6: Igha+ vs Igha- eosinophil identity check\n")
 cat("========================================\n\n")
 
 if ("Igha" %in% ig_present) {
-  counts_mat <- GetAssayData(eos, slot = "counts")
+  counts_mat <- GetAssayData(eos, layer = "counts")
   igha_status <- ifelse(counts_mat["Igha", ] > 0, "Igha+", "Igha-")
   eos$igha_status <- igha_status
 
@@ -460,7 +460,7 @@ if ("Igha" %in% ig_present) {
   # Compare eos marker expression
   check_genes <- c(eos_markers_present, bcell_present)
   if (length(check_genes) > 0) {
-    norm_mat <- GetAssayData(eos, slot = "data")
+    norm_mat <- GetAssayData(eos, layer = "data")
 
     cat("\n  Mean normalized expression (Igha+ vs Igha-):\n")
     cat(sprintf("  %-10s  %10s  %10s  %s\n", "Gene", "Igha+", "Igha-", "Interpretation"))
