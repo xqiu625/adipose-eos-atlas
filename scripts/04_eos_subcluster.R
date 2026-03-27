@@ -254,8 +254,11 @@ for (i in seq_len(n_iter)) {
   names(sub_labels) <- colnames(eos_sub)
 
   # Compute ARI between subsampled clusters and reference labels for same cells
-  ref_sub <- ref_labels[sub_cells]
-  ari_scores[i] <- compute_ari(ref_sub, sub_labels)
+  # IMPORTANT: align by colnames(eos_sub), NOT sub_cells — subset() preserves
+  # original cell order which differs from sample() order
+  shared_cells <- colnames(eos_sub)
+  ref_sub <- ref_labels[shared_cells]
+  ari_scores[i] <- compute_ari(ref_sub, sub_labels[shared_cells])
   n_clusters_sub[i] <- length(unique(sub_labels))
 }
 
@@ -468,6 +471,175 @@ marker_counts <- markers %>%
 print(as.data.frame(marker_counts))
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Step 5b: Map new clusters (res 0.4) to old clusters (res 0.8)
+# ══════════════════════════════════════════════════════════════════════════════
+cat("\n========================================\n")
+cat("Step 5b: Correspondence with manuscript clusters\n")
+cat("========================================\n\n")
+cat("  Old manuscript: no DecontX, 10,698 eos, 7 clusters (C0-C6)\n")
+cat("  New pipeline:   DecontX + QC + Scrublet, 7,475 eos, res 0.4\n")
+cat("  Matching by cell barcode to map new -> old cluster identity\n\n")
+
+# Load original manuscript Seurat object (has the published Eos C0-C6 labels)
+# Old object: eos_cluster column = C0-C6 (10,698 eos cells), NA for non-eos
+old_dir <- "/bigdata/nairlab/shared/XQiu/EOS_project/R07_20250702/03_cellchat_eos_mac/"
+old_rds <- file.path(old_dir, "seurat_object_for_cellchat.rds")
+
+old_eos_labels <- NULL
+
+if (file.exists(old_rds)) {
+  cat(sprintf("Loading original manuscript object:\n  %s\n", old_rds))
+  old_obj <- tryCatch(readRDS(old_rds), error = function(e) {
+    cat(sprintf("  ERROR loading: %s\n", e$message)); NULL
+  })
+
+  if (!is.null(old_obj)) {
+    cat(sprintf("  Old object: %d genes x %d cells\n", nrow(old_obj), ncol(old_obj)))
+
+    # Extract eos_cluster column (C0-C6 for eos, NA for non-eos)
+    old_all_labels <- as.character(old_obj$eos_cluster)
+    names(old_all_labels) <- colnames(old_obj)
+
+    # Keep only eosinophil cells (non-NA and non-"NA" string)
+    keep <- !is.na(old_all_labels) & old_all_labels != "NA" & grepl("^C[0-9]", old_all_labels)
+    old_eos_labels <- old_all_labels[keep]
+    cat(sprintf("  Old eosinophil cells: %d\n", length(old_eos_labels)))
+    cat(sprintf("  Old clusters: %s\n",
+                paste(names(sort(table(old_eos_labels), decreasing = TRUE)),
+                      collapse = ", ")))
+    print(table(old_eos_labels))
+
+    rm(old_obj); gc()
+  }
+} else {
+  cat(sprintf("  File not found: %s\n", old_rds))
+}
+
+# Match barcodes between new (res 0.4) and old (manuscript) clusters
+if (!is.null(old_eos_labels) && length(old_eos_labels) > 0) {
+  common_cells <- intersect(colnames(eos), names(old_eos_labels))
+  cat(sprintf("\n  Barcode matching:\n"))
+  cat(sprintf("    New eos cells:    %d\n", ncol(eos)))
+  cat(sprintf("    Old eos cells:    %d\n", length(old_eos_labels)))
+  cat(sprintf("    Common barcodes:  %d\n", length(common_cells)))
+
+  if (length(common_cells) > 0) {
+    new_labels <- eos$eos_cluster[common_cells]
+    old_labels <- old_eos_labels[common_cells]
+
+    # Confusion matrix: rows = new (res 0.4), cols = old (manuscript)
+    conf_mat <- table(New_res0.4 = new_labels, Old_manuscript = old_labels)
+    cat("\n  Confusion matrix (New res 0.4 vs Old manuscript):\n")
+    print(conf_mat)
+
+    # Proportion matrix: for each new cluster, what % came from each old cluster
+    prop_mat <- prop.table(conf_mat, margin = 1)
+    cat("\n  Proportion matrix (row-normalized, per new cluster):\n")
+    print(round(prop_mat, 3))
+
+    # Dominant mapping: for each new cluster, which old cluster has the most cells
+    dominant_map <- data.frame(
+      new_cluster = rownames(prop_mat),
+      stringsAsFactors = FALSE
+    )
+    dominant_map$primary_old_cluster <- apply(prop_mat, 1, function(x) {
+      colnames(prop_mat)[which.max(x)]
+    })
+    dominant_map$primary_fraction <- apply(prop_mat, 1, max)
+    dominant_map$secondary_old_cluster <- apply(prop_mat, 1, function(x) {
+      sorted <- sort(x, decreasing = TRUE)
+      if (length(sorted) >= 2 && sorted[2] > 0.05) {
+        colnames(prop_mat)[order(x, decreasing = TRUE)[2]]
+      } else {
+        NA
+      }
+    })
+    dominant_map$secondary_fraction <- apply(prop_mat, 1, function(x) {
+      sort(x, decreasing = TRUE)[2]
+    })
+    dominant_map$n_cells <- as.integer(table(new_labels)[dominant_map$new_cluster])
+
+    cat("\n  Cluster correspondence (new res 0.4 -> old manuscript):\n")
+    for (i in seq_len(nrow(dominant_map))) {
+      row <- dominant_map[i, ]
+      msg <- sprintf("    %s (n=%d) -> %s (%.1f%%)",
+                     row$new_cluster, row$n_cells,
+                     row$primary_old_cluster, row$primary_fraction * 100)
+      if (!is.na(row$secondary_old_cluster)) {
+        msg <- sprintf("%s + %s (%.1f%%)", msg,
+                       row$secondary_old_cluster, row$secondary_fraction * 100)
+      }
+      cat(msg, "\n")
+    }
+
+    # ARI between old and new
+    ari_old_new <- compute_ari(new_labels, old_labels)
+    cat(sprintf("\n  ARI (new res 0.4 vs old manuscript): %.4f\n", ari_old_new))
+
+    # Save correspondence table
+    write.csv(dominant_map,
+              file.path(supp_dir, "cluster_correspondence_new_vs_old.csv"),
+              row.names = FALSE)
+    write.csv(as.data.frame.matrix(conf_mat),
+              file.path(supp_dir, "cluster_confusion_matrix.csv"))
+    cat("  Saved: cluster_correspondence_new_vs_old.csv\n")
+    cat("  Saved: cluster_confusion_matrix.csv\n")
+
+    # Confusion matrix heatmap
+    cat("  Plotting confusion matrix heatmap...\n")
+    conf_df <- as.data.frame(conf_mat)
+    colnames(conf_df) <- c("New_res0.4", "Old_manuscript", "n_cells")
+
+    # Also make proportion version for color
+    prop_df <- as.data.frame(prop_mat)
+    colnames(prop_df) <- c("New_res0.4", "Old_manuscript", "fraction")
+    conf_df$fraction <- prop_df$fraction
+
+    p_conf <- ggplot(conf_df, aes(x = Old_manuscript, y = New_res0.4, fill = fraction)) +
+      geom_tile(color = "white", linewidth = 0.5) +
+      geom_text(aes(label = n_cells), size = 3.5, color = "black") +
+      scale_fill_gradient(low = "white", high = "#2166AC", name = "Fraction",
+                          limits = c(0, 1)) +
+      labs(x = "Old Clusters (Manuscript)", y = "New Clusters (res 0.4)",
+           title = "Cluster Correspondence: New (res 0.4) vs Old (Manuscript)",
+           subtitle = sprintf("Numbers = cell counts; ARI = %.3f", ari_old_new)) +
+      theme_pub() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+    pdf(file.path(supp_dir, "fig_cluster_correspondence.pdf"), width = 8, height = 6)
+    print(p_conf)
+    dev.off()
+    cat("  Saved: fig_cluster_correspondence.pdf\n")
+
+    # Side-by-side UMAP: old vs new coloring
+    eos$old_cluster <- old_eos_labels[colnames(eos)]
+
+    p_old <- DimPlot(eos, group.by = "old_cluster", cols = eos_colors,
+                     pt.size = 0.3, label = TRUE, label.size = 3) +
+      ggtitle("Old Clusters (Manuscript)") + theme_umap() +
+      theme(legend.position = "right")
+
+    p_new <- DimPlot(eos, group.by = "eos_cluster", cols = eos_colors,
+                     pt.size = 0.3, label = TRUE, label.size = 3) +
+      ggtitle("New Clusters (res 0.4)") + theme_umap() +
+      theme(legend.position = "right")
+
+    pdf(file.path(supp_dir, "fig_umap_old_vs_new_clusters.pdf"), width = 14, height = 6)
+    print(p_old + p_new + plot_layout(ncol = 2))
+    dev.off()
+    cat("  Saved: fig_umap_old_vs_new_clusters.pdf\n")
+
+  } else {
+    cat("  No common barcodes found.\n")
+    cat("  NOTE: Old manuscript had no DecontX cleaning (10,698 eos).\n")
+    cat("  New pipeline applies DecontX + stricter QC (7,475 eos).\n")
+    cat("  Barcodes may differ if cell naming convention changed.\n")
+  }
+} else {
+  cat("  Old manuscript eos labels not available. Skipping correspondence.\n")
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Step 6: Figures
 # ══════════════════════════════════════════════════════════════════════════════
 clusters_present <- sort(unique(eos$eos_cluster))
@@ -571,6 +743,19 @@ if (!is.null(scshc_result)) {
     cat(sprintf("   %d clusters merged to %d\n", n_original, n_final))
   }
   cat(sprintf("   (see scshc_summary.csv, scshc_pvalues.csv)\n"))
+}
+
+if (exists("dominant_map") && !is.null(dominant_map)) {
+  cat(sprintf("\n5. CLUSTER CORRESPONDENCE (new res 0.4 vs manuscript C0-C6):\n"))
+  cat(sprintf("   Old: no DecontX (10,698 eos) | New: DecontX + QC (7,475 eos)\n"))
+  cat(sprintf("   ARI = %.4f\n", ari_old_new))
+  for (i in seq_len(nrow(dominant_map))) {
+    row <- dominant_map[i, ]
+    cat(sprintf("   New %s (n=%d) -> Old %s (%.0f%%)\n",
+                row$new_cluster, row$n_cells,
+                row$primary_old_cluster, row$primary_fraction * 100))
+  }
+  cat(sprintf("   (see fig_cluster_correspondence.pdf, cluster_correspondence_new_vs_old.csv)\n"))
 }
 
 cat("\n================================================================\n")
