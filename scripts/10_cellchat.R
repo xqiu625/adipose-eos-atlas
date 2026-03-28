@@ -76,7 +76,7 @@ for (cond in conditions) {
     }
 
     # Prepare CellChat input
-    data_input <- GetAssayData(sub, slot = "data")  # normalized
+    data_input <- GetAssayData(sub, layer = "data")  # normalized
     meta <- data.frame(labels = sub$celltype, row.names = colnames(sub))
 
     cc <- createCellChat(object = data_input, meta = meta, group.by = "labels")
