@@ -25,7 +25,7 @@ dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
 # ── Ig genes to check (mouse orthologs) ──────────────────────────────────────
 # Mouse Ig genes (note: mouse uses Igha, Igkc, Ighg1, Jchain, Iglc2 etc.)
 ig_genes <- c("Igha", "Igkc", "Ighg1", "Jchain", "Iglc2", "Iglc1",
-              "Ighm", "Igha", "Ighg2b", "Ighg2c")
+              "Ighm", "Ighg2b", "Ighg2c")
 
 # Eosinophil markers
 eos_markers <- c("Siglecf", "Il5ra", "Epx", "Prg2", "Prg3", "Ear1", "Ear2", "Ccr3")
