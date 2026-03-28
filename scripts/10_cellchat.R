@@ -39,7 +39,7 @@ obj <- tryCatch(
   readRDS(file.path(BASE, "eos_mac_combined.rds")),
   error = function(e) { cat("ERROR: Cannot load input:", e$message, "\n"); quit(status = 1) }
 )
-cat("  Cells:", ncol(obj), " Celltypes:", paste(unique(obj$celltype), collapse = ", "), "\n")
+cat("  Cells:", ncol(obj), " Celltypes:", paste(sort(unique(obj$detailed_celltype)), collapse = ", "), "\n")
 
 # --- Helper: classify cell as eos or mac -------------------------------------
 is_eos <- function(ct) grepl("^Eos_", ct)
@@ -66,8 +66,8 @@ for (cond in conditions) {
     }
     sub <- subset(obj, cells = cells_cond)
 
-    n_eos <- sum(is_eos(sub$celltype))
-    n_mac <- sum(is_mac(sub$celltype))
+    n_eos <- sum(is_eos(sub$detailed_celltype))
+    n_mac <- sum(is_mac(sub$detailed_celltype))
     cat("  Eos:", n_eos, " Mac:", n_mac, "\n")
 
     if (n_eos < 50 || n_mac < 50) {
@@ -77,7 +77,7 @@ for (cond in conditions) {
 
     # Prepare CellChat input
     data_input <- GetAssayData(sub, layer = "data")  # normalized
-    meta <- data.frame(labels = sub$celltype, row.names = colnames(sub))
+    meta <- data.frame(labels = sub$detailed_celltype, row.names = colnames(sub))
 
     cc <- createCellChat(object = data_input, meta = meta, group.by = "labels")
     cat("  CellChat object created\n")
