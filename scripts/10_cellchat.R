@@ -41,6 +41,10 @@ obj <- tryCatch(
 )
 cat("  Cells:", ncol(obj), " Celltypes:", paste(sort(unique(obj$detailed_celltype)), collapse = ", "), "\n")
 
+# Seurat v5: join split layers so GetAssayData works
+cat("Joining layers...\n")
+obj <- JoinLayers(obj)
+
 # --- Helper: classify cell as eos or mac -------------------------------------
 is_eos <- function(ct) grepl("^Eos_", ct)
 is_mac <- function(ct) grepl("^Mac_", ct)
