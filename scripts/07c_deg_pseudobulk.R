@@ -126,7 +126,7 @@ plot_volcano <- function(deg_df, title, filename, label_up, label_down,
          title = title, color = "Significance") +
     theme_pub()
 
-  pdf(file.path(fig_dir, filename), width = 8, height = 7)
+  cairo_pdf(file.path(fig_dir, filename), width = 8, height = 7)
   print(p)
   dev.off()
 }
