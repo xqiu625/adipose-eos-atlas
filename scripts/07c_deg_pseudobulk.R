@@ -88,8 +88,8 @@ run_pseudobulk_deseq2 <- function(seu, group_col, test_level, ref_level,
 }
 
 # --- Helper: volcano plot -----------------------------------------------------
-plot_volcano <- function(deg_df, title, filename,
-                         fc_cutoff = 0.5, padj_cutoff = 0.05, top_n = 20) {
+plot_volcano <- function(deg_df, title, filename, label_up, label_down,
+                         fc_cutoff = 0.5, padj_cutoff = 0.05, top_n = 10) {
   deg_df <- deg_df %>%
     filter(!is.na(padj)) %>%
     mutate(
@@ -100,19 +100,27 @@ plot_volcano <- function(deg_df, title, filename,
       )
     )
 
-  top_genes <- deg_df %>%
-    filter(sig != "NS") %>%
-    arrange(padj) %>%
-    head(top_n)
+  # Always label top N genes in each direction by log2FC (regardless of sig)
+  top_up <- deg_df %>% arrange(desc(log2FC)) %>% head(top_n)
+  top_down <- deg_df %>% arrange(log2FC) %>% head(top_n)
+  top_genes <- bind_rows(top_up, top_down) %>% distinct(gene, .keep_all = TRUE)
+
+  # X-axis range for annotation placement
+  x_range <- range(deg_df$log2FC, na.rm = TRUE)
+  y_min <- min(-log10(deg_df$pval), na.rm = TRUE)
 
   p <- ggplot(deg_df, aes(x = log2FC, y = -log10(pval), color = sig)) +
     geom_point(size = 0.8, alpha = 0.7) +
     geom_text_repel(data = top_genes,
-                    aes(label = gene), size = 2.5, max.overlaps = 25,
+                    aes(label = gene), size = 2.5, max.overlaps = 30,
                     fontface = "italic", color = "black") +
     scale_color_manual(values = vol_colors) +
     geom_vline(xintercept = c(-fc_cutoff, fc_cutoff), linetype = "dashed", color = "grey40") +
     geom_hline(yintercept = -log10(padj_cutoff), linetype = "dashed", color = "grey40") +
+    annotate("text", x = x_range[2] * 0.7, y = y_min, label = paste0("Up in ", label_up, " \u2192"),
+             size = 3.5, fontface = "bold", color = "#E84A5F", hjust = 0.5) +
+    annotate("text", x = x_range[1] * 0.7, y = y_min, label = paste0("\u2190 Up in ", label_down),
+             size = 3.5, fontface = "bold", color = "#2166AC", hjust = 0.5) +
     labs(x = "log2 Fold Change",
          y = expression(-log[10](italic(p)-value)),
          title = title, color = "Significance") +
@@ -138,7 +146,9 @@ comparisons <- list(
     subset_conditions = c("WT_Female_HFD", "WT_Male_HFD"),
     group_col = "condition",
     test      = "WT_Female_HFD",
-    ref       = "WT_Male_HFD"
+    ref       = "WT_Male_HFD",
+    label_up  = "Female",
+    label_down = "Male"
   ),
   genotype_female = list(
     name      = "genotype_female",
@@ -146,7 +156,9 @@ comparisons <- list(
     subset_conditions = c("KO_Female_HFD", "WT_Female_HFD"),
     group_col = "condition",
     test      = "KO_Female_HFD",
-    ref       = "WT_Female_HFD"
+    ref       = "WT_Female_HFD",
+    label_up  = "KO",
+    label_down = "WT"
   ),
   genotype_male = list(
     name      = "genotype_male",
@@ -154,7 +166,9 @@ comparisons <- list(
     subset_conditions = c("KO_Male_HFD", "WT_Male_HFD"),
     group_col = "condition",
     test      = "KO_Male_HFD",
-    ref       = "WT_Male_HFD"
+    ref       = "WT_Male_HFD",
+    label_up  = "KO",
+    label_down = "WT"
   ),
   infection_female = list(
     name      = "infection_female",
@@ -163,7 +177,9 @@ comparisons <- list(
                           "WT_Female_HFD", "KO_Female_HFD"),
     group_col = "infection_status",
     test      = "Infected",
-    ref       = "NonInfected"
+    ref       = "NonInfected",
+    label_up  = "Infected",
+    label_down = "Non-infected"
   )
 )
 
@@ -211,8 +227,10 @@ for (comp in comparisons) {
 
     # Volcano plots at standard threshold
     plot_volcano(deg_res,
-                 title    = comp$desc,
-                 filename = sprintf("07c_volcano_pb_%s.pdf", comp$name))
+                 title      = comp$desc,
+                 filename   = sprintf("07c_volcano_pb_%s.pdf", comp$name),
+                 label_up   = comp$label_up,
+                 label_down = comp$label_down)
     cat("  Volcano plot saved.\n")
 
   }, error = function(e) {
