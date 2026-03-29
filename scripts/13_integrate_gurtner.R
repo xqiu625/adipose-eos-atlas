@@ -112,8 +112,8 @@ combined <- RunPCA(combined, npcs = 30, verbose = FALSE)
 
 # --- Harmony integration ------------------------------------------------------
 cat("Running Harmony integration (group.by = dataset) ...\n")
-combined <- RunHarmony(combined, group.by.vars = "dataset", reduction = "pca",
-                        dims.use = 1:30, verbose = TRUE)
+combined <- RunHarmony(combined, group.by.vars = "dataset",
+                        reduction.use = "pca", verbose = TRUE)
 
 # --- UMAP on Harmony embeddings ----------------------------------------------
 cat("Running UMAP on Harmony embeddings ...\n")
