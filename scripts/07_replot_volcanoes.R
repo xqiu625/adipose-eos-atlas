@@ -19,7 +19,7 @@ fig_dir <- file.path(BASE, "figures")
 
 # --- Volcano plot function ----------------------------------------------------
 plot_volcano <- function(deg_df, title, filename, label_up, label_down,
-                         fc_cutoff = 0.5, padj_cutoff = 0.05, top_n = 10) {
+                         fc_cutoff = 0.25, padj_cutoff = 0.05, top_n = 10) {
   deg_df <- deg_df %>%
     filter(!is.na(padj)) %>%
     mutate(
