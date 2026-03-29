@@ -171,7 +171,7 @@ tryCatch({
     ggtitle("Qiu_2025 adipose eos clusters") +
     theme_umap()
 
-  p2 <- DimPlot(subset(combined, dataset == "Gurtner_Blood_BM"),
+  p2 <- DimPlot(subset(combined, dataset == "Gurtner_2022"),
                  reduction = "umap", group.by = "original_cluster",
                  label = TRUE, pt.size = 0.3) +
     ggtitle("Gurtner blood/BM eos clusters") +
@@ -255,6 +255,9 @@ cat("  Saved qiu_gurtner_integrated.rds\n")
 cat("Exporting data for CellRank ...\n")
 export_dir <- file.path(outdir, "for_cellrank")
 dir.create(export_dir, showWarnings = FALSE, recursive = TRUE)
+
+# Join layers for Seurat v5 (merged object has split layers)
+combined <- JoinLayers(combined)
 
 # Counts matrix (sparse)
 counts_mat <- GetAssayData(combined, layer = "counts")
