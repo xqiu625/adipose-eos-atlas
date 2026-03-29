@@ -46,7 +46,7 @@ cat(sprintf("  %d genes x %d cells\n", nrow(eos), ncol(eos)))
 
 # -- Extract raw counts --------------------------------------------------------
 cat("Extracting raw counts...\n")
-raw_counts <- GetAssayData(eos, slot = "counts")
+raw_counts <- GetAssayData(eos, layer = "counts")
 
 # Transpose: AnnData expects cells x genes
 raw_t <- t(raw_counts)
@@ -56,7 +56,7 @@ cat(sprintf("  Raw counts matrix (cells x genes): %d x %d\n",
 
 # -- Extract normalized counts -------------------------------------------------
 cat("Extracting normalized counts...\n")
-norm_counts <- GetAssayData(eos, slot = "data")
+norm_counts <- GetAssayData(eos, layer = "data")
 norm_t <- t(norm_counts)
 
 # -- Convert to scipy sparse (CSC) --------------------------------------------
