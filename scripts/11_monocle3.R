@@ -16,13 +16,16 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # Output: monocle3_cds.rds, trajectory_genes.csv, PDFs
 # =============================================================================
 
-suppressPackageStartupMessages({
-  library(monocle3)
-  library(Seurat)
-  library(SeuratWrappers)
-  library(ggplot2)
-  library(dplyr)
-})
+library(Seurat)
+
+# Fix "superclass ExpData not defined" error with monocle3 + Bioconductor 3.21
+if (!isClass("ExpData")) {
+  setClass("ExpData", contains = "VIRTUAL")
+}
+library(monocle3)
+library(SeuratWrappers)
+library(ggplot2)
+library(dplyr)
 
 SCRIPTS <- dirname(sub("--file=", "", grep("--file=", commandArgs(trailingOnly = FALSE), value = TRUE)[1]))
 source(file.path(SCRIPTS, "00_theme.R"))
