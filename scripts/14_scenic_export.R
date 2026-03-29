@@ -64,7 +64,8 @@ cat("Converting matrices to scipy sparse format...\n")
 
 to_scipy_csc <- function(mat_t) {
   # mat_t is a dgCMatrix (cells x genes after transpose)
-  scipy$sparse$csc_matrix(
+  # scipy is already imported as scipy.sparse
+  scipy$csc_matrix(
     tuple(
       np$array(mat_t@x),
       np$array(as.integer(mat_t@i)),
