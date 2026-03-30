@@ -237,6 +237,24 @@ sbatch --job-name=23_mast --partition=batch \
   --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/23_hu_mast_marker_validation.R"
 
 # ==============================================================================
+# BLOCK 12: Three-way integration + CellRank maturation trajectory
+# Depends on: 04 (eos_subclustered.rds) + Hu + Gurtner data
+# ==============================================================================
+# Step 1: R integration (Harmony)
+sbatch --job-name=24_integrate --partition=epyc \
+  --mem=64G --cpus-per-task=8 --time=4:00:00 \
+  --output=${LOGS}/24_integrate_%j.out --error=${LOGS}/24_integrate_%j.err \
+  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/24_integrate_qiu_hu_gurtner.R"
+
+# >>> Wait for 24 to complete <<<
+
+# Step 2: CellRank trajectory (Python)
+sbatch --job-name=24b_cellrank --partition=epyc \
+  --mem=64G --cpus-per-task=8 --time=4:00:00 \
+  --output=${LOGS}/24b_cellrank_%j.out --error=${LOGS}/24b_cellrank_%j.err \
+  --wrap="source activate ${CONDA} && python ${SCRIPTS}/24b_cellrank_eos_maturation.py"
+
+# ==============================================================================
 # Monitor jobs:
 #   squeue -u $USER
 #   sacct --format=JobID,JobName,State,Elapsed,MaxRSS -j <JOB_IDs>

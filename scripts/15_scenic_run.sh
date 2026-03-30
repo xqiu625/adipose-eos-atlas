@@ -63,6 +63,7 @@ JOB1=$(sbatch --parsable \
     --output="${LOGS}/scenic_grn_%j.out" \
     --error="${LOGS}/scenic_grn_%j.err" \
     --wrap="source activate ${CONDA} && \
+export DASK_DATAFRAME__QUERY_PLANNING=False && \
 pyscenic grn \
   ${H5AD} \
   ${TF_LIST} \
