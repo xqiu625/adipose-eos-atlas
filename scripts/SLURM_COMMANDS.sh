@@ -180,6 +180,12 @@ sbatch --job-name=10_cellchat --partition=batch \
   --output=${LOGS}/10_cellchat_%j.out --error=${LOGS}/10_cellchat_%j.err \
   --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/10_cellchat.R"
 
+# 10b: CellChat manuscript figures (depends on 10_cellchat)
+sbatch --job-name=10b_cellchat_figs --partition=batch \
+  --mem=64G --cpus-per-task=4 --time=2:00:00 \
+  --output=${LOGS}/10b_cellchat_figs_%j.out --error=${LOGS}/10b_cellchat_figs_%j.err \
+  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/10b_cellchat_manuscript_figures.R"
+
 # >>> Wait for 14 to complete, then: <<<
 
 # ==============================================================================
