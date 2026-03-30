@@ -119,6 +119,7 @@ cat(sprintf("Conditions with both Eos + Mac: %s\n", paste(conds_with_both, colla
 
 # --- Map internal cell type names to display names ---
 display_name <- function(x) {
+  x <- as.character(x)  # CellChat returns factors; indexing named vec with factor uses integer codes
   mapping <- c(
     "Mac_M1"       = "M1",
     "Mac_M2_Func"  = "M2 Funct.",
