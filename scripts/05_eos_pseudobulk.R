@@ -30,9 +30,9 @@ obj <- readRDS(file.path(BASE, "all_cells_annotated.rds"))
 cat(sprintf("  %d genes x %d cells\n", nrow(obj), ncol(obj)))
 
 # ── Helper: Fig 1B aesthetics ─────────────────────────────────────────────────
-# Shape = Genotype (WT=circle, KO=triangle)
-# Color = Sex (Male=blue, Female=red)
-# Fill  = Infection (Naive=open, Infected=filled)
+# Color  = Condition (one distinct color per group, from cond_colors)
+# Shape  = Genotype (WT=circle, KO=triangle) — fillable shapes
+# Fill   = Infected=filled with condition color, Naive=open (white fill)
 add_fig1b_aes <- function(df) {
   df$genotype  <- ifelse(grepl("^WT", df$condition), "WT", "KO")
   df$sex       <- ifelse(grepl("Male", df$condition), "Male", "Female")
@@ -40,18 +40,29 @@ add_fig1b_aes <- function(df) {
   df
 }
 
-sex_colors  <- c("Male" = "#2166AC", "Female" = "#B2182B")
 geno_shapes <- c("WT" = 21, "KO" = 24)
 
+# Fill palette: infected conditions get their color, naive get white (open)
+fill_palette <- cond_colors
+fill_palette[!grepl("Infected", names(fill_palette))] <- "white"
+
 fig1b_plot <- function(df, x_var, y_var, x_lab, y_lab, title_text) {
+  # Ensure condition factor levels match cond_colors order
+  present_conds <- intersect(names(cond_colors), unique(df$condition))
+  df$condition <- factor(df$condition, levels = names(cond_colors))
+
   ggplot(df, aes(x = .data[[x_var]], y = .data[[y_var]],
-                 color = sex, fill = sex, shape = genotype)) +
-    geom_point(size = 4, stroke = 1.2, aes(alpha = infection)) +
+                 color = condition, fill = condition, shape = genotype)) +
+    geom_point(size = 4, stroke = 1.2) +
     scale_shape_manual(values = geno_shapes, name = "Genotype") +
-    scale_color_manual(values = sex_colors, name = "Sex") +
-    scale_fill_manual(values = sex_colors, name = "Sex") +
-    scale_alpha_manual(values = c("Naive" = 0.4, "Infected" = 1),
-                       name = "Infection Status") +
+    scale_color_manual(values = cond_colors, labels = cond_labels, name = "Group",
+                       breaks = present_conds) +
+    scale_fill_manual(values = fill_palette, labels = cond_labels, name = "Group",
+                      breaks = present_conds) +
+    guides(color = guide_legend(override.aes = list(
+             fill = fill_palette[present_conds],
+             shape = 21, size = 3)),
+           fill = "none") +
     labs(x = x_lab, y = y_lab, title = title_text) +
     theme_pub() +
     theme(legend.position = "right",
@@ -148,16 +159,16 @@ run_pseudobulk <- function(sobj, label, prefix) {
 
   # --- Figures ---------------------------------------------------------------
 
-  # MDS plot (Fig 1B style)
+  # MDS plot (Fig 1B style) — cairo_pdf for Unicode sex symbols
   cat("Plotting MDS...\n")
-  pdf(file.path(fig_dir, sprintf("%s_mds.pdf", prefix)), width = 9, height = 7)
+  cairo_pdf(file.path(fig_dir, sprintf("%s_mds.pdf", prefix)), width = 9, height = 7)
   print(fig1b_plot(mds_df, "MDS1", "MDS2",
                    "Dimension 1", "Dimension 2", label))
   dev.off()
 
   # PCA plot (Fig 1B style)
   cat("Plotting PCA...\n")
-  pdf(file.path(fig_dir, sprintf("%s_pca.pdf", prefix)), width = 9, height = 7)
+  cairo_pdf(file.path(fig_dir, sprintf("%s_pca.pdf", prefix)), width = 9, height = 7)
   print(fig1b_plot(pca_df, "PC1", "PC2",
                    sprintf("PC1 (%.1f%%)", pct_var[1]),
                    sprintf("PC2 (%.1f%%)", pct_var[2]),
