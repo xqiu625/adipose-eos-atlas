@@ -9,7 +9,7 @@
 # Conda: /bigdata/godziklab/shared/Xinru/cellrank_env
 #
 # Inputs:
-#   - eos_scenic_output.loom  (AUCell scores from pySCENIC)
+#   - eos_scenic_aucell.csv   (AUCell scores from pySCENIC)
 #   - eos_for_scenic.h5ad     (original expression + metadata)
 #
 # Outputs:
@@ -22,7 +22,6 @@ import warnings
 import numpy as np
 import pandas as pd
 import scanpy as sc
-import loompy
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -60,7 +59,7 @@ EOS_CMAP = sns.color_palette([EOS_COLORS[f"C{i}"] for i in range(7)])
 
 # -- Configuration -------------------------------------------------------------
 BASE = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
-LOOM_PATH = os.path.join(BASE, "scenic", "eos_scenic_output.loom")
+AUCELL_CSV = os.path.join(BASE, "scenic", "eos_scenic_aucell.csv")
 H5AD_PATH = os.path.join(BASE, "scenic", "eos_for_scenic.h5ad")
 FIG_DIR = os.path.join(BASE, "scenic", "figures")
 os.makedirs(FIG_DIR, exist_ok=True)
@@ -79,32 +78,11 @@ print(f"  Loading h5ad: {H5AD_PATH}")
 adata = sc.read_h5ad(H5AD_PATH)
 print(f"  AnnData: {adata.shape[0]} cells x {adata.shape[1]} genes")
 
-# Load SCENIC loom output
-print(f"  Loading loom: {LOOM_PATH}")
-lf = loompy.connect(LOOM_PATH, mode="r")
-
-# Extract AUCell matrix (regulon activity scores)
-# In SCENIC loom files, regulon AUC scores are in the column attributes
-# The matrix rows are genes, columns are cells
-auc_mtx = pd.DataFrame(
-    lf.ca["RegulonsAUC"],
-    index=lf.ca["CellID"]
-)
-
-# Get regulon names from the column attribute keys
-# RegulonsAUC is typically a structured array; handle accordingly
-if hasattr(lf.ca["RegulonsAUC"], "dtype") and lf.ca["RegulonsAUC"].dtype.names:
-    # Structured array: field names are regulon names
-    regulon_names = list(lf.ca["RegulonsAUC"].dtype.names)
-    cell_ids = lf.ca["CellID"]
-    auc_data = np.column_stack([lf.ca["RegulonsAUC"][r] for r in regulon_names])
-    auc_mtx = pd.DataFrame(auc_data, index=cell_ids, columns=regulon_names)
-else:
-    # Fallback: try direct matrix extraction
-    cell_ids = lf.ca["CellID"]
-    auc_mtx = pd.DataFrame(lf.ca["RegulonsAUC"], index=cell_ids)
-
-lf.close()
+# Load SCENIC AUCell CSV output
+print(f"  Loading AUCell CSV: {AUCELL_CSV}")
+auc_mtx = pd.read_csv(AUCELL_CSV, index_col=0)
+# Clean column names: remove trailing "(+)" from regulon names if present
+auc_mtx.columns = [c.strip() for c in auc_mtx.columns]
 
 print(f"  AUCell matrix: {auc_mtx.shape[0]} cells x {auc_mtx.shape[1]} regulons")
 print(f"  Regulons: {', '.join(auc_mtx.columns[:5])}... ({len(auc_mtx.columns)} total)")
@@ -310,39 +288,37 @@ print(f"  Saved: {dotplot_path}")
 # -- Step 6: Network visualization (top regulons + target genes) ---------------
 print("Step 6: Plotting regulon-target gene networks per cluster...")
 
-# Try to extract regulon-target gene mappings from the loom file
-print("  Extracting regulon-target mappings from loom...")
-lf = loompy.connect(LOOM_PATH, mode="r")
-
+# Extract regulon-target gene mappings from regulons.csv
+REGULONS_CSV = os.path.join(BASE, "scenic", "regulons.csv")
 regulon_targets = {}
 try:
-    # SCENIC stores regulon info in row attributes (Regulons column)
-    # Each regulon is a binary vector over genes indicating membership
-    if "Regulons" in lf.ra:
-        gene_names = lf.ra["Gene"]
-        if hasattr(lf.ra["Regulons"], "dtype") and lf.ra["Regulons"].dtype.names:
-            for reg_name in lf.ra["Regulons"].dtype.names:
-                targets = gene_names[lf.ra["Regulons"][reg_name].astype(bool)]
-                if len(targets) > 0:
-                    regulon_targets[reg_name] = list(targets)
-        else:
-            print("  Warning: Regulons attribute format not recognized; "
-                  "skipping target gene extraction.")
-    else:
-        print("  Warning: 'Regulons' not found in row attributes; "
-              "trying alternative extraction.")
-        # Fallback: check global attributes for regulon JSON
-        if "MetaData" in lf.attrs:
-            meta = json.loads(lf.attrs["MetaData"])
-            if "regulonThresholds" in meta:
-                for entry in meta["regulonThresholds"]:
-                    reg_name = entry.get("regulon", "")
-                    # Targets might not be stored here
-                    regulon_targets[reg_name] = []
+    print(f"  Loading regulon targets from: {REGULONS_CSV}")
+    reg_df = pd.read_csv(REGULONS_CSV)
+    # pySCENIC ctx output: columns are TF, MotifID, AUC, ..., TargetGenes
+    if "TF" in reg_df.columns:
+        for tf_name in reg_df["TF"].unique():
+            tf_rows = reg_df[reg_df["TF"] == tf_name]
+            # TargetGenes column contains comma-separated gene lists or JSON
+            targets = set()
+            for _, row in tf_rows.iterrows():
+                if "TargetGenes" in row and pd.notna(row["TargetGenes"]):
+                    tg = str(row["TargetGenes"])
+                    # Try parsing as list of (gene, score) tuples
+                    try:
+                        gene_list = eval(tg) if tg.startswith("[") else tg.split(",")
+                        for item in gene_list:
+                            if isinstance(item, (list, tuple)):
+                                targets.add(str(item[0]).strip())
+                            else:
+                                targets.add(str(item).strip())
+                    except Exception:
+                        targets.update(t.strip() for t in tg.split(","))
+            if targets:
+                reg_key = f"{tf_name}(+)"
+                regulon_targets[reg_key] = list(targets)[:50]  # cap at 50
+    print(f"  Found target genes for {len(regulon_targets)} regulons")
 except Exception as e:
     print(f"  Warning: Could not extract regulon targets: {e}")
-
-lf.close()
 
 if regulon_targets:
     print(f"  Found target genes for {len(regulon_targets)} regulons")
