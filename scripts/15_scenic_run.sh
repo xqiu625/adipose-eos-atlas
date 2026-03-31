@@ -56,9 +56,9 @@ echo ""
 echo "Submitting Job 1: GRN inference (GRNBoost2)..."
 JOB1=$(sbatch --parsable \
     --partition=batch \
-    --mem=64G \
-    --cpus-per-task=16 \
-    --time=8:00:00 \
+    --mem=128G \
+    --cpus-per-task=4 \
+    --time=12:00:00 \
     --job-name=scenic_grn \
     --output="${LOGS}/scenic_grn_%j.out" \
     --error="${LOGS}/scenic_grn_%j.err" \
@@ -68,7 +68,7 @@ pyscenic grn \
   ${H5AD} \
   ${TF_LIST} \
   -o ${ADJ} \
-  --num_workers 16 && \
+  --num_workers 4 && \
 echo 'GRN inference complete.'"
 )
 echo "  Job 1 (GRN):     ${JOB1}"
