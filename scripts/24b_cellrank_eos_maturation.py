@@ -135,7 +135,7 @@ g.compute_macrostates(n_states=8, cluster_key="original_cluster")
 print(f"  Macrostates: {g.macrostates.cat.categories.tolist()}")
 
 g.predict_initial_states()
-g.predict_terminal_states()
+g.predict_terminal_states(allow_overlap=True)
 
 print(f"  Initial states: {g.initial_states.cat.categories.tolist()}")
 print(f"  Terminal states: {g.terminal_states.cat.categories.tolist()}")

@@ -127,7 +127,7 @@ print(f"  Macrostates: {g.macrostates.cat.categories.tolist()}")
 # Gurtner cells are more progenitor-like (higher CytoTRACE), so they should
 # be detected as initial states automatically
 g.predict_initial_states()
-g.predict_terminal_states()
+g.predict_terminal_states(allow_overlap=True)
 
 print(f"  Initial states: {g.initial_states.cat.categories.tolist()}")
 print(f"  Terminal states: {g.terminal_states.cat.categories.tolist()}")
