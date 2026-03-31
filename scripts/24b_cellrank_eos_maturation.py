@@ -122,7 +122,13 @@ for ds in adata.obs["dataset"].unique():
     print(f"  {ds}: mean={scores.mean():.3f}, median={scores.median():.3f}")
 
 # --- Ensure categorical columns for CellRank ---------------------------------
-for col in ["original_cluster", "dataset", "organ", "study"]:
+# Create unique cluster labels (dataset prefix) to avoid duplicate names across datasets
+ds_short = {"Qiu_2025_Adipose": "Qiu", "Hu_2026_Healthy": "Hu", "Gurtner_2022_Blood_BM": "Gurtner"}
+adata.obs["dataset_cluster"] = (
+    adata.obs["dataset"].map(ds_short).astype(str) + "_" +
+    adata.obs["original_cluster"].astype(str)
+)
+for col in ["original_cluster", "dataset", "organ", "study", "dataset_cluster"]:
     if col in adata.obs.columns:
         adata.obs[col] = adata.obs[col].astype("category")
 
@@ -130,7 +136,7 @@ for col in ["original_cluster", "dataset", "organ", "study"]:
 print("\nComputing macrostates with GPCCA ...")
 g = cr.estimators.GPCCA(ctk)
 g.compute_schur(n_components=20)
-g.compute_macrostates(n_states=5, cluster_key="original_cluster")
+g.compute_macrostates(n_states=5, cluster_key="dataset_cluster")
 
 print(f"  Macrostates: {g.macrostates.cat.categories.tolist()}")
 
