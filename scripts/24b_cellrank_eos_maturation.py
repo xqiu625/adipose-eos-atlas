@@ -103,6 +103,10 @@ sc.pp.highly_variable_genes(adata, n_top_genes=2000)
 # Use Harmony embeddings for neighbors
 sc.pp.neighbors(adata, use_rep="X_harmony", n_neighbors=30)
 
+# CytoTRACE needs 'Ms' layer (moment-smoothed expression)
+# Without RNA velocity data, use normalized log-transformed expression
+adata.layers["Ms"] = adata.X.copy()
+
 # --- CytoTRACE Kernel -------------------------------------------------------
 print("Computing CytoTRACE kernel ...")
 ctk = cr.kernels.CytoTRACEKernel(adata)
