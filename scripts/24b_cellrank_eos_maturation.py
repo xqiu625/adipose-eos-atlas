@@ -130,7 +130,7 @@ for col in ["original_cluster", "dataset", "organ", "study"]:
 print("\nComputing macrostates with GPCCA ...")
 g = cr.estimators.GPCCA(ctk)
 g.compute_schur(n_components=20)
-g.compute_macrostates(n_states=8, cluster_key="original_cluster")
+g.compute_macrostates(n_states=5, cluster_key="original_cluster")
 
 print(f"  Macrostates: {g.macrostates.cat.categories.tolist()}")
 
