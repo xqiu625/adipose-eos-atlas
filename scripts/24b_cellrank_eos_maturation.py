@@ -121,6 +121,11 @@ for ds in adata.obs["dataset"].unique():
     scores = adata.obs.loc[mask, "ct_score"]
     print(f"  {ds}: mean={scores.mean():.3f}, median={scores.median():.3f}")
 
+# --- Ensure categorical columns for CellRank ---------------------------------
+for col in ["original_cluster", "dataset", "organ", "study"]:
+    if col in adata.obs.columns:
+        adata.obs[col] = adata.obs[col].astype("category")
+
 # --- GPCCA estimator --------------------------------------------------------
 print("\nComputing macrostates with GPCCA ...")
 g = cr.estimators.GPCCA(ctk)

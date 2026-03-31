@@ -110,6 +110,11 @@ ctk.compute_transition_matrix()
 
 print(f"  CytoTRACE score range: {adata.obs['ct_score'].min():.3f} - {adata.obs['ct_score'].max():.3f}")
 
+# --- Ensure categorical columns for CellRank ---------------------------------
+for col in ["original_cluster", "dataset", "organ"]:
+    if col in adata.obs.columns:
+        adata.obs[col] = adata.obs[col].astype("category")
+
 # --- Identify initial and terminal states ------------------------------------
 print("Computing macrostates with GPCCA ...")
 g = cr.estimators.GPCCA(ctk)
