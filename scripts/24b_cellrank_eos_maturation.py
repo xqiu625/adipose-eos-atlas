@@ -100,8 +100,8 @@ sc.pp.normalize_total(adata, target_sum=1e4)
 sc.pp.log1p(adata)
 sc.pp.highly_variable_genes(adata, n_top_genes=2000)
 
-# Use Harmony embeddings for neighbors
-sc.pp.neighbors(adata, use_rep="X_harmony", n_neighbors=30)
+# Use Harmony embeddings for neighbors (fewer neighbors for better local structure)
+sc.pp.neighbors(adata, use_rep="X_harmony", n_neighbors=15)
 
 # CytoTRACE needs 'Ms' layer (moment-smoothed expression)
 # Without RNA velocity data, use normalized log-transformed expression
@@ -160,7 +160,7 @@ if bm_mask.sum() > 0:
     bm_ct = adata.obs.loc[bm_mask, "ct_score"]
     root_cell_idx = adata.obs_names.get_loc(bm_ct.idxmax())
     adata.uns["iroot"] = root_cell_idx
-    sc.tl.diffmap(adata, n_comps=15)
+    sc.tl.diffmap(adata, n_comps=5)
     sc.tl.dpt(adata)
     print(f"  DPT range: {adata.obs['dpt_pseudotime'].min():.3f} - {adata.obs['dpt_pseudotime'].max():.3f}")
     has_dpt = True
