@@ -302,6 +302,11 @@ make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
   }
 
   genes_use <- head(sig_genes$gene, max_genes)
+  if (length(genes_use) < 2) {
+    cat(sprintf("  SKIP heatmap: only %d gene, need >= 2 for %s\n",
+                length(genes_use), title))
+    return(invisible(NULL))
+  }
   cat(sprintf("  Heatmap: %d genes for %s\n", length(genes_use), title))
 
   # Get scaled expression per sample
@@ -313,9 +318,12 @@ make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
     cells <- which(seu_obj$orig.ident == s)
     rowMeans(as.matrix(mat[, cells, drop = FALSE]))
   })
+  # Ensure matrix (not vector) when few genes
+  if (!is.matrix(pb_mat)) pb_mat <- matrix(pb_mat, nrow = 1, dimnames = list(genes_use, samples))
 
   # Scale genes (z-score across samples)
   pb_scaled <- t(scale(t(pb_mat)))
+  if (!is.matrix(pb_scaled)) pb_scaled <- matrix(pb_scaled, nrow = nrow(pb_mat), dimnames = dimnames(pb_mat))
 
   # Annotation
   sample_cond <- sapply(samples, function(s) {
@@ -330,14 +338,14 @@ make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
 
   # Order columns by condition
   col_order <- order(sample_cond)
-  pb_scaled <- pb_scaled[, col_order]
+  pb_scaled <- pb_scaled[, col_order, drop = FALSE]
   anno_col <- anno_col[col_order, , drop = FALSE]
 
   # Separate up/down genes
   up_genes <- sig_genes$gene[sig_genes$avg_log2FC > 0]
   down_genes <- sig_genes$gene[sig_genes$avg_log2FC < 0]
   row_order <- c(intersect(up_genes, genes_use), intersect(down_genes, genes_use))
-  pb_scaled <- pb_scaled[row_order, ]
+  pb_scaled <- pb_scaled[row_order, , drop = FALSE]
 
   # Row annotation (direction)
   row_anno <- data.frame(
