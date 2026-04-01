@@ -436,12 +436,16 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
                 row.names = FALSE)
       cat(sprintf("  GO %s: %d enriched terms\n", direction, nrow(go_df)))
 
-      # Dotplot
-      p_dot <- dotplot(ego, showCategory = 15) +
+      # Dotplot — wrap long GO term labels and increase height
+      n_terms <- min(15, nrow(go_df))
+      p_dot <- dotplot(ego, showCategory = n_terms) +
+        scale_y_discrete(labels = function(x) stringr::str_wrap(x, width = 40)) +
         ggtitle(sprintf("%s — %s genes", title,
-                        ifelse(direction == "up", "Upregulated", "Downregulated")))
+                        ifelse(direction == "up", "Upregulated", "Downregulated"))) +
+        theme(axis.text.y = element_text(size = 9, lineheight = 0.9))
       save_pdf(p_dot, file.path(out_dir,
-               sprintf("%s_GO_BP_%s_dotplot.pdf", prefix, direction)), 10, 8)
+               sprintf("%s_GO_BP_%s_dotplot.pdf", prefix, direction)),
+               10, max(8, n_terms * 0.55 + 3))
     } else {
       cat(sprintf("  GO %s: no enriched terms\n", direction))
     }
