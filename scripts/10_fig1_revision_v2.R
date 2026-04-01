@@ -405,8 +405,8 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
   deg$gene <- rownames(deg)
   if (!is.null(exclude_genes)) deg <- deg[!deg$gene %in% exclude_genes, ]
 
-  sig_up <- deg$gene[deg$p_val_adj < 0.05 & deg$avg_log2FC > 0.5]
-  sig_down <- deg$gene[deg$p_val_adj < 0.05 & deg$avg_log2FC < -0.5]
+  sig_up <- deg$gene[deg$p_val_adj < 0.05 & deg$avg_log2FC > 0]
+  sig_down <- deg$gene[deg$p_val_adj < 0.05 & deg$avg_log2FC < 0]
 
   go_results <- list()
 
