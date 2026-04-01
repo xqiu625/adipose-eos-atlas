@@ -300,8 +300,10 @@ make_volcano <- function(deg, title, pdf_path, label_left, label_right,
 }
 
 # Helper: DEG heatmap (Hu-style — shows top significant genes across conditions)
+# condition_order: optional vector of condition names to control column ordering
 make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
-                             exclude_genes = NULL, max_genes = 50) {
+                             exclude_genes = NULL, max_genes = 50,
+                             condition_order = NULL) {
   deg$gene <- rownames(deg)
   if (!is.null(exclude_genes)) deg <- deg[!deg$gene %in% exclude_genes, ]
 
@@ -323,11 +325,6 @@ make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
   }
 
   genes_use <- head(sig_genes$gene, max_genes)
-  if (length(genes_use) < 2) {
-    cat(sprintf("  SKIP heatmap: only %d gene, need >= 2 for %s\n",
-                length(genes_use), title))
-    return(invisible(NULL))
-  }
   cat(sprintf("  Heatmap: %d genes for %s\n", length(genes_use), title))
 
   # Get scaled expression per sample
@@ -339,26 +336,33 @@ make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
     cells <- which(seu_obj$orig.ident == s)
     rowMeans(as.matrix(mat[, cells, drop = FALSE]))
   })
-  # Ensure matrix (not vector) when few genes
-  if (!is.matrix(pb_mat)) pb_mat <- matrix(pb_mat, nrow = 1, dimnames = list(genes_use, samples))
+  if (!is.matrix(pb_mat)) pb_mat <- matrix(pb_mat, nrow = length(genes_use),
+                                            dimnames = list(genes_use, samples))
 
-  # Scale genes (z-score across samples)
-  pb_scaled <- t(scale(t(pb_mat)))
-  if (!is.matrix(pb_scaled)) pb_scaled <- matrix(pb_scaled, nrow = nrow(pb_mat), dimnames = dimnames(pb_mat))
+  # Scale genes (z-score across samples) — skip for single gene
+  if (nrow(pb_mat) == 1) {
+    pb_scaled <- pb_mat
+  } else {
+    pb_scaled <- t(scale(t(pb_mat)))
+    if (!is.matrix(pb_scaled)) pb_scaled <- matrix(pb_scaled, nrow = nrow(pb_mat),
+                                                    dimnames = dimnames(pb_mat))
+  }
 
   # Annotation
   sample_cond <- sapply(samples, function(s) {
     unique(seu_obj@meta.data[seu_obj$orig.ident == s, "condition"])[1]
   })
-  anno_col <- data.frame(
-    Condition = sample_cond,
-    row.names = samples
-  )
+  anno_col <- data.frame(Condition = sample_cond, row.names = samples)
   present <- intersect(names(cond_colors), unique(sample_cond))
   anno_colors <- list(Condition = cond_colors[present])
 
-  # Order columns by condition
-  col_order <- order(sample_cond)
+  # Order columns: custom condition_order or alphabetical
+  if (!is.null(condition_order)) {
+    cond_rank <- setNames(seq_along(condition_order), condition_order)
+    col_order <- order(cond_rank[sample_cond])
+  } else {
+    col_order <- order(sample_cond)
+  }
   pb_scaled <- pb_scaled[, col_order, drop = FALSE]
   anno_col <- anno_col[col_order, , drop = FALSE]
 
@@ -366,7 +370,7 @@ make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
   up_genes <- sig_genes$gene[sig_genes$avg_log2FC > 0]
   down_genes <- sig_genes$gene[sig_genes$avg_log2FC < 0]
   row_order <- c(intersect(up_genes, genes_use), intersect(down_genes, genes_use))
-  pb_scaled <- pb_scaled[row_order, , drop = FALSE]
+  if (length(row_order) > 0) pb_scaled <- pb_scaled[row_order, , drop = FALSE]
 
   # Row annotation (direction)
   row_anno <- data.frame(
@@ -394,8 +398,9 @@ make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
   cat(sprintf("  Saved heatmap: %s\n", pdf_path))
 }
 
-# Helper: GO enrichment on DEGs
+# Helper: GO enrichment — butterfly bar chart combining UP + DOWN (manuscript style)
 run_go_enrichment <- function(deg, title, prefix, out_dir,
+                               label_left, label_right,
                                exclude_genes = NULL) {
   deg$gene <- rownames(deg)
   if (!is.null(exclude_genes)) deg <- deg[!deg$gene %in% exclude_genes, ]
@@ -430,26 +435,95 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
       go_df <- as.data.frame(ego)
       go_df$direction <- direction
       go_results[[direction]] <- go_df
-
       write.csv(go_df, file.path(out_dir,
                 sprintf("%s_GO_BP_%s.csv", prefix, direction)),
                 row.names = FALSE)
       cat(sprintf("  GO %s: %d enriched terms\n", direction, nrow(go_df)))
-
-      # Dotplot — wrap long GO term labels and increase height
-      n_terms <- min(15, nrow(go_df))
-      p_dot <- dotplot(ego, showCategory = n_terms) +
-        scale_y_discrete(labels = function(x) stringr::str_wrap(x, width = 40)) +
-        ggtitle(sprintf("%s — %s genes", title,
-                        ifelse(direction == "up", "Upregulated", "Downregulated"))) +
-        theme(axis.text.y = element_text(size = 9, lineheight = 0.9))
-      save_pdf(p_dot, file.path(out_dir,
-               sprintf("%s_GO_BP_%s_dotplot.pdf", prefix, direction)),
-               10, max(8, n_terms * 0.55 + 3))
     } else {
       cat(sprintf("  GO %s: no enriched terms\n", direction))
     }
   }
+
+  # --- Combined butterfly bar chart (manuscript Fig 1E-H style) ---
+  if (length(go_results) == 0) return(go_results)
+
+  n_top <- 5
+  plot_rows <- list()
+
+  # "down" = neg log2FC = UP in label_left → bars extend LEFT
+  if ("down" %in% names(go_results)) {
+    df <- head(go_results[["down"]], n_top)
+    df$gene_count <- as.numeric(sub("/.*", "", df$GeneRatio))
+    df$plot_x <- -df$gene_count
+    df$side <- "left"
+    df$neg_log10p <- -log10(df$pvalue)
+    plot_rows[["down"]] <- df[, c("Description", "gene_count", "plot_x",
+                                    "side", "neg_log10p")]
+  }
+
+  # "up" = pos log2FC = UP in label_right → bars extend RIGHT
+  if ("up" %in% names(go_results)) {
+    df <- head(go_results[["up"]], n_top)
+    df$gene_count <- as.numeric(sub("/.*", "", df$GeneRatio))
+    df$plot_x <- df$gene_count
+    df$side <- "right"
+    df$neg_log10p <- -log10(df$pvalue)
+    plot_rows[["up"]] <- df[, c("Description", "gene_count", "plot_x",
+                                  "side", "neg_log10p")]
+  }
+
+  plot_df <- do.call(rbind, plot_rows)
+  plot_df$label <- stringr::str_wrap(plot_df$Description, width = 28)
+
+  # Y ordering: left terms top (sorted small→large), right terms bottom (large→small)
+  left_desc <- if ("down" %in% names(plot_rows))
+    plot_rows[["down"]]$Description[order(plot_rows[["down"]]$gene_count)] else character(0)
+  right_desc <- if ("up" %in% names(plot_rows))
+    plot_rows[["up"]]$Description[order(-plot_rows[["up"]]$gene_count)] else character(0)
+  plot_df$Description <- factor(plot_df$Description, levels = c(right_desc, left_desc))
+
+  # Text inside bars near the center axis
+  plot_df$text_x <- ifelse(plot_df$side == "left", -0.3, 0.3)
+  plot_df$text_hjust <- ifelse(plot_df$side == "left", 1, 0)
+
+  # White text on dark bars, black on light
+  p_mid <- mean(range(plot_df$neg_log10p))
+  plot_df$text_color <- ifelse(plot_df$neg_log10p > p_mid, "white", "black")
+
+  x_max <- max(abs(plot_df$plot_x)) * 1.15
+
+  p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = neg_log10p)) +
+    geom_col(width = 0.7) +
+    geom_text(aes(x = text_x, label = label, hjust = text_hjust, color = text_color),
+              size = 2.8, lineheight = 0.85, fontface = "bold", show.legend = FALSE) +
+    scale_color_identity() +
+    scale_fill_gradientn(
+      colors = c("#FFFFCC", "#FED976", "#FD8D3C", "#E31A1C", "#800026"),
+      name = expression(-Log[10] ~ "P-value")) +
+    scale_x_continuous(labels = abs, limits = c(-x_max, x_max)) +
+    geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
+    labs(x = "Gene Count", y = "", title = "GO BP") +
+    annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.8,
+             label = paste("UP in", label_left), hjust = 0.5,
+             size = 3.5, fontface = "bold") +
+    annotate("text", x = x_max * 0.5, y = nrow(plot_df) + 0.8,
+             label = paste("UP in", label_right), hjust = 0.5,
+             size = 3.5, fontface = "bold") +
+    theme_minimal(base_size = 11) +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 12),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(t = 25, r = 10, b = 10, l = 10)
+    ) +
+    coord_cartesian(clip = "off")
+
+  n_rows <- nrow(plot_df)
+  save_pdf(p, file.path(out_dir, sprintf("%s_GO_BP_butterfly.pdf", prefix)),
+           10, max(5, n_rows * 0.55 + 2))
+  cat(sprintf("  Saved: %s_GO_BP_butterfly.pdf\n", prefix))
 
   return(go_results)
 }
@@ -460,23 +534,28 @@ volcanos <- list(
        prefix = "fig1E", title = "Eos DEG: WT Female vs WT Male",
        label_right = "WT Female", label_left = "WT Male",
        excl = NULL,
-       groups = c("WT_Female_HFD", "WT_Male_HFD")),
+       groups = c("WT_Female_HFD", "WT_Male_HFD"),
+       cond_order = NULL),
   list(csv = "deg_KO_Female_vs_WT_Female.csv",
        prefix = "fig1F", title = "Eos DEG: KO Female vs WT Female",
        label_right = "KO Female", label_left = "WT Female",
        excl = ko_exclude,
-       groups = c("KO_Female_HFD", "WT_Female_HFD")),
+       groups = c("KO_Female_HFD", "WT_Female_HFD"),
+       cond_order = NULL),
   list(csv = "deg_KO_Male_vs_WT_Male.csv",
        prefix = "fig1G", title = "Eos DEG: KO Male vs WT Male",
        label_right = "KO Male", label_left = "WT Male",
        excl = ko_exclude,
-       groups = c("KO_Male_HFD", "WT_Male_HFD")),
+       groups = c("KO_Male_HFD", "WT_Male_HFD"),
+       cond_order = NULL),
   list(csv = "deg_Infected_vs_NonInfected_Female.csv",
        prefix = "fig1H", title = "Eos DEG: Infected vs Naive Female",
        label_right = "Inf. Female", label_left = "Naive Female",
        excl = NULL,
-       groups = c("WT_Female_HFDInfected", "KO_Female_HFDInfected",
-                  "WT_Female_HFD", "KO_Female_HFD"))
+       groups = c("WT_Female_HFD", "WT_Female_HFDInfected",
+                  "KO_Female_HFD", "KO_Female_HFDInfected"),
+       cond_order = c("WT_Female_HFD", "WT_Female_HFDInfected",
+                      "KO_Female_HFD", "KO_Female_HFDInfected"))
 )
 
 for (v in volcanos) {
@@ -500,10 +579,12 @@ for (v in volcanos) {
   make_deg_heatmap(deg, tier1_sub, "condition", v$groups,
                    v$title,
                    file.path(out_dir, paste0(v$prefix, "_heatmap.pdf")),
-                   exclude_genes = v$excl)
+                   exclude_genes = v$excl,
+                   condition_order = v$cond_order)
 
-  # GO enrichment
+  # GO enrichment (butterfly bar chart)
   run_go_enrichment(deg, v$title, v$prefix, out_dir,
+                    label_left = v$label_left, label_right = v$label_right,
                     exclude_genes = v$excl)
 }
 
