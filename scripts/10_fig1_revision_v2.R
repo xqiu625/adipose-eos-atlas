@@ -10,7 +10,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 #   Fig 1B: All filled circles, different color per group (Rev 2 Comment 3)
 #           Both immune cell AND eos-only PCA/MDS
 #   Fig 1C: Updated UMAPs in PDF (immune only + immune with gray background)
-#   Fig 1D: Composition barplot with mast cells + NK cells
+#   Fig 1D: Dot plot of canonical immune cell markers (replicating manuscript)
 #   Fig 1E-H: Volcano + DEG heatmap (Hu-style, Rev 2 Comment 5) + GO enrichment
 #
 # Input:  all_cells_annotated.rds, harmony_tier1_clustered.rds, DEG CSVs
@@ -194,28 +194,49 @@ save_pdf(p_all, file.path(out_dir, "fig1C_umap_all_cells_immune_highlight.pdf"),
 rm(sobj_immune); gc()
 
 # =============================================================================
-# Fig 1D: Cell type composition with mast cells + NK cells
+# Fig 1D: Dot plot of canonical immune cell marker genes
+# Replicating original manuscript Fig 1D style
 # =============================================================================
-cat("\n=== Fig 1D: Cell type composition ===\n")
+cat("\n=== Fig 1D: Immune cell marker dot plot ===\n")
 
 immune_sub <- subset(obj, celltype %in% immune_types)
-ct_counts <- as.data.frame(table(immune_sub$condition, immune_sub$celltype))
-colnames(ct_counts) <- c("condition", "celltype", "count")
 
-# Reorder conditions
-ct_counts$condition <- factor(ct_counts$condition, levels = names(cond_colors))
-ct_counts$celltype <- factor(ct_counts$celltype, levels = immune_types)
+# Set cell type order to match manuscript (bottom to top: Eos -> Mast)
+immune_sub$celltype <- factor(immune_sub$celltype,
+  levels = rev(c("Mast cells", "Dendritic cells", "B cells",
+                 "NK cells", "Neutrophils", "Macrophages", "Eosinophils")))
 
-p_comp <- ggplot(ct_counts, aes(x = condition, y = count, fill = celltype)) +
-  geom_bar(stat = "identity", position = "fill") +
-  scale_fill_manual(values = ct_colors, name = "Cell Type") +
-  scale_x_discrete(labels = cond_labels) +
-  scale_y_continuous(labels = scales::percent_format()) +
-  labs(title = "Immune Cell Composition by Condition",
-       x = "", y = "Proportion") +
+# Canonical marker genes — manuscript set + Nkg7 for NK cells
+marker_genes <- c("Siglecf", "Ccr3", "Il5ra",             # Eosinophils
+                   "Mertk", "Mrc1", "Fcgr1", "Retnla",    # Macrophages
+                   "S100a8",                                # Neutrophils
+                   "Nkg7",                                  # NK cells
+                   "Cd19",                                  # B cells
+                   "Itgax",                                 # Dendritic cells
+                   "Tpsb2")                                 # Mast cells
+
+# Filter to genes present in the data
+marker_genes <- marker_genes[marker_genes %in% rownames(immune_sub)]
+cat(sprintf("  Using %d / %d marker genes\n", length(marker_genes),
+            length(c("Siglecf","Ccr3","Il5ra","Mertk","Mrc1","Fcgr1","Retnla",
+                     "S100a8","Nkg7","Cd19","Itgax","Tpsb2"))))
+
+p_dot <- DotPlot(immune_sub, features = marker_genes, group.by = "celltype",
+                 scale = TRUE) +
+  scale_color_gradientn(
+    colors = c("#3B4CC0", "#7092D5", "#AAC7FD", "#DDDDDD",
+               "#F7B799", "#E8744A", "#B40426"),
+    name = "Average\nExpression") +
+  scale_size_continuous(range = c(1, 8), name = "Percent\nExpressed") +
+  labs(x = "", y = "") +
   theme_pub() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10))
-save_pdf(p_comp, file.path(out_dir, "fig1D_composition_immune.pdf"), 10, 7)
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10, face = "italic"),
+        axis.text.y = element_text(size = 11),
+        legend.position = "right",
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.3))
+
+save_pdf(p_dot, file.path(out_dir, "fig1D_dotplot_markers.pdf"), 12, 6)
+cat("  Saved: fig1D_dotplot_markers.pdf\n")
 
 rm(immune_sub); gc()
 
