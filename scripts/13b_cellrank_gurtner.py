@@ -257,7 +257,10 @@ if has_dpt:
     out_df["dpt_pseudotime"] = adata.obs["dpt_pseudotime"]
 out_df.to_csv(os.path.join(OUT_DIR, "cellrank_cytotrace_scores.csv"))
 
-# Save AnnData
+# Save AnnData — convert bool/object columns to strings for h5py compatibility
+for col in adata.obs.columns:
+    if adata.obs[col].dtype == object or adata.obs[col].dtype == bool:
+        adata.obs[col] = adata.obs[col].astype(str)
 adata.write_h5ad(os.path.join(OUT_DIR, "qiu_gurtner_cellrank.h5ad"))
 
 print(f"\n========== CellRank analysis complete ==========")

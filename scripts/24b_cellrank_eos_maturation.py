@@ -333,7 +333,10 @@ if "condition" in adata.obs.columns:
     out_cols.append("condition")
 adata.obs[out_cols].to_csv(os.path.join(OUT_DIR, "cellrank_scores.csv"))
 
-# Save AnnData
+# Save AnnData — convert bool/object columns to strings for h5py compatibility
+for col in adata.obs.columns:
+    if adata.obs[col].dtype == object or adata.obs[col].dtype == bool:
+        adata.obs[col] = adata.obs[col].astype(str)
 adata.write_h5ad(os.path.join(OUT_DIR, "three_way_cellrank.h5ad"))
 
 print(f"\n========== Three-way CellRank analysis complete ==========")
