@@ -473,40 +473,37 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
   }
 
   plot_df <- do.call(rbind, plot_rows)
-  plot_df$label <- stringr::str_wrap(plot_df$Description, width = 28)
+  plot_df$label <- stringr::str_wrap(plot_df$Description, width = 25)
 
-  # Y ordering: left terms top (sorted small→large), right terms bottom (large→small)
+  # Y ordering: most significant terms near center, least significant at edges
+  # Bottom = left (down) terms: least sig at bottom, most sig near center
+  # Top = right (up) terms: most sig near center, least sig at top
   left_desc <- if ("down" %in% names(plot_rows))
-    plot_rows[["down"]]$Description[order(plot_rows[["down"]]$gene_count)] else character(0)
+    rev(plot_rows[["down"]]$Description) else character(0)  # reverse so most sig = top of left block
   right_desc <- if ("up" %in% names(plot_rows))
-    plot_rows[["up"]]$Description[order(-plot_rows[["up"]]$gene_count)] else character(0)
-  plot_df$Description <- factor(plot_df$Description, levels = c(right_desc, left_desc))
+    plot_rows[["up"]]$Description else character(0)  # most sig = bottom of right block (near center)
+  plot_df$Description <- factor(plot_df$Description, levels = c(left_desc, right_desc))
 
-  # Text inside bars near the center axis
-  plot_df$text_x <- ifelse(plot_df$side == "left", -0.3, 0.3)
+  # Text positioned inside bars near center axis — always black
+  plot_df$text_x <- ifelse(plot_df$side == "left", -0.2, 0.2)
   plot_df$text_hjust <- ifelse(plot_df$side == "left", 1, 0)
-
-  # White text on dark bars, black on light
-  p_mid <- mean(range(plot_df$neg_log10p))
-  plot_df$text_color <- ifelse(plot_df$neg_log10p > p_mid, "white", "black")
 
   x_max <- max(abs(plot_df$plot_x)) * 1.15
 
   p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = neg_log10p)) +
-    geom_col(width = 0.7) +
-    geom_text(aes(x = text_x, label = label, hjust = text_hjust, color = text_color),
-              size = 2.8, lineheight = 0.85, fontface = "bold", show.legend = FALSE) +
-    scale_color_identity() +
+    geom_col(width = 0.85) +
+    geom_text(aes(x = text_x, label = label, hjust = text_hjust),
+              size = 3, lineheight = 0.85, color = "black", show.legend = FALSE) +
     scale_fill_gradientn(
       colors = c("#FFFFCC", "#FED976", "#FD8D3C", "#E31A1C", "#800026"),
       name = expression(-Log[10] ~ "P-value")) +
     scale_x_continuous(labels = abs, limits = c(-x_max, x_max)) +
     geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
     labs(x = "Gene Count", y = "", title = "GO BP") +
-    annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.8,
+    annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.7,
              label = paste("UP in", label_left), hjust = 0.5,
              size = 3.5, fontface = "bold") +
-    annotate("text", x = x_max * 0.5, y = nrow(plot_df) + 0.8,
+    annotate("text", x = x_max * 0.5, y = nrow(plot_df) + 0.7,
              label = paste("UP in", label_right), hjust = 0.5,
              size = 3.5, fontface = "bold") +
     theme_minimal(base_size = 11) +
@@ -516,13 +513,15 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
       plot.title = element_text(face = "bold", hjust = 0.5, size = 12),
       panel.grid.major.y = element_blank(),
       panel.grid.minor = element_blank(),
-      plot.margin = margin(t = 25, r = 10, b = 10, l = 10)
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
+      plot.margin = margin(t = 25, r = 10, b = 10, l = 10),
+      plot.background = element_rect(fill = "white", color = NA)
     ) +
     coord_cartesian(clip = "off")
 
   n_rows <- nrow(plot_df)
   save_pdf(p, file.path(out_dir, sprintf("%s_GO_BP_butterfly.pdf", prefix)),
-           10, max(5, n_rows * 0.55 + 2))
+           8, max(5, n_rows * 0.55 + 2))
   cat(sprintf("  Saved: %s_GO_BP_butterfly.pdf\n", prefix))
 
   return(go_results)
