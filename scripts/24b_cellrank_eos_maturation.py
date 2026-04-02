@@ -143,7 +143,7 @@ if bm_mask.sum() > 0:
     root_cell_idx = adata.obs_names.get_loc(bm_ct.idxmax())
     adata.uns["iroot"] = root_cell_idx
     sc.tl.diffmap(adata, n_comps=5)
-    sc.tl.dpt(adata)
+    sc.tl.dpt(adata, n_dcs=5)
     print(f"  DPT range: {adata.obs['dpt_pseudotime'].min():.3f} - {adata.obs['dpt_pseudotime'].max():.3f}")
     # Per-dataset DPT summary
     for ds in adata.obs["dataset"].unique():
