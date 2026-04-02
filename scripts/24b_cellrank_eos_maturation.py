@@ -132,25 +132,7 @@ for col in ["original_cluster", "dataset", "organ", "study", "dataset_cluster"]:
     if col in adata.obs.columns:
         adata.obs[col] = adata.obs[col].astype("category")
 
-# --- GPCCA estimator --------------------------------------------------------
-print("\nComputing macrostates with GPCCA ...")
-g = cr.estimators.GPCCA(ctk)
-g.compute_schur(n_components=20)
-g.compute_macrostates(n_states=5, cluster_key="dataset_cluster")
-
-print(f"  Macrostates: {g.macrostates.cat.categories.tolist()}")
-
-g.predict_initial_states()
-g.predict_terminal_states(allow_overlap=True)
-
-print(f"  Initial states: {g.initial_states.cat.categories.tolist()}")
-print(f"  Terminal states: {g.terminal_states.cat.categories.tolist()}")
-
-# --- Fate probabilities ------------------------------------------------------
-print("Computing fate probabilities ...")
-g.compute_fate_probabilities()
-
-# --- Diffusion pseudotime from BM root --------------------------------------
+# --- Diffusion pseudotime from BM root (compute FIRST, independent of GPCCA) -
 print("\nComputing diffusion pseudotime rooted on Gurtner BM cells ...")
 
 bm_mask = adata.obs["organ"] == "Bone Marrow"
@@ -163,10 +145,40 @@ if bm_mask.sum() > 0:
     sc.tl.diffmap(adata, n_comps=5)
     sc.tl.dpt(adata)
     print(f"  DPT range: {adata.obs['dpt_pseudotime'].min():.3f} - {adata.obs['dpt_pseudotime'].max():.3f}")
+    # Per-dataset DPT summary
+    for ds in adata.obs["dataset"].unique():
+        mask = adata.obs["dataset"] == ds
+        vals = adata.obs.loc[mask, "dpt_pseudotime"]
+        vals = vals[vals < 1.0]
+        print(f"    {ds}: median={vals.median():.3f}, mean={vals.mean():.3f}")
     has_dpt = True
 else:
     print("  WARNING: No Bone Marrow cells found. Skipping DPT.")
     has_dpt = False
+
+# --- GPCCA estimator (optional — wrap in try/except) -------------------------
+print("\nComputing macrostates with GPCCA ...")
+has_gpcca = False
+try:
+    g = cr.estimators.GPCCA(ctk)
+    g.compute_schur(n_components=20)
+    g.compute_macrostates(n_states=5, cluster_key="dataset_cluster")
+
+    print(f"  Macrostates: {g.macrostates.cat.categories.tolist()}")
+
+    g.predict_initial_states()
+    g.predict_terminal_states(allow_overlap=True)
+
+    print(f"  Initial states: {g.initial_states.cat.categories.tolist()}")
+    print(f"  Terminal states: {g.terminal_states.cat.categories.tolist()}")
+
+    # Fate probabilities
+    print("Computing fate probabilities ...")
+    g.compute_fate_probabilities()
+    has_gpcca = True
+except Exception as e:
+    print(f"  WARNING: GPCCA/fate probabilities failed: {e}")
+    print("  Continuing with DPT-only results.")
 
 # =============================================================================
 # Figures
@@ -231,36 +243,35 @@ if qiu_mask.sum() > 0:
     fig.savefig(os.path.join(FIG_DIR, "cellrank_cytotrace_by_cluster.pdf"))
     plt.close()
 
-# --- Fig 4: Macrostates on UMAP ---
-fig, ax = plt.subplots(figsize=(10, 7))
-g.plot_macrostates(which="all", basis="umap", legend_loc="right", ax=ax, show=False)
-ax.set_title("CellRank Macrostates (Three-way)")
-fig.savefig(os.path.join(FIG_DIR, "cellrank_macrostates.pdf"))
-plt.close()
-
-# --- Fig 5: Initial and terminal states ---
-fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-try:
-    g.plot_macrostates(which="initial", basis="umap", ax=axes[0], show=False)
-    axes[0].set_title("Initial States")
-except Exception as e:
-    print(f"  Initial states plot failed: {e}")
-try:
-    g.plot_macrostates(which="terminal", basis="umap", ax=axes[1], show=False)
-    axes[1].set_title("Terminal States")
-except Exception as e:
-    print(f"  Terminal states plot failed: {e}")
-plt.tight_layout()
-fig.savefig(os.path.join(FIG_DIR, "cellrank_initial_terminal.pdf"))
-plt.close()
-
-# --- Fig 6: Fate probabilities ---
-try:
-    g.plot_fate_probabilities(basis="umap", same_plot=False)
-    plt.savefig(os.path.join(FIG_DIR, "cellrank_fate_probabilities.pdf"))
+# --- Fig 4-6: GPCCA plots (only if GPCCA succeeded) ---
+if has_gpcca:
+    fig, ax = plt.subplots(figsize=(10, 7))
+    g.plot_macrostates(which="all", basis="umap", legend_loc="right", ax=ax, show=False)
+    ax.set_title("CellRank Macrostates (Three-way)")
+    fig.savefig(os.path.join(FIG_DIR, "cellrank_macrostates.pdf"))
     plt.close()
-except Exception as e:
-    print(f"  Fate probability plot failed: {e}")
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    try:
+        g.plot_macrostates(which="initial", basis="umap", ax=axes[0], show=False)
+        axes[0].set_title("Initial States")
+    except Exception as e:
+        print(f"  Initial states plot failed: {e}")
+    try:
+        g.plot_macrostates(which="terminal", basis="umap", ax=axes[1], show=False)
+        axes[1].set_title("Terminal States")
+    except Exception as e:
+        print(f"  Terminal states plot failed: {e}")
+    plt.tight_layout()
+    fig.savefig(os.path.join(FIG_DIR, "cellrank_initial_terminal.pdf"))
+    plt.close()
+
+    try:
+        g.plot_fate_probabilities(basis="umap", same_plot=False)
+        plt.savefig(os.path.join(FIG_DIR, "cellrank_fate_probabilities.pdf"))
+        plt.close()
+    except Exception as e:
+        print(f"  Fate probability plot failed: {e}")
 
 # --- Fig 7: DPT pseudotime ---
 if has_dpt:
@@ -316,8 +327,8 @@ if has_dpt:
 # =============================================================================
 print("\nSaving results ...")
 
-# Fate probabilities
-if g.fate_probabilities is not None:
+# Fate probabilities (only if GPCCA succeeded)
+if has_gpcca and g.fate_probabilities is not None:
     fate_df = pd.DataFrame(
         g.fate_probabilities.X,
         index=adata.obs_names,
