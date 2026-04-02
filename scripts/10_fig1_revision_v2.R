@@ -448,64 +448,69 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
   if (length(go_results) == 0) return(go_results)
 
   n_top <- 5
-  plot_rows <- list()
+  frames <- list()
 
   # "down" = neg log2FC = UP in label_left → bars extend LEFT
   if ("down" %in% names(go_results)) {
-    df <- head(go_results[["down"]], n_top)
-    df$gene_count <- as.numeric(sub("/.*", "", df$GeneRatio))
-    df$neg_log10p <- -log10(df$pvalue)
-    df$plot_x <- -df$neg_log10p
-    df$side <- "left"
-    plot_rows[["down"]] <- df[, c("Description", "gene_count", "plot_x",
-                                    "side", "neg_log10p")]
+    d <- head(go_results[["down"]], n_top)
+    frames[["down"]] <- data.frame(
+      Description = as.character(d$Description),
+      gene_count  = as.numeric(sub("/.*", "", d$GeneRatio)),
+      neg_log10p  = -log10(d$pvalue),
+      side        = "left",
+      stringsAsFactors = FALSE
+    )
+    frames[["down"]]$plot_x <- -frames[["down"]]$neg_log10p
   }
 
   # "up" = pos log2FC = UP in label_right → bars extend RIGHT
   if ("up" %in% names(go_results)) {
-    df <- head(go_results[["up"]], n_top)
-    df$gene_count <- as.numeric(sub("/.*", "", df$GeneRatio))
-    df$neg_log10p <- -log10(df$pvalue)
-    df$plot_x <- df$neg_log10p
-    df$side <- "right"
-    plot_rows[["up"]] <- df[, c("Description", "gene_count", "plot_x",
-                                  "side", "neg_log10p")]
+    u <- head(go_results[["up"]], n_top)
+    frames[["up"]] <- data.frame(
+      Description = as.character(u$Description),
+      gene_count  = as.numeric(sub("/.*", "", u$GeneRatio)),
+      neg_log10p  = -log10(u$pvalue),
+      side        = "right",
+      stringsAsFactors = FALSE
+    )
+    frames[["up"]]$plot_x <- frames[["up"]]$neg_log10p
   }
 
-  plot_df <- do.call(rbind, plot_rows)
+  plot_df <- do.call(rbind, frames)
+  cat(sprintf("  Butterfly: %d rows (%s)\n", nrow(plot_df),
+              paste(names(frames), sapply(frames, nrow), sep = "=", collapse = ", ")))
   plot_df$label <- stringr::str_wrap(plot_df$Description, width = 25)
 
-  # Y ordering: most significant terms near center, least significant at edges
-  # Bottom = left (down) terms: least sig at bottom, most sig near center
-  # Top = right (up) terms: most sig near center, least sig at top
-  left_desc <- if ("down" %in% names(plot_rows))
-    rev(plot_rows[["down"]]$Description) else character(0)
-  right_desc <- if ("up" %in% names(plot_rows))
-    plot_rows[["up"]]$Description else character(0)
+  # Y ordering: left (down) terms bottom, right (up) terms top
+  left_desc  <- if ("down" %in% names(frames))
+    rev(frames[["down"]]$Description) else character(0)
+  right_desc <- if ("up" %in% names(frames))
+    frames[["up"]]$Description else character(0)
   plot_df$Description <- factor(plot_df$Description, levels = c(left_desc, right_desc))
 
-  # Text positioned inside bars near center axis — always black
-  plot_df$text_x <- ifelse(plot_df$side == "left", -0.15, 0.15)
+  # Text near center axis
+  plot_df$text_x    <- ifelse(plot_df$side == "left", -0.15, 0.15)
   plot_df$text_hjust <- ifelse(plot_df$side == "left", 1, 0)
 
   x_max <- max(abs(plot_df$plot_x)) * 1.15
 
-  p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = gene_count)) +
-    geom_col(width = 0.85) +
+  # Use distinct fill color per side so both are always visible
+  side_colors <- c("left" = "#2166AC", "right" = "#B2182B")
+
+  p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = side)) +
+    geom_col(width = 0.85, alpha = 0.85) +
     geom_text(aes(x = text_x, label = label, hjust = text_hjust),
               size = 3, lineheight = 0.85, color = "black", show.legend = FALSE) +
-    scale_fill_gradientn(
-      colors = c("#FFFFCC", "#FED976", "#FD8D3C", "#E31A1C", "#800026"),
-      name = "Gene Count") +
+    scale_fill_manual(values = side_colors, guide = "none") +
     scale_x_continuous(labels = abs, limits = c(-x_max, x_max)) +
     geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
     labs(x = expression(-Log[10] ~ "(P-value)"), y = "", title = "GO BP") +
     annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.7,
              label = paste("UP in", label_left), hjust = 0.5,
-             size = 3.5, fontface = "bold") +
+             size = 3.5, fontface = "bold", color = "#2166AC") +
     annotate("text", x = x_max * 0.5, y = nrow(plot_df) + 0.7,
              label = paste("UP in", label_right), hjust = 0.5,
-             size = 3.5, fontface = "bold") +
+             size = 3.5, fontface = "bold", color = "#B2182B") +
     theme_minimal(base_size = 11) +
     theme(
       axis.text.y = element_blank(),
