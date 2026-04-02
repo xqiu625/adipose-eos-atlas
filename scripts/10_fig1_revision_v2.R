@@ -454,9 +454,9 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
   if ("down" %in% names(go_results)) {
     df <- head(go_results[["down"]], n_top)
     df$gene_count <- as.numeric(sub("/.*", "", df$GeneRatio))
-    df$plot_x <- -df$gene_count
-    df$side <- "left"
     df$neg_log10p <- -log10(df$pvalue)
+    df$plot_x <- -df$neg_log10p
+    df$side <- "left"
     plot_rows[["down"]] <- df[, c("Description", "gene_count", "plot_x",
                                     "side", "neg_log10p")]
   }
@@ -465,9 +465,9 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
   if ("up" %in% names(go_results)) {
     df <- head(go_results[["up"]], n_top)
     df$gene_count <- as.numeric(sub("/.*", "", df$GeneRatio))
-    df$plot_x <- df$gene_count
-    df$side <- "right"
     df$neg_log10p <- -log10(df$pvalue)
+    df$plot_x <- df$neg_log10p
+    df$side <- "right"
     plot_rows[["up"]] <- df[, c("Description", "gene_count", "plot_x",
                                   "side", "neg_log10p")]
   }
@@ -479,27 +479,27 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
   # Bottom = left (down) terms: least sig at bottom, most sig near center
   # Top = right (up) terms: most sig near center, least sig at top
   left_desc <- if ("down" %in% names(plot_rows))
-    rev(plot_rows[["down"]]$Description) else character(0)  # reverse so most sig = top of left block
+    rev(plot_rows[["down"]]$Description) else character(0)
   right_desc <- if ("up" %in% names(plot_rows))
-    plot_rows[["up"]]$Description else character(0)  # most sig = bottom of right block (near center)
+    plot_rows[["up"]]$Description else character(0)
   plot_df$Description <- factor(plot_df$Description, levels = c(left_desc, right_desc))
 
   # Text positioned inside bars near center axis — always black
-  plot_df$text_x <- ifelse(plot_df$side == "left", -0.2, 0.2)
+  plot_df$text_x <- ifelse(plot_df$side == "left", -0.15, 0.15)
   plot_df$text_hjust <- ifelse(plot_df$side == "left", 1, 0)
 
   x_max <- max(abs(plot_df$plot_x)) * 1.15
 
-  p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = neg_log10p)) +
+  p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = gene_count)) +
     geom_col(width = 0.85) +
     geom_text(aes(x = text_x, label = label, hjust = text_hjust),
               size = 3, lineheight = 0.85, color = "black", show.legend = FALSE) +
     scale_fill_gradientn(
       colors = c("#FFFFCC", "#FED976", "#FD8D3C", "#E31A1C", "#800026"),
-      name = expression(-Log[10] ~ "P-value")) +
+      name = "Gene Count") +
     scale_x_continuous(labels = abs, limits = c(-x_max, x_max)) +
     geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
-    labs(x = "Gene Count", y = "", title = "GO BP") +
+    labs(x = expression(-Log[10] ~ "(P-value)"), y = "", title = "GO BP") +
     annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.7,
              label = paste("UP in", label_left), hjust = 0.5,
              size = 3.5, fontface = "bold") +
