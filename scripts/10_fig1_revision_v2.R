@@ -40,7 +40,7 @@ source(file.path(SCRIPTS, "00_theme.R"))
 # --- Paths ---
 PNAS     <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision"
 BASE     <- file.path(PNAS, "atlas")
-deg_dir  <- file.path(PNAS, "revision/deg_condition")
+deg_dir  <- file.path(BASE, "deg")  # pseudobulk DESeq2 results
 out_dir  <- file.path(PNAS, "revision/figures/fig1")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -260,12 +260,12 @@ make_volcano <- function(deg, title, pdf_path, label_left, label_right,
   if (!is.null(exclude_genes)) deg <- deg[!deg$gene %in% exclude_genes, ]
 
   deg$sig <- "NS"
-  deg$sig[deg$p_val_adj < 0.05 & deg$avg_log2FC > 0.5]  <- "Up"
-  deg$sig[deg$p_val_adj < 0.05 & deg$avg_log2FC < -0.5] <- "Down"
+  deg$sig[deg$p_val_adj < 0.05 & deg$avg_log2FC > 0.25]  <- "Up"
+  deg$sig[deg$p_val_adj < 0.05 & deg$avg_log2FC < -0.25] <- "Down"
   deg$sig <- factor(deg$sig, levels = c("Down", "NS", "Up"))
 
-  top_pos <- head(deg[deg$avg_log2FC > 0, ][order(deg$p_val[deg$avg_log2FC > 0]), ], 10)
-  top_neg <- head(deg[deg$avg_log2FC < 0, ][order(deg$p_val[deg$avg_log2FC < 0]), ], 10)
+  top_pos <- head(deg[deg$avg_log2FC > 0, ][order(deg$p_val_adj[deg$avg_log2FC > 0]), ], 10)
+  top_neg <- head(deg[deg$avg_log2FC < 0, ][order(deg$p_val_adj[deg$avg_log2FC < 0]), ], 10)
   label_df <- rbind(top_pos, top_neg)
 
   deg$neglog10p <- -log10(pmax(deg$p_val_adj, 1e-300))
@@ -276,7 +276,7 @@ make_volcano <- function(deg, title, pdf_path, label_left, label_right,
   p <- ggplot(deg, aes(x = avg_log2FC, y = neglog10p, color = sig)) +
     geom_point(size = 1.2, alpha = 0.7) +
     scale_color_manual(values = sig_colors, guide = "none") +
-    geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed", color = "grey40") +
+    geom_vline(xintercept = c(-0.25, 0.25), linetype = "dashed", color = "grey40") +
     geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "grey40") +
     geom_text_repel(data = label_df,
       aes(x = avg_log2FC, y = -log10(pmax(p_val_adj, 1e-300)), label = gene),
@@ -308,15 +308,15 @@ make_deg_heatmap <- function(deg, seu_obj, group_col, groups, title, pdf_path,
   if (!is.null(exclude_genes)) deg <- deg[!deg$gene %in% exclude_genes, ]
 
   sig_genes <- deg %>%
-    filter(p_val_adj < 0.05, abs(avg_log2FC) > 0.5) %>%
+    filter(p_val_adj < 0.05, abs(avg_log2FC) > 0.25) %>%
     arrange(p_val_adj)
 
   if (nrow(sig_genes) == 0) {
     # Relax threshold
     sig_genes <- deg %>%
-      filter(p_val_adj < 0.1, abs(avg_log2FC) > 0.25) %>%
+      filter(p_val_adj < 0.1) %>%
       arrange(p_val_adj)
-    cat(sprintf("  Warning: relaxed threshold to padj<0.1, |log2FC|>0.25 (%d genes)\n", nrow(sig_genes)))
+    cat(sprintf("  Warning: relaxed threshold to padj<0.1 (%d genes)\n", nrow(sig_genes)))
   }
 
   if (nrow(sig_genes) == 0) {
@@ -532,27 +532,27 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
   return(go_results)
 }
 
-# --- Define comparison panels ---
+# --- Define comparison panels (using pseudobulk DESeq2 results) ---
 volcanos <- list(
-  list(csv = "deg_WT_Female_vs_WT_Male.csv",
+  list(csv = "deg_pseudobulk_sex_effect.csv",
        prefix = "fig1E", title = "Eos DEG: WT Female vs WT Male",
        label_right = "WT Female", label_left = "WT Male",
        excl = NULL,
        groups = c("WT_Female_HFD", "WT_Male_HFD"),
        cond_order = NULL),
-  list(csv = "deg_KO_Female_vs_WT_Female.csv",
+  list(csv = "deg_pseudobulk_genotype_female.csv",
        prefix = "fig1F", title = "Eos DEG: KO Female vs WT Female",
        label_right = "KO Female", label_left = "WT Female",
        excl = ko_exclude,
        groups = c("KO_Female_HFD", "WT_Female_HFD"),
        cond_order = NULL),
-  list(csv = "deg_KO_Male_vs_WT_Male.csv",
+  list(csv = "deg_pseudobulk_genotype_male.csv",
        prefix = "fig1G", title = "Eos DEG: KO Male vs WT Male",
        label_right = "KO Male", label_left = "WT Male",
        excl = ko_exclude,
        groups = c("KO_Male_HFD", "WT_Male_HFD"),
        cond_order = NULL),
-  list(csv = "deg_Infected_vs_NonInfected_Female.csv",
+  list(csv = "deg_pseudobulk_infection_female.csv",
        prefix = "fig1H", title = "Eos DEG: Infected vs Naive Female",
        label_right = "Inf. Female", label_left = "Naive Female",
        excl = NULL,
@@ -568,9 +568,15 @@ for (v in volcanos) {
     cat(sprintf("  SKIP: %s not found\n", v$csv))
     next
   }
-  deg <- read.csv(csv_path, row.names = 1)
-  n_sig <- sum(deg$p_val_adj < 0.05 & abs(deg$avg_log2FC) > 0.5, na.rm = TRUE)
-  cat(sprintf("\n%s: %d genes, %d significant\n", v$csv, nrow(deg), n_sig))
+  deg <- read.csv(csv_path)
+  # Standardize DESeq2 column names to match code expectations
+  deg <- deg %>%
+    filter(!is.na(padj)) %>%
+    rename(avg_log2FC = log2FC, p_val = pval, p_val_adj = padj)
+  rownames(deg) <- deg$gene
+  n_sig <- sum(deg$p_val_adj < 0.05 & abs(deg$avg_log2FC) > 0.25, na.rm = TRUE)
+  cat(sprintf("\n%s: %d genes, %d significant (padj<0.05, |FC|>0.25)\n",
+      v$csv, nrow(deg), n_sig))
 
   # Volcano
   make_volcano(deg, v$title,
