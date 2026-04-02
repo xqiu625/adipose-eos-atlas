@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 """
 24c_pseudotime_violin.py
-Fig 2H-style violin plot: DPT pseudotime by group, ranked by median pseudotime.
+Fig 2H-style violin plot: CytoTRACE score by group, ranked by median score.
+Higher CytoTRACE = more progenitor-like (immature).
 
 Groups:
-  - Gurtner Bone Marrow (most immature)
+  - Gurtner Bone Marrow (most immature, highest CytoTRACE)
   - Gurtner Blood
   - Qiu eos clusters C0-C6
   - Hu adipose types: eWAT, scWAT, BAT (parsed from CellName prefix)
@@ -65,8 +66,11 @@ print("Loading metadata and CellRank scores ...")
 meta = pd.read_csv(META_PATH, index_col=0)
 scores = pd.read_csv(SCORES_PATH, index_col=0)
 
-# Merge
-df = meta.join(scores[["ct_score", "dpt_pseudotime"]], how="inner")
+# Merge — use ct_score (CytoTRACE) since DPT doesn't separate datasets
+merge_cols = ["ct_score"]
+if "dpt_pseudotime" in scores.columns:
+    merge_cols.append("dpt_pseudotime")
+df = meta.join(scores[merge_cols], how="inner")
 print(f"  Merged: {len(df)} cells")
 
 # --- Assign violin groups ----------------------------------------------------
@@ -102,16 +106,15 @@ def assign_group(row):
         return None
 
 df["violin_group"] = df.apply(assign_group, axis=1)
-df = df.dropna(subset=["violin_group", "dpt_pseudotime"])
-df = df[df["dpt_pseudotime"] < 1.0]  # remove inf/unreachable
+df = df.dropna(subset=["violin_group", "ct_score"])
 
 print(f"  Cells with valid groups: {len(df)}")
 print(f"  Groups: {df['violin_group'].value_counts().to_dict()}")
 
-# --- Order by median pseudotime ----------------------------------------------
-group_medians = df.groupby("violin_group")["dpt_pseudotime"].median().sort_values()
+# --- Order by median CytoTRACE (descending: most progenitor first) ----------
+group_medians = df.groupby("violin_group")["ct_score"].median().sort_values(ascending=False)
 ordered_groups = group_medians.index.tolist()
-print(f"\n  Group order by median DPT:")
+print(f"\n  Group order by median CytoTRACE (high = progenitor):")
 for g in ordered_groups:
     n = (df["violin_group"] == g).sum()
     print(f"    {g:20s}  median={group_medians[g]:.3f}  n={n}")
@@ -127,7 +130,7 @@ print("\nGenerating violin plot ...")
 
 fig, ax = plt.subplots(figsize=(max(10, len(ordered_groups) * 0.9 + 2), 6))
 
-data_list = [df.loc[df["violin_group"] == g, "dpt_pseudotime"].values
+data_list = [df.loc[df["violin_group"] == g, "ct_score"].values
              for g in ordered_groups]
 
 parts = ax.violinplot(data_list, positions=range(len(ordered_groups)),
@@ -152,24 +155,25 @@ bp = ax.boxplot(data_list, positions=range(len(ordered_groups)),
 ax.set_xticks(range(len(ordered_groups)))
 ax.set_xticklabels(ordered_groups, rotation=45, ha="right", fontsize=10,
                    fontweight="bold")
-ax.set_ylabel("Pseudotime", fontsize=13, fontweight="bold")
-ax.set_title("Diffusion Pseudotime by Group", fontsize=14, fontweight="bold")
+ax.set_ylabel("CytoTRACE Score", fontsize=13, fontweight="bold")
+ax.set_title("CytoTRACE Score by Group\n(high = progenitor-like)",
+             fontsize=14, fontweight="bold")
 ax.set_ylim(-0.02, 1.02)
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 
 plt.tight_layout()
 
-out_path = os.path.join(FIG_DIR, "24c_pseudotime_violin.pdf")
+out_path = os.path.join(FIG_DIR, "24c_cytotrace_violin.pdf")
 fig.savefig(out_path)
 plt.close()
 print(f"\n  Saved: {out_path}")
 
 # Also save group summary
-summary = df.groupby("violin_group")["dpt_pseudotime"].agg(
+summary = df.groupby("violin_group")["ct_score"].agg(
     ["count", "mean", "median", "std", "min", "max"]
 ).reindex(ordered_groups)
-summary.to_csv(os.path.join(THREE_WAY, "pseudotime_violin_summary.csv"))
-print(f"  Saved: pseudotime_violin_summary.csv")
+summary.to_csv(os.path.join(THREE_WAY, "cytotrace_violin_summary.csv"))
+print(f"  Saved: cytotrace_violin_summary.csv")
 
 print("\nDone.")
