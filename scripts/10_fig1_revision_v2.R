@@ -148,7 +148,7 @@ run_fig1b <- function(sobj, label, prefix) {
 
 # Immune cells PCA/MDS
 immune_types <- c("Eosinophils", "Macrophages", "Dendritic cells",
-                  "B cells", "NK cells", "Neutrophils")
+                  "B cells", "NK cells", "Neutrophils", "Mast cells")
 immune <- subset(obj, celltype %in% immune_types)
 run_fig1b(immune, "Immune Cells", "immune")
 rm(immune); gc()
@@ -201,9 +201,9 @@ cat("\n=== Fig 1D: Immune cell marker dot plot ===\n")
 
 immune_sub <- subset(obj, celltype %in% immune_types)
 
-# Set cell type order to match manuscript (bottom to top)
+# Set cell type order to match manuscript (bottom to top: Eos -> Mast)
 immune_sub$celltype <- factor(immune_sub$celltype,
-  levels = rev(c("Dendritic cells", "B cells",
+  levels = rev(c("Mast cells", "Dendritic cells", "B cells",
                  "NK cells", "Neutrophils", "Macrophages", "Eosinophils")))
 
 # Canonical marker genes — manuscript set + Nkg7 for NK cells
@@ -212,13 +212,14 @@ marker_genes <- c("Siglecf", "Ccr3", "Il5ra",             # Eosinophils
                    "S100a8",                                # Neutrophils
                    "Nkg7",                                  # NK cells
                    "Cd19",                                  # B cells
-                   "Itgax")                                 # Dendritic cells
+                   "Itgax",                                 # Dendritic cells
+                   "Tpsb2")                                 # Mast cells
 
 # Filter to genes present in the data
 marker_genes <- marker_genes[marker_genes %in% rownames(immune_sub)]
 cat(sprintf("  Using %d / %d marker genes\n", length(marker_genes),
             length(c("Siglecf","Ccr3","Il5ra","Mertk","Mrc1","Fcgr1","Retnla",
-                     "S100a8","Nkg7","Cd19","Itgax"))))
+                     "S100a8","Nkg7","Cd19","Itgax","Tpsb2"))))
 
 p_dot <- DotPlot(immune_sub, features = marker_genes, group.by = "celltype",
                  scale = TRUE) +

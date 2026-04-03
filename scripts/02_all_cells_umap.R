@@ -47,8 +47,8 @@ sobj <- RunPCA(sobj, npcs = 30, verbose = FALSE)
 cat("FindNeighbors (dims = 1:20, k.param = 30)...\n")
 sobj <- FindNeighbors(sobj, dims = 1:20, k.param = 30, verbose = FALSE)
 
-cat("RunUMAP (dims = 1:20, n.neighbors = 40, min.dist = 0.2)...\n")
-sobj <- RunUMAP(sobj, dims = 1:20, n.neighbors = 40L, min.dist = 0.2,
+cat("RunUMAP (dims = 1:20, n.neighbors = 50, min.dist = 0.1)...\n")
+sobj <- RunUMAP(sobj, dims = 1:20, n.neighbors = 50L, min.dist = 0.1,
                 spread = 1, verbose = FALSE)
 
 cat("FindClusters (res = 0.5)...\n")
