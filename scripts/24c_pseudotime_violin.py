@@ -52,38 +52,44 @@ EXTRA_COLORS = {
 # --- Paths -------------------------------------------------------------------
 BASE = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
 INTEG_DIR = os.path.join(BASE, "integration")
-H5AD_PATH = os.path.join(INTEG_DIR, "qiu_gurtner_cellrank.h5ad")
-META_PATH = os.path.join(INTEG_DIR, "for_cellrank", "metadata.csv")
+EXPORT_DIR = os.path.join(INTEG_DIR, "for_cellrank")
 SCORES_PATH = os.path.join(INTEG_DIR, "cellrank_cytotrace_scores.csv")
 FIG_DIR = os.path.join(BASE, "figures")
 os.makedirs(FIG_DIR, exist_ok=True)
 
-# --- Load integrated AnnData from script 13b ---------------------------------
-print("Loading integrated h5ad from script 13b ...")
-adata = sc.read_h5ad(H5AD_PATH)
+# --- Load from for_cellrank exports (same approach as 13b) -------------------
+print("Loading from for_cellrank exports ...")
+
+from scipy.io import mmread
+from scipy.sparse import csc_matrix
+
+counts = mmread(os.path.join(EXPORT_DIR, "counts.mtx")).T.tocsc()
+genes = pd.read_csv(os.path.join(EXPORT_DIR, "genes.txt"), header=None)[0].values
+barcodes = pd.read_csv(os.path.join(EXPORT_DIR, "barcodes.txt"), header=None)[0].values
+meta = pd.read_csv(os.path.join(EXPORT_DIR, "metadata.csv"), index_col=0)
+harmony = pd.read_csv(os.path.join(EXPORT_DIR, "harmony_embeddings.csv"), index_col=0)
+
+# Build AnnData
+adata = sc.AnnData(X=csc_matrix(counts))
+adata.var_names = genes.astype(str)
+adata.obs_names = barcodes.astype(str)
+adata.obs = meta.loc[adata.obs_names].copy()
+adata.obsm["X_harmony"] = harmony.loc[adata.obs_names].values
+
 print(f"  AnnData: {adata.n_obs} cells x {adata.n_vars} genes")
-print(f"  h5ad obs columns: {adata.obs.columns.tolist()}")
+print(f"  obs columns: {adata.obs.columns.tolist()}")
 
-# Load metadata CSV (has dataset, organ, original_cluster columns)
-meta = pd.read_csv(META_PATH, index_col=0)
-print(f"  metadata.csv: {len(meta)} cells, columns: {meta.columns.tolist()}")
+# Normalize (needed for diffusion map)
+sc.pp.normalize_total(adata, target_sum=1e4)
+sc.pp.log1p(adata)
 
-# Load scores CSV (has ct_score, dpt_pseudotime)
+# Load CytoTRACE scores from 13b
 scores = pd.read_csv(SCORES_PATH, index_col=0)
 print(f"  scores.csv: {len(scores)} cells, columns: {scores.columns.tolist()}")
-
-# Merge metadata + scores into adata.obs
-for col in ["dataset", "organ", "original_cluster"]:
-    if col in meta.columns:
-        adata.obs[col] = meta.loc[adata.obs_names, col].values
-        print(f"  Added '{col}' from metadata.csv")
-
 for col in ["ct_score", "dpt_pseudotime"]:
     if col in scores.columns:
         adata.obs[col] = scores.loc[adata.obs_names, col].values
-        print(f"  Added '{col}' from scores.csv")
-
-print(f"  Final obs columns: {adata.obs.columns.tolist()}")
+        print(f"  Added '{col}' from scores")
 
 # --- Assign groups -----------------------------------------------------------
 print("Assigning groups ...")
