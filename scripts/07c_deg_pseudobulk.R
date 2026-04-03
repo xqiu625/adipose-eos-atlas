@@ -242,6 +242,110 @@ for (comp in comparisons) {
   })
 }
 
+# ==============================================================================
+# Multi-factor DESeq2: infection females — ~ genotype + infection_status
+# Extracts both the genotype effect (controlling for infection) and
+# the infection effect (controlling for genotype)
+# ==============================================================================
+cat("\n============================================================\n")
+cat("Multi-factor DESeq2: females ~ genotype + infection_status\n")
+cat("============================================================\n")
+
+eos_fem <- subset(eos, condition %in% c("WT_Female_HFD", "KO_Female_HFD",
+                                         "WT_Female_HFDInfected", "KO_Female_HFDInfected"))
+eos_fem$infection_status <- ifelse(grepl("Infected", eos_fem$condition), "Infected", "NonInfected")
+eos_fem$genotype <- ifelse(grepl("^KO", eos_fem$condition), "KO", "WT")
+
+cat(sprintf("  Total female cells: %d\n", ncol(eos_fem)))
+cat(sprintf("  WT Naive: %d, WT Infected: %d, KO Naive: %d, KO Infected: %d\n",
+            sum(eos_fem$condition == "WT_Female_HFD"),
+            sum(eos_fem$condition == "WT_Female_HFDInfected"),
+            sum(eos_fem$condition == "KO_Female_HFD"),
+            sum(eos_fem$condition == "KO_Female_HFDInfected")))
+
+# Aggregate per sample
+counts_mat <- GetAssayData(eos_fem, layer = "counts")
+meta_fem <- eos_fem@meta.data
+meta_fem$sample <- meta_fem$orig.ident
+samples <- unique(meta_fem$sample)
+
+pb_list <- lapply(samples, function(s) {
+  cells <- which(meta_fem$sample == s)
+  Matrix::rowSums(counts_mat[, cells, drop = FALSE])
+})
+pb_counts <- do.call(cbind, pb_list)
+colnames(pb_counts) <- samples
+
+# Sample metadata
+col_data <- meta_fem %>%
+  select(sample, genotype, infection_status) %>%
+  distinct()
+rownames(col_data) <- col_data$sample
+col_data <- col_data[samples, ]
+col_data$genotype <- factor(col_data$genotype, levels = c("WT", "KO"))
+col_data$infection_status <- factor(col_data$infection_status, levels = c("NonInfected", "Infected"))
+
+cat(sprintf("  Samples per group:\n"))
+print(table(col_data$genotype, col_data$infection_status))
+
+pb_counts <- pb_counts[rowSums(pb_counts) >= 10, ]
+cat(sprintf("  Genes tested: %d\n", nrow(pb_counts)))
+
+# Fit multi-factor model
+cat("  Running DESeq2 (~ genotype + infection_status)...\n")
+dds_mf <- DESeqDataSetFromMatrix(countData = round(pb_counts),
+                                  colData   = col_data,
+                                  design    = ~ genotype + infection_status)
+dds_mf <- DESeq(dds_mf)
+
+# --- Extract genotype effect (controlling for infection) ---
+cat("\n--- Multi-factor: Genotype effect (KO vs WT, controlling for infection) ---\n")
+res_geno <- results(dds_mf, contrast = c("genotype", "KO", "WT"))
+deg_geno <- as.data.frame(res_geno) %>%
+  tibble::rownames_to_column("gene") %>%
+  rename(log2FC = log2FoldChange, pval = pvalue, padj = padj) %>%
+  arrange(padj)
+
+for (fc in c(0.5, 0.25)) {
+  for (pcut in c(0.05, 0.1)) {
+    sig <- deg_geno %>% filter(!is.na(padj), padj < pcut, abs(log2FC) > fc)
+    cat(sprintf("  DEGs (padj < %.2f, |log2FC| > %.2f): %d (Up KO: %d, Up WT: %d)\n",
+                pcut, fc, nrow(sig), sum(sig$log2FC > 0), sum(sig$log2FC < 0)))
+  }
+}
+write.csv(deg_geno, file.path(deg_dir, "deg_pseudobulk_multifactor_genotype.csv"), row.names = FALSE)
+cat("  Saved: deg_pseudobulk_multifactor_genotype.csv\n")
+
+plot_volcano(deg_geno,
+             title    = "Multi-factor: Genotype (KO vs WT, ctrl for infection)",
+             filename = "07c_volcano_pb_multifactor_genotype.pdf",
+             label_up = "KO", label_down = "WT")
+
+# --- Extract infection effect (controlling for genotype) ---
+cat("\n--- Multi-factor: Infection effect (Infected vs Naive, controlling for genotype) ---\n")
+res_inf <- results(dds_mf, contrast = c("infection_status", "Infected", "NonInfected"))
+deg_inf <- as.data.frame(res_inf) %>%
+  tibble::rownames_to_column("gene") %>%
+  rename(log2FC = log2FoldChange, pval = pvalue, padj = padj) %>%
+  arrange(padj)
+
+for (fc in c(0.5, 0.25)) {
+  for (pcut in c(0.05, 0.1)) {
+    sig <- deg_inf %>% filter(!is.na(padj), padj < pcut, abs(log2FC) > fc)
+    cat(sprintf("  DEGs (padj < %.2f, |log2FC| > %.2f): %d (Up Inf: %d, Up Naive: %d)\n",
+                pcut, fc, nrow(sig), sum(sig$log2FC > 0), sum(sig$log2FC < 0)))
+  }
+}
+write.csv(deg_inf, file.path(deg_dir, "deg_pseudobulk_multifactor_infection.csv"), row.names = FALSE)
+cat("  Saved: deg_pseudobulk_multifactor_infection.csv\n")
+
+plot_volcano(deg_inf,
+             title    = "Multi-factor: Infection (Inf vs Naive, ctrl for genotype)",
+             filename = "07c_volcano_pb_multifactor_infection.pdf",
+             label_up = "Infected", label_down = "Naive")
+
+rm(eos_fem, dds_mf); gc()
+
 # --- Compare with MAST results -----------------------------------------------
 cat("\n============================================================\n")
 cat("Comparison: Pseudobulk DESeq2 vs MAST mixed-effects\n")
