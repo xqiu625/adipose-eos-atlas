@@ -22,7 +22,6 @@ import warnings
 import numpy as np
 import pandas as pd
 import scanpy as sc
-import loompy
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -85,7 +84,11 @@ print("Step 1: Loading data...")
 # Load cell metadata
 print(f"  Loading metadata: {META_PATH}")
 if os.path.exists(META_PATH):
-    cell_meta = pd.read_csv(META_PATH, index_col=0)
+    cell_meta = pd.read_csv(META_PATH)
+    # The CSV from 14_scenic_export.R has: cluster,condition,sex,genotype,sample,barcode,UMAP_1,UMAP_2
+    # Use barcode as index to align with AUCell matrix
+    if "barcode" in cell_meta.columns:
+        cell_meta.index = cell_meta["barcode"]
     print(f"  Metadata: {cell_meta.shape[0]} cells, columns: {list(cell_meta.columns)}")
 else:
     # Fallback: load from h5ad
@@ -115,36 +118,61 @@ if condition_col is None and genotype_col and sex_col and infection_col:
     condition_col = "condition"
     print(f"  Constructed condition column from genotype+sex+infection")
 
-# Load SCENIC loom output
-print(f"  Loading loom: {LOOM_PATH}")
-lf = loompy.connect(LOOM_PATH, mode="r")
+# Load SCENIC AUCell scores (try CSV first, fall back to loom)
+AUCELL_CSV = os.path.join(BASE, "scenic", "eos_scenic_aucell.csv")
 
-# Extract AUCell matrix
-if hasattr(lf.ca["RegulonsAUC"], "dtype") and lf.ca["RegulonsAUC"].dtype.names:
-    regulon_names = list(lf.ca["RegulonsAUC"].dtype.names)
-    cell_ids = lf.ca["CellID"]
-    auc_data = np.column_stack([lf.ca["RegulonsAUC"][r] for r in regulon_names])
-    auc_mtx = pd.DataFrame(auc_data, index=cell_ids, columns=regulon_names)
-else:
-    cell_ids = lf.ca["CellID"]
-    auc_mtx = pd.DataFrame(lf.ca["RegulonsAUC"], index=cell_ids)
+if os.path.exists(AUCELL_CSV):
+    print(f"  Loading AUCell CSV: {AUCELL_CSV}")
+    auc_mtx = pd.read_csv(AUCELL_CSV, index_col=0)
+    auc_mtx.columns = [c.strip() for c in auc_mtx.columns]
     regulon_names = list(auc_mtx.columns)
+elif os.path.exists(LOOM_PATH):
+    print(f"  Loading loom: {LOOM_PATH}")
+    import loompy
+    lf = loompy.connect(LOOM_PATH, mode="r")
+    if hasattr(lf.ca["RegulonsAUC"], "dtype") and lf.ca["RegulonsAUC"].dtype.names:
+        regulon_names = list(lf.ca["RegulonsAUC"].dtype.names)
+        cell_ids = lf.ca["CellID"]
+        auc_data = np.column_stack([lf.ca["RegulonsAUC"][r] for r in regulon_names])
+        auc_mtx = pd.DataFrame(auc_data, index=cell_ids, columns=regulon_names)
+    else:
+        cell_ids = lf.ca["CellID"]
+        auc_mtx = pd.DataFrame(lf.ca["RegulonsAUC"], index=cell_ids)
+        regulon_names = list(auc_mtx.columns)
+    lf.close()
+else:
+    raise FileNotFoundError(
+        f"Neither {AUCELL_CSV} nor {LOOM_PATH} found. Run pySCENIC first."
+    )
 
-# Extract regulon-target gene mappings
+# Load regulon-target gene mappings from regulons.csv
+REGULONS_CSV = os.path.join(BASE, "scenic", "regulons.csv")
 regulon_targets = {}
 try:
-    if "Regulons" in lf.ra:
-        gene_names = lf.ra["Gene"]
-        if hasattr(lf.ra["Regulons"], "dtype") and lf.ra["Regulons"].dtype.names:
-            for reg_name in lf.ra["Regulons"].dtype.names:
-                targets = gene_names[lf.ra["Regulons"][reg_name].astype(bool)]
-                if len(targets) > 0:
-                    regulon_targets[reg_name] = list(targets)
-    print(f"  Extracted target genes for {len(regulon_targets)} regulons")
+    if os.path.exists(REGULONS_CSV):
+        print(f"  Loading regulon targets from: {REGULONS_CSV}")
+        reg_df = pd.read_csv(REGULONS_CSV)
+        if "TF" in reg_df.columns:
+            for tf_name in reg_df["TF"].unique():
+                tf_rows = reg_df[reg_df["TF"] == tf_name]
+                targets = set()
+                for _, row in tf_rows.iterrows():
+                    if "TargetGenes" in row and pd.notna(row["TargetGenes"]):
+                        tg = str(row["TargetGenes"])
+                        try:
+                            gene_list = eval(tg) if tg.startswith("[") else tg.split(",")
+                            for item in gene_list:
+                                if isinstance(item, (list, tuple)):
+                                    targets.add(str(item[0]).strip())
+                                else:
+                                    targets.add(str(item).strip())
+                        except Exception:
+                            targets.update(t.strip() for t in tg.split(","))
+                if targets:
+                    regulon_targets[f"{tf_name}(+)"] = list(targets)[:50]
+        print(f"  Found target genes for {len(regulon_targets)} regulons")
 except Exception as e:
     print(f"  Warning: Could not extract regulon targets: {e}")
-
-lf.close()
 
 print(f"  AUCell matrix: {auc_mtx.shape[0]} cells x {auc_mtx.shape[1]} regulons")
 
