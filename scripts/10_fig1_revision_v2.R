@@ -148,7 +148,7 @@ run_fig1b <- function(sobj, label, prefix) {
 
 # Immune cells PCA/MDS
 immune_types <- c("Eosinophils", "Macrophages", "Dendritic cells",
-                  "B cells", "NK cells", "Neutrophils", "Mast cells")
+                  "B cells", "NK cells", "Neutrophils")
 immune <- subset(obj, celltype %in% immune_types)
 run_fig1b(immune, "Immune Cells", "immune")
 rm(immune); gc()
@@ -201,9 +201,9 @@ cat("\n=== Fig 1D: Immune cell marker dot plot ===\n")
 
 immune_sub <- subset(obj, celltype %in% immune_types)
 
-# Set cell type order to match manuscript (bottom to top: Eos -> Mast)
+# Set cell type order to match manuscript (bottom to top)
 immune_sub$celltype <- factor(immune_sub$celltype,
-  levels = rev(c("Mast cells", "Dendritic cells", "B cells",
+  levels = rev(c("Dendritic cells", "B cells",
                  "NK cells", "Neutrophils", "Macrophages", "Eosinophils")))
 
 # Canonical marker genes — manuscript set + Nkg7 for NK cells
@@ -212,14 +212,13 @@ marker_genes <- c("Siglecf", "Ccr3", "Il5ra",             # Eosinophils
                    "S100a8",                                # Neutrophils
                    "Nkg7",                                  # NK cells
                    "Cd19",                                  # B cells
-                   "Itgax",                                 # Dendritic cells
-                   "Tpsb2")                                 # Mast cells
+                   "Itgax")                                 # Dendritic cells
 
 # Filter to genes present in the data
 marker_genes <- marker_genes[marker_genes %in% rownames(immune_sub)]
 cat(sprintf("  Using %d / %d marker genes\n", length(marker_genes),
             length(c("Siglecf","Ccr3","Il5ra","Mertk","Mrc1","Fcgr1","Retnla",
-                     "S100a8","Nkg7","Cd19","Itgax","Tpsb2"))))
+                     "S100a8","Nkg7","Cd19","Itgax"))))
 
 p_dot <- DotPlot(immune_sub, features = marker_genes, group.by = "celltype",
                  scale = TRUE) +
@@ -532,6 +531,123 @@ run_go_enrichment <- function(deg, title, prefix, out_dir,
   return(go_results)
 }
 
+# Helper: GSEA using the full ranked gene list (all genes, not just significant)
+run_gsea <- function(deg_full, title, prefix, out_dir,
+                     label_left, label_right, exclude_genes = NULL) {
+  deg_full$gene <- rownames(deg_full)
+  if (!is.null(exclude_genes)) deg_full <- deg_full[!deg_full$gene %in% exclude_genes, ]
+
+  # Rank by DESeq2 stat (= log2FC / lfcSE); positive = up in label_right
+  gene_list <- setNames(deg_full$stat, deg_full$gene)
+  gene_list <- sort(gene_list, decreasing = TRUE)
+  gene_list <- gene_list[!is.na(gene_list)]
+
+  gsea_res <- tryCatch({
+    gseGO(geneList  = gene_list,
+          OrgDb     = org.Mm.eg.db,
+          keyType   = "SYMBOL",
+          ont       = "BP",
+          minGSSize = 10,
+          maxGSSize = 500,
+          pvalueCutoff = 0.05,
+          pAdjustMethod = "BH",
+          seed      = TRUE)
+  }, error = function(e) {
+    cat(sprintf("  GSEA error: %s\n", e$message))
+    NULL
+  })
+
+  if (is.null(gsea_res) || nrow(as.data.frame(gsea_res)) == 0) {
+    cat(sprintf("  GSEA: no enriched terms for %s\n", prefix))
+    return(invisible(NULL))
+  }
+
+  gsea_df <- as.data.frame(gsea_res)
+  write.csv(gsea_df, file.path(out_dir, sprintf("%s_GSEA_BP.csv", prefix)),
+            row.names = FALSE)
+  cat(sprintf("  GSEA: %d enriched BP terms for %s\n", nrow(gsea_df), prefix))
+
+  # --- Butterfly bar chart: top activated (right) vs suppressed (left) ---
+  n_top <- 5
+  activated  <- gsea_df[gsea_df$NES > 0, ]
+  suppressed <- gsea_df[gsea_df$NES < 0, ]
+
+  frames <- list()
+  if (nrow(suppressed) > 0) {
+    s <- head(suppressed[order(suppressed$pvalue), ], n_top)
+    frames[["left"]] <- data.frame(
+      Description = as.character(s$Description),
+      NES         = s$NES,
+      neg_log10p  = -log10(s$pvalue),
+      plot_x      = -(-log10(s$pvalue)),
+      side        = "left",
+      stringsAsFactors = FALSE
+    )
+  }
+  if (nrow(activated) > 0) {
+    a <- head(activated[order(activated$pvalue), ], n_top)
+    frames[["right"]] <- data.frame(
+      Description = as.character(a$Description),
+      NES         = a$NES,
+      neg_log10p  = -log10(a$pvalue),
+      plot_x      = -log10(a$pvalue),
+      side        = "right",
+      stringsAsFactors = FALSE
+    )
+  }
+
+  if (length(frames) == 0) return(invisible(gsea_df))
+
+  plot_df <- do.call(rbind, frames)
+  plot_df$label <- stringr::str_wrap(plot_df$Description, width = 25)
+
+  left_desc  <- if ("left" %in% names(frames))
+    rev(frames[["left"]]$Description) else character(0)
+  right_desc <- if ("right" %in% names(frames))
+    frames[["right"]]$Description else character(0)
+  plot_df$Description <- factor(plot_df$Description, levels = c(left_desc, right_desc))
+
+  plot_df$text_x    <- ifelse(plot_df$side == "left", -0.15, 0.15)
+  plot_df$text_hjust <- ifelse(plot_df$side == "left", 1, 0)
+
+  x_max <- max(abs(plot_df$plot_x)) * 1.15
+  side_colors <- c("left" = "#2166AC", "right" = "#B2182B")
+
+  p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = side)) +
+    geom_col(width = 0.85, alpha = 0.85) +
+    geom_text(aes(x = text_x, label = label, hjust = text_hjust),
+              size = 3, lineheight = 0.85, color = "black", show.legend = FALSE) +
+    scale_fill_manual(values = side_colors, guide = "none") +
+    scale_x_continuous(labels = abs, limits = c(-x_max, x_max)) +
+    geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
+    labs(x = expression(-Log[10] ~ "(P-value)"), y = "", title = "GSEA GO BP") +
+    annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.7,
+             label = paste("UP in", label_left), hjust = 0.5,
+             size = 3.5, fontface = "bold", color = "#2166AC") +
+    annotate("text", x = x_max * 0.5, y = nrow(plot_df) + 0.7,
+             label = paste("UP in", label_right), hjust = 0.5,
+             size = 3.5, fontface = "bold", color = "#B2182B") +
+    theme_minimal(base_size = 11) +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 12),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
+      plot.margin = margin(t = 25, r = 10, b = 10, l = 10),
+      plot.background = element_rect(fill = "white", color = NA)
+    ) +
+    coord_cartesian(clip = "off")
+
+  n_rows <- nrow(plot_df)
+  save_pdf(p, file.path(out_dir, sprintf("%s_GSEA_BP_butterfly.pdf", prefix)),
+           8, max(5, n_rows * 0.55 + 2))
+  cat(sprintf("  Saved: %s_GSEA_BP_butterfly.pdf\n", prefix))
+
+  return(invisible(gsea_df))
+}
+
 # --- Define comparison panels (using pseudobulk DESeq2 results) ---
 volcanos <- list(
   list(csv = "deg_pseudobulk_sex_effect.csv",
@@ -597,10 +713,15 @@ for (v in volcanos) {
                    exclude_genes = v$excl,
                    condition_order = v$cond_order)
 
-  # GO enrichment (butterfly bar chart)
+  # GO enrichment (ORA butterfly bar chart)
   run_go_enrichment(deg, v$title, v$prefix, out_dir,
                     label_left = v$label_left, label_right = v$label_right,
                     exclude_genes = v$excl)
+
+  # GSEA (full ranked list)
+  run_gsea(deg, v$title, v$prefix, out_dir,
+           label_left = v$label_left, label_right = v$label_right,
+           exclude_genes = v$excl)
 }
 
 rm(obj, tier1); gc()

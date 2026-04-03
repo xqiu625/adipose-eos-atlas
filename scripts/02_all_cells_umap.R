@@ -44,11 +44,12 @@ sobj <- ScaleData(sobj, verbose = FALSE)
 cat("RunPCA (npcs = 30)...\n")
 sobj <- RunPCA(sobj, npcs = 30, verbose = FALSE)
 
-cat("RunUMAP (dims = 1:20)...\n")
-sobj <- RunUMAP(sobj, dims = 1:20, verbose = FALSE)
+cat("FindNeighbors (dims = 1:20, k.param = 30)...\n")
+sobj <- FindNeighbors(sobj, dims = 1:20, k.param = 30, verbose = FALSE)
 
-cat("FindNeighbors (dims = 1:20)...\n")
-sobj <- FindNeighbors(sobj, dims = 1:20, verbose = FALSE)
+cat("RunUMAP (dims = 1:20, n.neighbors = 40, min.dist = 0.2)...\n")
+sobj <- RunUMAP(sobj, dims = 1:20, n.neighbors = 40L, min.dist = 0.2,
+                spread = 1, verbose = FALSE)
 
 cat("FindClusters (res = 0.5)...\n")
 sobj <- FindClusters(sobj, resolution = 0.5, verbose = FALSE)
@@ -56,12 +57,16 @@ sobj <- FindClusters(sobj, resolution = 0.5, verbose = FALSE)
 cat("FindClusters (res = 0.8)...\n")
 sobj <- FindClusters(sobj, resolution = 0.8, verbose = FALSE)
 
+cat("FindClusters (res = 1.0)...\n")
+sobj <- FindClusters(sobj, resolution = 1.0, verbose = FALSE)
+
 # Set default identity to resolution 0.8
 Idents(sobj) <- "RNA_snn_res.0.8"
 sobj$seurat_clusters <- sobj$RNA_snn_res.0.8
 
 cat(sprintf("\nClusters at res 0.5: %d\n", length(unique(sobj$RNA_snn_res.0.5))))
 cat(sprintf("Clusters at res 0.8: %d\n", length(unique(sobj$RNA_snn_res.0.8))))
+cat(sprintf("Clusters at res 1.0: %d\n", length(unique(sobj$RNA_snn_res.1))))
 cat("\nCluster sizes (res 0.8):\n")
 print(sort(table(sobj$seurat_clusters), decreasing = TRUE))
 
