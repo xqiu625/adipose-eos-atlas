@@ -78,9 +78,33 @@ print(f"  Loading h5ad: {H5AD_PATH}")
 adata = sc.read_h5ad(H5AD_PATH)
 print(f"  AnnData: {adata.shape[0]} cells x {adata.shape[1]} genes")
 
-# Load SCENIC AUCell CSV output
-print(f"  Loading AUCell CSV: {AUCELL_CSV}")
-auc_mtx = pd.read_csv(AUCELL_CSV, index_col=0)
+# Load SCENIC AUCell scores (try CSV first, fall back to loom)
+LOOM_PATH = os.path.join(BASE, "scenic", "eos_scenic_output.loom")
+
+if os.path.exists(AUCELL_CSV):
+    print(f"  Loading AUCell CSV: {AUCELL_CSV}")
+    auc_mtx = pd.read_csv(AUCELL_CSV, index_col=0)
+elif os.path.exists(LOOM_PATH):
+    print(f"  AUCell CSV not found. Extracting from loom: {LOOM_PATH}")
+    import loompy
+    lf = loompy.connect(LOOM_PATH, mode="r")
+    cell_ids = lf.ca["CellID"]
+    if hasattr(lf.ca["RegulonsAUC"], "dtype") and lf.ca["RegulonsAUC"].dtype.names:
+        regulon_names = list(lf.ca["RegulonsAUC"].dtype.names)
+        auc_data = np.column_stack([lf.ca["RegulonsAUC"][r] for r in regulon_names])
+        auc_mtx = pd.DataFrame(auc_data, index=cell_ids, columns=regulon_names)
+    else:
+        auc_mtx = pd.DataFrame(lf.ca["RegulonsAUC"], index=cell_ids)
+    lf.close()
+    # Save as CSV for future use
+    auc_mtx.to_csv(AUCELL_CSV)
+    print(f"  Saved AUCell CSV: {AUCELL_CSV}")
+else:
+    raise FileNotFoundError(
+        f"Neither {AUCELL_CSV} nor {LOOM_PATH} found. "
+        "Run 15_scenic_run.sh first."
+    )
+
 # Clean column names: remove trailing "(+)" from regulon names if present
 auc_mtx.columns = [c.strip() for c in auc_mtx.columns]
 
