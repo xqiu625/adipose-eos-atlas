@@ -132,11 +132,15 @@ plot_volcano <- function(deg_df, title, filename, label_up, label_down,
 }
 
 # --- Load eosinophil object ---------------------------------------------------
-cat("Loading all_cells_annotated.rds and subsetting eosinophils...\n")
-obj <- readRDS(file.path(BASE, "all_cells_annotated.rds"))
-eos <- subset(obj, celltype == "Eosinophils")
-cat(sprintf("  %d eosinophils\n", ncol(eos)))
-rm(obj); gc()
+cat("Loading eos_subclustered.rds (decontX-cleaned, clustered)...\n")
+eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
+cat(sprintf("  %d eosinophils, clusters: %s\n", ncol(eos),
+            paste(sort(unique(Idents(eos))), collapse = ", ")))
+
+# Remove C6 — too few cells (Cldn5/Rasip1 enriched, 14 cells)
+n_c6 <- sum(Idents(eos) == "C6")
+eos <- subset(eos, idents = "C6", invert = TRUE)
+cat(sprintf("  Removed C6: %d cells. Remaining: %d eos (C0-C5)\n", n_c6, ncol(eos)))
 
 # --- Define comparisons -------------------------------------------------------
 comparisons <- list(

@@ -183,7 +183,7 @@ p <- ggplot(deg_plot, aes(x = log2FC, y = -log10(pval), color = sig)) +
        color = "Significance") +
   theme_pub()
 
-cairo_pdf(file.path(fig_dir, "adhoc", "adhoc_volcano_genotype_female_noC6.pdf"),
+cairo_pdf(file.path(fig_dir, "adhoc_volcano_genotype_female_noC6.pdf"),
           width = 8, height = 7)
 print(p)
 dev.off()

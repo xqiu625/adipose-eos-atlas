@@ -153,8 +153,11 @@ immune <- subset(obj, celltype %in% immune_types)
 run_fig1b(immune, "Immune Cells", "immune")
 rm(immune); gc()
 
-# Eosinophils only PCA/MDS
-eos <- subset(obj, celltype == "Eosinophils")
+# Eosinophils only PCA/MDS — from eos_subclustered.rds, exclude C6
+eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
+if (inherits(eos[["RNA"]], "Assay5")) eos[["RNA"]] <- JoinLayers(eos[["RNA"]])
+eos <- subset(eos, idents = "C6", invert = TRUE)
+cat(sprintf("  Eos for PCA/MDS: %d cells (C6 removed)\n", ncol(eos)))
 run_fig1b(eos, "Eosinophils", "eos")
 rm(eos); gc()
 
