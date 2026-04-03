@@ -635,7 +635,7 @@ if len(relma_df) > 0:
         sub.loc[(sub["fdr"] < 0.05) & (sub["log2fc_WT_vs_KO"] < 0),
                 "sig_group"] = "Up in KO"
 
-        color_map = {"NS": "grey70", "Up in WT": "#E84A5F", "Up in KO": "#2166AC"}
+        color_map = {"NS": "#B3B3B3", "Up in WT": "#E84A5F", "Up in KO": "#2166AC"}
 
         for group, color in color_map.items():
             mask = sub["sig_group"] == group
