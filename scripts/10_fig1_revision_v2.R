@@ -537,7 +537,7 @@ volcanos <- list(
   list(csv = "deg_pseudobulk_sex_effect.csv",
        prefix = "fig1E", title = "Eos DEG: WT Female vs WT Male",
        label_right = "WT Female", label_left = "WT Male",
-       excl = NULL,
+       excl = c("Ddx3y"),
        groups = c("WT_Female_HFD", "WT_Male_HFD"),
        cond_order = NULL),
   list(csv = "deg_pseudobulk_genotype_female.csv",
@@ -574,6 +574,11 @@ for (v in volcanos) {
     filter(!is.na(padj)) %>%
     rename(avg_log2FC = log2FC, p_val = pval, p_val_adj = padj)
   rownames(deg) <- deg$gene
+  if (!is.null(v$excl)) {
+    deg <- deg[!deg$gene %in% v$excl, ]
+    rownames(deg) <- deg$gene
+    cat(sprintf("  Excluded genes: %s\n", paste(v$excl, collapse = ", ")))
+  }
   n_sig <- sum(deg$p_val_adj < 0.05 & abs(deg$avg_log2FC) > 0.25, na.rm = TRUE)
   cat(sprintf("\n%s: %d genes, %d significant (padj<0.05, |FC|>0.25)\n",
       v$csv, nrow(deg), n_sig))

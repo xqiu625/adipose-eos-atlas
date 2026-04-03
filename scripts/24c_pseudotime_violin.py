@@ -1,23 +1,25 @@
 #!/usr/bin/env python
 """
 24c_pseudotime_violin.py
-Fig 2H-style violin plot: Diffusion pseudotime by group, ranked by median DPT.
-Uses TWO-WAY integration (Qiu + Gurtner) from script 13b to match original
-manuscript Methods (CellRank2 + Scanpy DPT, root = Gurtner bone marrow).
+Fig 2H-style violin plot: per-group DPT ranked by median pseudotime.
+Matches original manuscript approach (scripts 09+10):
+  1. Load integrated Qiu+Gurtner h5ad from script 13b (global DPT already computed)
+  2. Re-compute DPT per group (each group gets own neighbors, diffmap, DPT)
+  3. Violin plot ranked by median per-group DPT
 
 Groups:
-  - Gurtner Bone Marrow (most immature, lowest DPT)
-  - Gurtner Blood
+  - Gurtner Bone Marrow, Gurtner Blood
   - Qiu eos clusters C0-C6
 
-Input:  13b CellRank scores + metadata from two-way integration
+Input:  13b h5ad (two-way integration with global DPT)
 Output: violin plot PDF
-SLURM:  batch, 16G, 2 CPUs, 30min, cellrank_env
+SLURM:  batch, 32G, 4 CPUs, 1h, cellrank_env
 """
 
 import os
 import numpy as np
 import pandas as pd
+import scanpy as sc
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -47,72 +49,103 @@ EXTRA_COLORS = {
     "Gurtner\nBlood": "#DAA520",
 }
 
-# --- Paths (two-way integration from script 13b) ----------------------------
+# --- Paths -------------------------------------------------------------------
 BASE = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
 INTEG_DIR = os.path.join(BASE, "integration")
-META_PATH = os.path.join(INTEG_DIR, "for_cellrank", "metadata.csv")
-SCORES_PATH = os.path.join(INTEG_DIR, "cellrank_cytotrace_scores.csv")
+H5AD_PATH = os.path.join(INTEG_DIR, "qiu_gurtner_cellrank.h5ad")
 FIG_DIR = os.path.join(BASE, "figures")
 os.makedirs(FIG_DIR, exist_ok=True)
 
-# --- Load data ---------------------------------------------------------------
-print("Loading two-way integration data (script 13b) ...")
+# --- Load integrated AnnData from script 13b ---------------------------------
+print("Loading integrated h5ad from script 13b ...")
+adata = sc.read_h5ad(H5AD_PATH)
+print(f"  AnnData: {adata.n_obs} cells x {adata.n_vars} genes")
+print(f"  obs columns: {adata.obs.columns.tolist()}")
 
-meta = pd.read_csv(META_PATH, index_col=0)
-scores = pd.read_csv(SCORES_PATH, index_col=0)
-
-print(f"  Metadata: {len(meta)} cells")
-print(f"  Scores:   {len(scores)} cells")
-print(f"  Score columns: {scores.columns.tolist()}")
-
-# Merge — use dpt_pseudotime as primary metric (matches original manuscript)
-if "dpt_pseudotime" not in scores.columns:
-    print("ERROR: dpt_pseudotime column not found in scores. "
-          "Make sure script 13b completed successfully with DPT.")
-    raise SystemExit(1)
-
-df = meta.join(scores[["dpt_pseudotime", "ct_score"]], how="inner")
-print(f"  Merged: {len(df)} cells")
-
-# Remove cells with infinite DPT
-n_inf = np.isinf(df["dpt_pseudotime"]).sum()
-if n_inf > 0:
-    print(f"  Removing {n_inf} cells with infinite DPT")
-    df = df[~np.isinf(df["dpt_pseudotime"])]
-
-# --- Assign violin groups (two-way: Qiu + Gurtner only) ---------------------
-print("Assigning violin groups ...")
+# --- Assign groups -----------------------------------------------------------
+print("Assigning groups ...")
 
 def assign_group(row):
-    ds = row.get("dataset", "")
-    organ = row.get("organ", "")
-    cluster = row.get("original_cluster", "")
+    ds = str(row.get("dataset", ""))
+    organ = str(row.get("organ", ""))
+    cluster = str(row.get("original_cluster", ""))
 
-    if ds == "Gurtner_2022_Blood_BM" or ds == "Gurtner_2022":
+    if "Gurtner" in ds:
         if organ == "Bone Marrow":
             return "Gurtner\nBone Marrow"
         elif organ == "Blood":
             return "Gurtner\nBlood"
         else:
             return None
-    elif ds == "Qiu_2025_Adipose":
+    elif "Qiu" in ds:
         return cluster  # C0, C1, ..., C6
     else:
         return None
 
-df["violin_group"] = df.apply(assign_group, axis=1)
-df = df.dropna(subset=["violin_group", "dpt_pseudotime"])
+adata.obs["violin_group"] = adata.obs.apply(assign_group, axis=1)
+adata = adata[adata.obs["violin_group"].notna()].copy()
 
-print(f"  Cells with valid groups: {len(df)}")
-print(f"  Groups: {df['violin_group'].value_counts().to_dict()}")
+groups = sorted(adata.obs["violin_group"].unique())
+print(f"  Groups: {adata.obs['violin_group'].value_counts().to_dict()}")
 
-# --- Order by median DPT (ascending: most immature / lowest DPT first) ------
-group_medians = df.groupby("violin_group")["dpt_pseudotime"].median().sort_values(ascending=True)
-ordered_groups = group_medians.index.tolist()
-print(f"\n  Group order by median DPT (low = progenitor):")
+# --- Per-group DPT (matching original manuscript script 10) ------------------
+print("\nComputing per-group DPT (like original manuscript) ...")
+
+group_dpt = {}  # group_name -> array of DPT values
+
+for grp in groups:
+    print(f"\n  --- {grp} ---")
+    mask = adata.obs["violin_group"] == grp
+    adata_grp = adata[mask].copy()
+    n_cells = adata_grp.n_obs
+    print(f"    n_cells = {n_cells}")
+
+    if n_cells < 30:
+        print(f"    WARNING: too few cells ({n_cells}), skipping per-group DPT")
+        # Use global DPT if available
+        if "dpt_pseudotime" in adata_grp.obs.columns:
+            vals = adata_grp.obs["dpt_pseudotime"].astype(float).values
+            vals = vals[~np.isinf(vals) & ~np.isnan(vals)]
+            group_dpt[grp] = vals
+            print(f"    Using global DPT (fallback): median={np.median(vals):.4f}")
+        continue
+
+    # Re-compute neighbors and diffusion map per group
+    n_neighbors = min(30, n_cells - 1)
+    n_pcs = min(30, adata_grp.obsm["X_harmony"].shape[1])
+
+    sc.pp.neighbors(adata_grp, use_rep="X_harmony",
+                    n_neighbors=n_neighbors, n_pcs=n_pcs)
+    n_comps = min(15, n_cells - 2)
+    sc.tl.diffmap(adata_grp, n_comps=n_comps)
+
+    # Root cell: cell with highest CytoTRACE score (most progenitor-like)
+    if "ct_score" in adata_grp.obs.columns:
+        ct = adata_grp.obs["ct_score"].astype(float)
+        root_cell = ct.idxmax()
+        root_idx = adata_grp.obs_names.get_loc(root_cell)
+        print(f"    Root cell: {root_cell} (ct_score={ct[root_cell]:.3f})")
+    else:
+        root_idx = 0
+        print(f"    Root cell: index 0 (no ct_score available)")
+
+    adata_grp.uns["iroot"] = root_idx
+    n_dcs = min(10, n_comps)
+    sc.tl.dpt(adata_grp, n_dcs=n_dcs)
+
+    vals = adata_grp.obs["dpt_pseudotime"].values.astype(float)
+    vals = vals[~np.isinf(vals) & ~np.isnan(vals)]
+    group_dpt[grp] = vals
+    print(f"    DPT range: {vals.min():.4f} - {vals.max():.4f}, "
+          f"median={np.median(vals):.4f}, n_valid={len(vals)}")
+
+# --- Order by median DPT (ascending) ----------------------------------------
+medians = {g: np.median(v) for g, v in group_dpt.items()}
+ordered_groups = sorted(medians, key=lambda g: medians[g])
+
+print(f"\n  Group order by median per-group DPT:")
 for g in ordered_groups:
-    n = (df["violin_group"] == g).sum()
-    print(f"    {g:20s}  median={group_medians[g]:.4f}  n={n}")
+    print(f"    {g:20s}  median={medians[g]:.4f}  n={len(group_dpt[g])}")
 
 # --- Build color map ---------------------------------------------------------
 all_colors = {}
@@ -125,20 +158,17 @@ print("\nGenerating violin plot ...")
 
 fig, ax = plt.subplots(figsize=(max(10, len(ordered_groups) * 0.9 + 2), 6))
 
-data_list = [df.loc[df["violin_group"] == g, "dpt_pseudotime"].values
-             for g in ordered_groups]
+data_list = [group_dpt[g] for g in ordered_groups]
 
 parts = ax.violinplot(data_list, positions=range(len(ordered_groups)),
                       showmeans=False, showmedians=False, showextrema=False)
 
-# Color each violin
 for i, pc in enumerate(parts["bodies"]):
     pc.set_facecolor(colors[i])
     pc.set_edgecolor("black")
     pc.set_linewidth(0.8)
     pc.set_alpha(0.85)
 
-# Add boxplot inside (thin, white median line)
 bp = ax.boxplot(data_list, positions=range(len(ordered_groups)),
                 widths=0.15, showfliers=False, patch_artist=True,
                 medianprops=dict(color="white", linewidth=2),
@@ -146,12 +176,11 @@ bp = ax.boxplot(data_list, positions=range(len(ordered_groups)),
                 whiskerprops=dict(color="black", linewidth=0.8),
                 capprops=dict(color="black", linewidth=0.8))
 
-# Style
 ax.set_xticks(range(len(ordered_groups)))
 ax.set_xticklabels(ordered_groups, rotation=45, ha="right", fontsize=10,
                    fontweight="bold")
 ax.set_ylabel("Diffusion Pseudotime", fontsize=13, fontweight="bold")
-ax.set_title("Diffusion Pseudotime by Group\n(root = Gurtner bone marrow)",
+ax.set_title("Diffusion Pseudotime by Group\n(per-group DPT, root = most progenitor-like cell)",
              fontsize=14, fontweight="bold")
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
@@ -163,54 +192,21 @@ fig.savefig(out_path)
 plt.close()
 print(f"\n  Saved: {out_path}")
 
-# Also save group summary
-summary = df.groupby("violin_group")["dpt_pseudotime"].agg(
-    ["count", "mean", "median", "std", "min", "max"]
-).reindex(ordered_groups)
-summary.to_csv(os.path.join(INTEG_DIR, "dpt_violin_summary.csv"))
+# Save summary
+summary_rows = []
+for g in ordered_groups:
+    v = group_dpt[g]
+    summary_rows.append({
+        "group": g.replace("\n", " "),
+        "n": len(v),
+        "mean": np.mean(v),
+        "median": np.median(v),
+        "std": np.std(v),
+        "min": np.min(v),
+        "max": np.max(v),
+    })
+summary = pd.DataFrame(summary_rows)
+summary.to_csv(os.path.join(INTEG_DIR, "dpt_violin_summary.csv"), index=False)
 print(f"  Saved: dpt_violin_summary.csv")
-
-# --- Also generate CytoTRACE version for supplementary ----------------------
-print("\nGenerating supplementary CytoTRACE violin ...")
-
-ct_medians = df.groupby("violin_group")["ct_score"].median().sort_values(ascending=False)
-ct_order = ct_medians.index.tolist()
-ct_colors = [all_colors.get(g, "#999999") for g in ct_order]
-
-fig2, ax2 = plt.subplots(figsize=(max(10, len(ct_order) * 0.9 + 2), 6))
-
-ct_data = [df.loc[df["violin_group"] == g, "ct_score"].values for g in ct_order]
-
-parts2 = ax2.violinplot(ct_data, positions=range(len(ct_order)),
-                        showmeans=False, showmedians=False, showextrema=False)
-
-for i, pc in enumerate(parts2["bodies"]):
-    pc.set_facecolor(ct_colors[i])
-    pc.set_edgecolor("black")
-    pc.set_linewidth(0.8)
-    pc.set_alpha(0.85)
-
-ax2.boxplot(ct_data, positions=range(len(ct_order)),
-            widths=0.15, showfliers=False, patch_artist=True,
-            medianprops=dict(color="white", linewidth=2),
-            boxprops=dict(facecolor="black", linewidth=0.8),
-            whiskerprops=dict(color="black", linewidth=0.8),
-            capprops=dict(color="black", linewidth=0.8))
-
-ax2.set_xticks(range(len(ct_order)))
-ax2.set_xticklabels(ct_order, rotation=45, ha="right", fontsize=10,
-                    fontweight="bold")
-ax2.set_ylabel("CytoTRACE Score", fontsize=13, fontweight="bold")
-ax2.set_title("CytoTRACE Score by Group\n(high = progenitor-like)",
-              fontsize=14, fontweight="bold")
-ax2.set_ylim(-0.02, 1.02)
-ax2.spines["top"].set_visible(False)
-ax2.spines["right"].set_visible(False)
-
-plt.tight_layout()
-out_path2 = os.path.join(FIG_DIR, "24c_cytotrace_violin.pdf")
-fig2.savefig(out_path2)
-plt.close()
-print(f"  Saved: {out_path2}")
 
 print("\nDone.")
