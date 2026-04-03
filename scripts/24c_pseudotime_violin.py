@@ -53,6 +53,8 @@ EXTRA_COLORS = {
 BASE = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
 INTEG_DIR = os.path.join(BASE, "integration")
 H5AD_PATH = os.path.join(INTEG_DIR, "qiu_gurtner_cellrank.h5ad")
+META_PATH = os.path.join(INTEG_DIR, "for_cellrank", "metadata.csv")
+SCORES_PATH = os.path.join(INTEG_DIR, "cellrank_cytotrace_scores.csv")
 FIG_DIR = os.path.join(BASE, "figures")
 os.makedirs(FIG_DIR, exist_ok=True)
 
@@ -60,7 +62,28 @@ os.makedirs(FIG_DIR, exist_ok=True)
 print("Loading integrated h5ad from script 13b ...")
 adata = sc.read_h5ad(H5AD_PATH)
 print(f"  AnnData: {adata.n_obs} cells x {adata.n_vars} genes")
-print(f"  obs columns: {adata.obs.columns.tolist()}")
+print(f"  h5ad obs columns: {adata.obs.columns.tolist()}")
+
+# Load metadata CSV (has dataset, organ, original_cluster columns)
+meta = pd.read_csv(META_PATH, index_col=0)
+print(f"  metadata.csv: {len(meta)} cells, columns: {meta.columns.tolist()}")
+
+# Load scores CSV (has ct_score, dpt_pseudotime)
+scores = pd.read_csv(SCORES_PATH, index_col=0)
+print(f"  scores.csv: {len(scores)} cells, columns: {scores.columns.tolist()}")
+
+# Merge metadata + scores into adata.obs
+for col in ["dataset", "organ", "original_cluster"]:
+    if col in meta.columns:
+        adata.obs[col] = meta.loc[adata.obs_names, col].values
+        print(f"  Added '{col}' from metadata.csv")
+
+for col in ["ct_score", "dpt_pseudotime"]:
+    if col in scores.columns:
+        adata.obs[col] = scores.loc[adata.obs_names, col].values
+        print(f"  Added '{col}' from scores.csv")
+
+print(f"  Final obs columns: {adata.obs.columns.tolist()}")
 
 # --- Assign groups -----------------------------------------------------------
 print("Assigning groups ...")
