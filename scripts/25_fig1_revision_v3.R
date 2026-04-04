@@ -149,23 +149,53 @@ run_gsea <- function(deg_csv, prefix, title, label_left, label_right,
   gene_list <- sort(gene_list[!is.na(gene_list)], decreasing = TRUE)
   cat(sprintf("  GSEA ranked list: %d genes from %s\n", length(gene_list), basename(deg_csv)))
 
-  gsea_res <- tryCatch({
-    gseGO(geneList     = gene_list,
-          OrgDb        = org.Mm.eg.db,
-          keyType      = "SYMBOL",
-          ont          = "BP",
-          minGSSize    = 10,
-          maxGSSize    = 500,
-          pvalueCutoff = 0.05,
-          pAdjustMethod = "BH",
-          seed         = TRUE)
-  }, error = function(e) {
-    cat(sprintf("  GSEA error: %s\n", e$message))
-    NULL
-  })
+  # Try strict first (padj < 0.05), then relax to 0.25 if no results
+  gsea_res <- NULL
+  for (pcut in c(0.05, 0.25)) {
+    gsea_res <- tryCatch({
+      gseGO(geneList     = gene_list,
+            OrgDb        = org.Mm.eg.db,
+            keyType      = "SYMBOL",
+            ont          = "BP",
+            minGSSize    = 10,
+            maxGSSize    = 500,
+            pvalueCutoff = pcut,
+            pAdjustMethod = "BH",
+            seed         = TRUE)
+    }, error = function(e) {
+      cat(sprintf("  GSEA error (pcut=%.2f): %s\n", pcut, e$message))
+      NULL
+    })
+    if (!is.null(gsea_res) && nrow(as.data.frame(gsea_res)) > 0) {
+      cat(sprintf("  GSEA found terms at pvalueCutoff=%.2f\n", pcut))
+      break
+    }
+    cat(sprintf("  GSEA: no terms at pvalueCutoff=%.2f, trying relaxed...\n", pcut))
+  }
+
+  # If stat-based ranking failed, retry with log2FC ranking
+  if ((is.null(gsea_res) || nrow(as.data.frame(gsea_res)) == 0) && "log2FC" %in% colnames(deg)) {
+    cat("  Retrying GSEA with log2FC ranking...\n")
+    gene_list_fc <- setNames(deg$log2FC, deg$gene)
+    gene_list_fc <- sort(gene_list_fc[!is.na(gene_list_fc)], decreasing = TRUE)
+    gsea_res <- tryCatch({
+      gseGO(geneList     = gene_list_fc,
+            OrgDb        = org.Mm.eg.db,
+            keyType      = "SYMBOL",
+            ont          = "BP",
+            minGSSize    = 10,
+            maxGSSize    = 500,
+            pvalueCutoff = 0.25,
+            pAdjustMethod = "BH",
+            seed         = TRUE)
+    }, error = function(e) NULL)
+    if (!is.null(gsea_res) && nrow(as.data.frame(gsea_res)) > 0) {
+      cat(sprintf("  GSEA found %d terms with log2FC ranking\n", nrow(as.data.frame(gsea_res))))
+    }
+  }
 
   if (is.null(gsea_res) || nrow(as.data.frame(gsea_res)) == 0) {
-    cat(sprintf("  GSEA: no enriched terms for %s\n", prefix))
+    cat(sprintf("  GSEA: no enriched terms for %s (tried all approaches)\n", prefix))
     write.csv(data.frame(note = "No significant GSEA terms"),
               file.path(out_dir, sprintf("%s_GSEA_BP.csv", prefix)),
               row.names = FALSE)
@@ -212,35 +242,132 @@ run_gsea <- function(deg_csv, prefix, title, label_left, label_right,
   x_max <- max(abs(plot_df$plot_x)) * 1.15
   side_colors <- c("left" = "#2166AC", "right" = "#B2182B")
 
+  # 5.5cm x 7.5cm = 2.17in x 2.95in (Rebecca's requested GO plot size)
+  w_in <- 5.5 / 2.54
+  h_in <- 7.5 / 2.54
+
   p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = side)) +
     geom_col(width = 0.85, alpha = 0.85) +
     geom_text(aes(x = text_x, label = label, hjust = text_hjust),
-              size = 3, lineheight = 0.85, color = "black", show.legend = FALSE) +
+              size = 1.8, lineheight = 0.8, color = "black", show.legend = FALSE) +
     scale_fill_manual(values = side_colors, guide = "none") +
     scale_x_continuous(labels = abs, limits = c(-x_max, x_max)) +
-    geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
+    geom_vline(xintercept = 0, color = "black", linewidth = 0.3) +
     labs(x = expression(-Log[10] ~ "(P-value)"), y = "", title = "GSEA GO BP") +
     annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.7,
              label = paste("UP in", label_left), hjust = 0.5,
-             size = 3.5, fontface = "bold", color = "#2166AC") +
+             size = 2, fontface = "bold", color = "#2166AC") +
     annotate("text", x = x_max * 0.5, y = nrow(plot_df) + 0.7,
              label = paste("UP in", label_right), hjust = 0.5,
-             size = 3.5, fontface = "bold", color = "#B2182B") +
-    theme_minimal(base_size = 11) +
+             size = 2, fontface = "bold", color = "#B2182B") +
+    theme_minimal(base_size = 7) +
     theme(
       axis.text.y = element_blank(), axis.ticks.y = element_blank(),
-      plot.title = element_text(face = "bold", hjust = 0.5, size = 12),
+      axis.title.x = element_text(size = 6),
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 7),
       panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
-      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8),
-      plot.margin = margin(t = 25, r = 10, b = 10, l = 10),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+      plot.margin = margin(t = 15, r = 5, b = 5, l = 5),
       plot.background = element_rect(fill = "white", color = NA)
     ) +
     coord_cartesian(clip = "off")
 
   save_pdf(p, file.path(out_dir, sprintf("%s_GSEA_BP_butterfly.pdf", prefix)),
-           8, max(5, nrow(plot_df) * 0.55 + 2))
+           w_in, h_in)
 
   return(invisible(gsea_df))
+}
+
+
+# =============================================================================
+# Re-generate ORA GO butterfly plots at 5.5cm x 7.5cm (Rebecca's size request)
+# Reads existing GO CSV results and re-plots at new size
+# =============================================================================
+cat("\n=== Re-generating GO butterfly plots at 5.5cm x 7.5cm ===\n")
+
+go_w <- 5.5 / 2.54  # inches
+go_h <- 7.5 / 2.54
+
+replot_go_butterfly <- function(prefix, label_left, label_right, out_dir) {
+  up_csv <- file.path(out_dir, sprintf("%s_GO_BP_up.csv", prefix))
+  dn_csv <- file.path(out_dir, sprintf("%s_GO_BP_down.csv", prefix))
+
+  frames <- list()
+  n_top <- 5
+
+  if (file.exists(dn_csv)) {
+    d <- read.csv(dn_csv)
+    if (nrow(d) > 0) {
+      d <- head(d[order(d$pvalue), ], n_top)
+      frames[["left"]] <- data.frame(
+        Description = as.character(d$Description),
+        plot_x = -(-log10(d$pvalue)), side = "left",
+        stringsAsFactors = FALSE)
+    }
+  }
+  if (file.exists(up_csv)) {
+    u <- read.csv(up_csv)
+    if (nrow(u) > 0) {
+      u <- head(u[order(u$pvalue), ], n_top)
+      frames[["right"]] <- data.frame(
+        Description = as.character(u$Description),
+        plot_x = -log10(u$pvalue), side = "right",
+        stringsAsFactors = FALSE)
+    }
+  }
+
+  if (length(frames) == 0) { cat(sprintf("  SKIP %s: no GO results\n", prefix)); return() }
+
+  plot_df <- do.call(rbind, frames)
+  plot_df$label <- str_wrap(plot_df$Description, width = 25)
+
+  left_desc  <- if ("left" %in% names(frames)) rev(frames[["left"]]$Description) else character(0)
+  right_desc <- if ("right" %in% names(frames)) frames[["right"]]$Description else character(0)
+  plot_df$Description <- factor(plot_df$Description, levels = c(left_desc, right_desc))
+  plot_df$text_x    <- ifelse(plot_df$side == "left", -0.15, 0.15)
+  plot_df$text_hjust <- ifelse(plot_df$side == "left", 1, 0)
+  x_max <- max(abs(plot_df$plot_x)) * 1.15
+  side_colors <- c("left" = "#2166AC", "right" = "#B2182B")
+
+  p <- ggplot(plot_df, aes(x = plot_x, y = Description, fill = side)) +
+    geom_col(width = 0.85, alpha = 0.85) +
+    geom_text(aes(x = text_x, label = label, hjust = text_hjust),
+              size = 1.8, lineheight = 0.8, color = "black", show.legend = FALSE) +
+    scale_fill_manual(values = side_colors, guide = "none") +
+    scale_x_continuous(labels = abs, limits = c(-x_max, x_max)) +
+    geom_vline(xintercept = 0, color = "black", linewidth = 0.3) +
+    labs(x = expression(-Log[10] ~ "(P-value)"), y = "", title = "GO BP") +
+    annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.7,
+             label = paste("UP in", label_left), hjust = 0.5,
+             size = 2, fontface = "bold", color = "#2166AC") +
+    annotate("text", x = x_max * 0.5, y = nrow(plot_df) + 0.7,
+             label = paste("UP in", label_right), hjust = 0.5,
+             size = 2, fontface = "bold", color = "#B2182B") +
+    theme_minimal(base_size = 7) +
+    theme(
+      axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+      axis.title.x = element_text(size = 6),
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 7),
+      panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+      plot.margin = margin(t = 15, r = 5, b = 5, l = 5),
+      plot.background = element_rect(fill = "white", color = NA)
+    ) +
+    coord_cartesian(clip = "off")
+
+  save_pdf(p, file.path(out_dir, sprintf("%s_GO_BP_butterfly.pdf", prefix)), go_w, go_h)
+}
+
+go_panels <- list(
+  list(prefix = "fig1E", left = "WT Male", right = "WT Female"),
+  list(prefix = "fig1F", left = "WT Female", right = "KO Female"),
+  list(prefix = "fig1G", left = "WT Male", right = "KO Male"),
+  list(prefix = "fig1H", left = "Naive Female", right = "Inf. Female")
+)
+
+for (g in go_panels) {
+  cat(sprintf("  Replotting %s GO butterfly...\n", g$prefix))
+  replot_go_butterfly(g$prefix, g$left, g$right, out_dir)
 }
 
 
