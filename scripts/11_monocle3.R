@@ -40,6 +40,12 @@ eos <- tryCatch(
   readRDS(file.path(BASE, "eos_subclustered.rds")),
   error = function(e) { cat("ERROR: Cannot load input:", e$message, "\n"); quit(status = 1) }
 )
+# Remove C6 if still present (too few cells)
+if ("C6" %in% levels(Idents(eos))) {
+  eos <- subset(eos, idents = "C6", invert = TRUE)
+  Idents(eos) <- droplevels(Idents(eos))
+  cat(sprintf("  Removed C6. Remaining: %d eos (C0-C5)\n", ncol(eos)))
+}
 cat("  Cells:", ncol(eos), " Clusters:", paste(sort(unique(Idents(eos))), collapse = ", "), "\n")
 
 # --- Convert Seurat to Monocle3 cell_data_set --------------------------------

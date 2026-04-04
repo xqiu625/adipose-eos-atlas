@@ -33,6 +33,12 @@ broad_colors <- c("Eosinophil" = "#E84A5F", "Macrophage" = "#2166AC")
 # --- Load objects -------------------------------------------------------------
 cat("Loading eos_subclustered.rds...\n")
 eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
+# Remove C6 if still present (too few cells)
+if ("C6" %in% levels(Idents(eos))) {
+  eos <- subset(eos, idents = "C6", invert = TRUE)
+  Idents(eos) <- droplevels(Idents(eos))
+  cat(sprintf("  Removed C6. Remaining: %d eos (C0-C5)\n", ncol(eos)))
+}
 
 cat("Loading mac_subtyped.rds...\n")
 mac <- readRDS(file.path(BASE, "mac_subtyped.rds"))

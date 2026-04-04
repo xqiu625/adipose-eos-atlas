@@ -60,6 +60,12 @@ cat("[1/5] Loading data ...\n")
 # Our eosinophils
 cat("  Loading our eos (eos_subclustered.rds) ...\n")
 eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
+# Remove C6 if still present (too few cells)
+if ("C6" %in% levels(Idents(eos))) {
+  eos <- subset(eos, idents = "C6", invert = TRUE)
+  Idents(eos) <- droplevels(Idents(eos))
+  cat(sprintf("  Removed C6. Remaining: %d eos (C0-C5)\n", ncol(eos)))
+}
 cat(sprintf("  Our eos: %d cells, %d clusters\n", ncol(eos),
             length(unique(Idents(eos)))))
 

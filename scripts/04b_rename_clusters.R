@@ -56,14 +56,17 @@ for (from in names(rename_map)) {
 new_labels <- rename_map[eos$eos_cluster]
 names(new_labels) <- colnames(eos)
 eos$eos_cluster <- new_labels
-Idents(eos) <- factor(new_labels, levels = paste0("C", 0:6))
+Idents(eos) <- factor(new_labels, levels = paste0("C", 0:6))  # C6 removed below
 
 cat("\n  After renaming:\n")
 print(table(eos$eos_cluster))
 
-cat("\n  Manuscript reference:\n")
-cat("    C0=3092, C1=1899, C2=1831, C3=1338, C4=1143, C5=1126, C6=269\n")
-cat("    (New has fewer cells due to DecontX filtering)\n")
+# ── Remove C6 — too few cells (Cldn5/Rasip1, no mature eos markers)
+n_c6 <- sum(Idents(eos) == "C6")
+eos <- subset(eos, idents = "C6", invert = TRUE)
+eos$eos_cluster <- droplevels(factor(eos$eos_cluster, levels = paste0("C", 0:5)))
+Idents(eos) <- eos$eos_cluster
+cat(sprintf("\n  Removed C6: %d cells. Remaining: %d eos (C0-C5)\n", n_c6, ncol(eos)))
 
 # ── Re-run FindAllMarkers with renamed labels ────────────────────────────────
 cat("\nFinding cluster markers with manuscript labels...\n")

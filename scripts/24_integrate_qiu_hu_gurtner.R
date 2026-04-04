@@ -38,6 +38,12 @@ dir.create(export_dir, recursive = TRUE, showWarnings = FALSE)
 # --- Our eosinophils (HFD adipose, C0-C6) ---
 cat("Loading Qiu adipose eosinophils ...\n")
 qiu <- readRDS(file.path(BASE, "eos_subclustered.rds"))
+# Remove C6 if still present (too few cells)
+if ("C6" %in% levels(Idents(qiu))) {
+  qiu <- subset(qiu, idents = "C6", invert = TRUE)
+  Idents(qiu) <- droplevels(Idents(qiu))
+  cat(sprintf("  Removed C6. Remaining: %d eos (C0-C5)\n", ncol(qiu)))
+}
 cat(sprintf("  Qiu: %d cells\n", ncol(qiu)))
 
 # --- Hu healthy adipose eosinophils ---

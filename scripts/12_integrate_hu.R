@@ -37,6 +37,12 @@ eos <- tryCatch(
   readRDS(file.path(BASE, "eos_subclustered.rds")),
   error = function(e) { cat("ERROR: Cannot load eos_subclustered.rds:", e$message, "\n"); quit(status = 1) }
 )
+# Remove C6 if still present (too few cells)
+if ("C6" %in% levels(Idents(eos))) {
+  eos <- subset(eos, idents = "C6", invert = TRUE)
+  Idents(eos) <- droplevels(Idents(eos))
+  cat(sprintf("  Removed C6. Remaining: %d eos (C0-C5)\n", ncol(eos)))
+}
 cat("  Our cells:", ncol(eos), "\n")
 
 # --- Load Hu reference data --------------------------------------------------
