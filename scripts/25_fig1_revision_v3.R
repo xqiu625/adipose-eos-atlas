@@ -49,15 +49,21 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 # =============================================================================
 cat("=== Fig 1C: UMAPs (C6 removed) ===\n")
 
-# Identify C6 barcodes from eos subcluster object
+# Identify C6 barcodes: eosinophils in all_cells_annotated that are NOT in
+# eos_subclustered (which had C6 removed by 04b_rename_clusters.R)
 eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
-c6_barcodes <- colnames(eos)[Idents(eos) == "C6"]
-cat(sprintf("  C6 barcodes to remove: %d\n", length(c6_barcodes)))
+eos_barcodes <- colnames(eos)  # C0-C5 only (C6 already removed by 04b)
 rm(eos); gc()
 
-# Load all-cells annotated object, remove C6
+# Load all-cells object first to find the C6 cells
 obj <- readRDS(file.path(BASE, "all_cells_annotated.rds"))
 if (inherits(obj[["RNA"]], "Assay5")) obj[["RNA"]] <- JoinLayers(obj[["RNA"]])
+
+all_eos_barcodes <- colnames(obj)[obj$celltype == "Eosinophils"]
+c6_barcodes <- setdiff(all_eos_barcodes, eos_barcodes)
+cat(sprintf("  C6 barcodes to remove: %d (eos in all_cells but not in eos_subclustered)\n",
+            length(c6_barcodes)))
+
 cat(sprintf("  All cells before: %d\n", ncol(obj)))
 
 cells_keep <- setdiff(colnames(obj), c6_barcodes)
