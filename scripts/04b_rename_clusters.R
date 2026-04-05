@@ -28,18 +28,10 @@ cat(sprintf("  %d cells, clusters: %s\n", ncol(eos),
 cat("  Before renaming:\n")
 print(table(eos$eos_cluster))
 
-# ── Rename map (from 04 barcode correspondence analysis) ─────────────────────
-# New C0 (n=1949) -> Old C1 (69%)  => rename to C1
-# New C1 (n=1739) -> Old C0 (34%)  => rename to C0
-# New C2 (n=1658) -> Old C4 (44%)  => rename to C4
-# New C3 (n=1156) -> Old C2 (60%)  => rename to C2
-# New C4 (n=756)  -> Old C5 (82%)  => rename to C5
-# New C5 (n=203)  -> Old C3 (43%)  => rename to C3
-# New C6 (n=14)   -> Old C6 (100%) => keep C6
-
+# ── Rename map (Seurat res 0.4 -> Manuscript) ────────────────────────────────
 rename_map <- c(
-  "C0" = "C1",
-  "C1" = "C0",
+  "C0" = "C0",
+  "C1" = "C1",
   "C2" = "C4",
   "C3" = "C2",
   "C4" = "C5",

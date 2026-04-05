@@ -143,11 +143,42 @@ if (length(all_go) > 0) {
   # Truncate extreme values for visualization
   heatmap_mat[heatmap_mat > 20] <- 20
 
+  # Order rows by cluster: C0 terms first, then C1, etc.
+  row_order <- c()
+  for (cl in unique_clusters) {
+    cl_terms <- top_terms %>% filter(cluster == cl) %>%
+      arrange(p.adjust) %>% pull(Description)
+    # Only add terms not already in the list (avoid duplicates)
+    cl_terms <- setdiff(cl_terms, row_order)
+    row_order <- c(row_order, cl_terms)
+  }
+  # Add any remaining terms
+  row_order <- c(row_order, setdiff(unique_terms, row_order))
+  heatmap_mat <- heatmap_mat[row_order, , drop = FALSE]
+
+  # Row annotation: which cluster each term belongs to
+  term_cluster <- top_terms %>%
+    group_by(Description) %>%
+    slice_min(order_by = p.adjust, n = 1) %>%
+    ungroup()
+  row_anno <- data.frame(
+    Cluster = term_cluster$cluster[match(row_order, term_cluster$Description)],
+    row.names = row_order
+  )
+  anno_colors <- list(Cluster = eos_colors[unique_clusters])
+
+  # Add gaps between cluster blocks
+  gap_positions <- cumsum(table(row_anno$Cluster)[unique_clusters])
+  gap_positions <- gap_positions[-length(gap_positions)]
+
   pdf(file.path(fig_dir, "08_go_heatmap_clusters.pdf"),
       width = 10, height = max(8, nrow(heatmap_mat) * 0.3))
   pheatmap(heatmap_mat,
            color = colorRampPalette(c("white", "#FDDBC7", "#D6604D", "#B2182B"))(50),
-           cluster_rows = TRUE, cluster_cols = FALSE,
+           cluster_rows = FALSE, cluster_cols = FALSE,
+           annotation_row = row_anno,
+           annotation_colors = anno_colors,
+           gaps_row = gap_positions,
            fontsize_row = 8, fontsize_col = 11,
            main = "GO:BP Enrichment by Eosinophil Cluster",
            angle_col = 0,
