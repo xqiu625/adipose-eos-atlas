@@ -53,9 +53,9 @@ plt.rcParams.update({
 # Eos cluster palette (matching R scripts)
 EOS_COLORS = {
     "C0": "#6CA6CD", "C1": "#E84A5F", "C2": "#FF6F1F",
-    "C3": "#CBAACB", "C4": "#B03A48", "C5": "#5BA4A4", "C6": "#2F3C7E"
+    "C3": "#CBAACB", "C4": "#B03A48", "C5": "#5BA4A4"
 }
-EOS_CMAP = sns.color_palette([EOS_COLORS[f"C{i}"] for i in range(7)])
+EOS_CMAP = sns.color_palette([EOS_COLORS[f"C{i}"] for i in range(6)])
 
 # -- Configuration -------------------------------------------------------------
 BASE = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
