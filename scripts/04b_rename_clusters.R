@@ -55,10 +55,13 @@ print(table(eos$eos_cluster))
 
 # ── Remove C6 — too few cells (Cldn5/Rasip1, no mature eos markers)
 n_c6 <- sum(Idents(eos) == "C6")
-eos <- subset(eos, idents = "C6", invert = TRUE)
+if (n_c6 > 0) {
+  eos <- subset(eos, idents = "C6", invert = TRUE)
+  cat(sprintf("\n  Removed C6: %d cells.\n", n_c6))
+}
 eos$eos_cluster <- droplevels(factor(eos$eos_cluster, levels = paste0("C", 0:5)))
 Idents(eos) <- eos$eos_cluster
-cat(sprintf("\n  Removed C6: %d cells. Remaining: %d eos (C0-C5)\n", n_c6, ncol(eos)))
+cat(sprintf("  Remaining: %d eos (C0-C5)\n", ncol(eos)))
 
 # ── Re-run FindAllMarkers with renamed labels ────────────────────────────────
 cat("\nFinding cluster markers with manuscript labels...\n")
