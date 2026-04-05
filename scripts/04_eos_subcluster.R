@@ -672,8 +672,8 @@ for (from in names(rename_map)) {
 
 # Apply renaming
 old_labels_before <- eos$eos_cluster
-eos$eos_cluster <- rename_map[eos$eos_cluster]
-Idents(eos) <- "eos_cluster"
+eos$eos_cluster <- unname(rename_map[eos$eos_cluster])
+Idents(eos) <- eos$eos_cluster
 
 cat("\n  Cluster sizes after renaming:\n")
 print(table(eos$eos_cluster))
