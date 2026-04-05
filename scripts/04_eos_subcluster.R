@@ -656,8 +656,8 @@ cat("========================================\n\n")
 # New C6 -> Old C6 (100%) => rename to C6
 
 rename_map <- c(
-  "C0" = "C1",
-  "C1" = "C0",
+  "C0" = "C0",
+  "C1" = "C1",
   "C2" = "C4",
   "C3" = "C2",
   "C4" = "C5",
@@ -678,10 +678,15 @@ Idents(eos) <- "eos_cluster"
 cat("\n  Cluster sizes after renaming:\n")
 print(table(eos$eos_cluster))
 
-# Verify: compare renamed distribution with manuscript distribution
-cat("\n  Manuscript reference distribution:\n")
-cat("    C0=3092, C1=1899, C2=1831, C3=1338, C4=1143, C5=1126, C6=269\n")
-cat("  (New has fewer cells due to DecontX filtering)\n")
+# Remove C6 — too few cells (Cldn5/Rasip1, no mature eos markers)
+n_c6 <- sum(eos$eos_cluster == "C6")
+if (n_c6 > 0) {
+  eos <- subset(eos, eos_cluster != "C6")
+  cat(sprintf("\n  Removed C6: %d cells.\n", n_c6))
+}
+eos$eos_cluster <- droplevels(factor(eos$eos_cluster, levels = paste0("C", 0:5)))
+Idents(eos) <- eos$eos_cluster
+cat(sprintf("  Remaining: %d eos (C0-C5)\n", ncol(eos)))
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Step 6: Figures
@@ -717,6 +722,16 @@ comp_df <- eos@meta.data %>%
   summarise(n = n(), .groups = "drop") %>%
   group_by(condition) %>%
   mutate(frac = n / sum(n))
+
+cond_order <- c("WT_Male_HFD", "KO_Male_HFD",
+                "WT_Female_HFD", "KO_Female_HFD",
+                "WT_Female_HFDInfected", "KO_Female_HFDInfected")
+cond_display <- c("WT_Male_HFD" = "WT Male", "KO_Male_HFD" = "KO Male",
+                  "WT_Female_HFD" = "WT Female", "KO_Female_HFD" = "KO Female",
+                  "WT_Female_HFDInfected" = "WT Inf Female",
+                  "KO_Female_HFDInfected" = "KO Inf Female")
+comp_df$condition <- factor(comp_df$condition, levels = cond_order,
+                            labels = cond_display[cond_order])
 
 pdf(file.path(fig_dir, "04_eos_composition_condition.pdf"), width = 8, height = 6)
 print(ggplot(comp_df, aes(x = condition, y = frac, fill = eos_cluster)) +
