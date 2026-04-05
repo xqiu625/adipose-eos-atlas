@@ -681,10 +681,11 @@ print(table(eos$eos_cluster))
 # Remove C6 — too few cells (Cldn5/Rasip1, no mature eos markers)
 n_c6 <- sum(eos$eos_cluster == "C6")
 if (n_c6 > 0) {
-  eos <- subset(eos, eos_cluster != "C6")
+  cells_keep <- colnames(eos)[eos$eos_cluster != "C6"]
+  eos <- subset(eos, cells = cells_keep)
   cat(sprintf("\n  Removed C6: %d cells.\n", n_c6))
 }
-eos$eos_cluster <- droplevels(factor(eos$eos_cluster, levels = paste0("C", 0:5)))
+eos$eos_cluster <- factor(as.character(eos$eos_cluster), levels = paste0("C", 0:5))
 Idents(eos) <- eos$eos_cluster
 cat(sprintf("  Remaining: %d eos (C0-C5)\n", ncol(eos)))
 
