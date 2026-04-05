@@ -119,6 +119,18 @@ print(DoHeatmap(eos, features = top5$gene, group.colors = eos_colors_use) +
         theme(axis.text.y = element_text(size = 8)))
 dev.off()
 
+cat("Plotting top 5 marker dotplot (Fig 2B)...\n")
+Idents(eos) <- factor(eos$eos_cluster, levels = rev(clusters_present))
+pdf(file.path(fig_dir, "04b_eos_marker_dotplot.pdf"), width = 12, height = 6)
+print(DotPlot(eos, features = unique(top5$gene), cols = c("lightgrey", "#B2182B"),
+              dot.scale = 6) +
+        labs(x = "", y = "", title = "Top 5 Markers per Eosinophil Cluster") +
+        theme_pub() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 9, face = "italic"),
+              axis.text.y = element_text(size = 11)))
+dev.off()
+Idents(eos) <- factor(eos$eos_cluster, levels = clusters_present)
+
 # ── Save ─────────────────────────────────────────────────────────────────────
 cat("\nSaving eos_subclustered.rds (overwrite with renamed labels)...\n")
 saveRDS(eos, file.path(BASE, "eos_subclustered.rds"))
