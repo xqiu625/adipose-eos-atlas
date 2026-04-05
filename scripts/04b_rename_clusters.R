@@ -90,6 +90,11 @@ comp_df <- eos@meta.data %>%
   group_by(condition) %>%
   mutate(frac = n / sum(n))
 
+cond_order <- c("WT_Male_HFD", "KO_Male_HFD",
+                "WT_Female_HFD", "KO_Female_HFD",
+                "WT_Female_HFDInfected", "KO_Female_HFDInfected")
+comp_df$condition <- factor(comp_df$condition, levels = cond_order)
+
 pdf(file.path(fig_dir, "04b_eos_composition_condition.pdf"), width = 8, height = 6)
 print(ggplot(comp_df, aes(x = condition, y = frac, fill = eos_cluster)) +
         geom_bar(stat = "identity", position = "stack") +
