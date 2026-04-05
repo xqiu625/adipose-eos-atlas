@@ -54,7 +54,18 @@ make_custom_butterfly <- function(gsea_csv, selected_left, selected_right,
   }
 
   # Right side (NES > 0 = UP in label_right)
-  if (length(selected_right) > 0) {
+  if (length(selected_right) == 1 && selected_right[1] == "TOP5") {
+    # Auto-select top 5 by p-value
+    right_df <- gsea_df[gsea_df$NES > 0, ]
+    if (nrow(right_df) > 0) {
+      right_df <- head(right_df[order(right_df$pvalue), ], 5)
+      frames[["right"]] <- data.frame(
+        Description = as.character(right_df$Description),
+        neg_log10p = -log10(right_df$pvalue),
+        plot_x = -log10(right_df$pvalue), side = "right",
+        stringsAsFactors = FALSE)
+    }
+  } else if (length(selected_right) > 0) {
     matches <- gsea_df[sapply(gsea_df$Description, function(d)
       any(sapply(selected_right, function(s) grepl(s, d, ignore.case = TRUE)))), ]
     matches <- matches[matches$NES > 0 | nrow(matches) == 0, ]
@@ -67,6 +78,19 @@ make_custom_butterfly <- function(gsea_csv, selected_left, selected_right,
         Description = as.character(matches$Description),
         neg_log10p = -log10(matches$pvalue),
         plot_x = -log10(matches$pvalue), side = "right",
+        stringsAsFactors = FALSE)
+    }
+  }
+
+  # Left side: also support "TOP5" auto-select
+  if (length(selected_left) == 1 && selected_left[1] == "TOP5") {
+    left_df <- gsea_df[gsea_df$NES < 0, ]
+    if (nrow(left_df) > 0) {
+      left_df <- head(left_df[order(left_df$pvalue), ], 5)
+      frames[["left"]] <- data.frame(
+        Description = as.character(left_df$Description),
+        neg_log10p = -log10(left_df$pvalue),
+        plot_x = -(-log10(left_df$pvalue)), side = "left",
         stringsAsFactors = FALSE)
     }
   }
@@ -154,7 +178,7 @@ make_custom_butterfly(
     "negative regulation of carbohydrate metabolic process",
     "sodium ion transmembrane transport"
   ),
-  selected_right = character(0),  # No KO Male terms selected
+  selected_right = "TOP5",  # Keep original top 5 KO Male terms
   label_left = "WT Male", label_right = "KO Male",
   prefix = "fig1G", out_dir = out_dir
 )
@@ -170,7 +194,7 @@ make_custom_butterfly(
     "apoptotic cell clearance",
     "positive chemotaxis"
   ),
-  selected_right = character(0),  # No Infected terms selected by Rebecca
+  selected_right = "TOP5",  # Keep original top Infected terms
   label_left = "Naive", label_right = "Infected",
   prefix = "multifactor_infection", out_dir = out_dir
 )
