@@ -120,19 +120,35 @@ cat("  Depot distribution:\n")
 print(table(depot_map[hu_barcodes_tw], useNA = "ifany"))
 
 # ==============================================================================
-# 3. Assign comparison groups
+# 3. Assign comparison groups (direct assignment — avoids case_when factor issues)
 # ==============================================================================
 cat("Assigning comparison groups...\n")
 
-tw$sim_group <- case_when(
-  tw$dataset == "Qiu_2025_Adipose"  ~ tw$original_cluster,  # C0-C5
-  tw$dataset == "Hu_2026_Healthy"   ~ paste0("Hu.", depot_map[colnames(tw)]),
-  tw$organ == "Bone Marrow"          ~ "Gurtner.BM",
-  tw$organ == "Blood"                ~ "Gurtner.Blood",
-  TRUE                               ~ NA_character_
-)
-# Clean up Hu.NA entries
-tw$sim_group[tw$sim_group == "Hu.NA"] <- NA
+ds <- as.character(tw$dataset)
+org <- as.character(tw$organ)
+cl <- as.character(tw$original_cluster)
+
+tw$sim_group <- NA_character_
+
+# Qiu: use original cluster (C0-C5)
+qiu_idx <- which(ds == "Qiu_2025_Adipose")
+tw$sim_group[qiu_idx] <- cl[qiu_idx]
+cat(sprintf("  Qiu assigned: %d\n", length(qiu_idx)))
+
+# Hu: use depot (BAT, eWAT, scWAT)
+hu_idx <- which(ds == "Hu_2026_Healthy")
+tw$sim_group[hu_idx] <- paste0("Hu.", depot_map[colnames(tw)[hu_idx]])
+cat(sprintf("  Hu assigned: %d (example: %s)\n", length(hu_idx),
+            paste(head(tw$sim_group[hu_idx], 3), collapse=", ")))
+
+# Gurtner BM and Blood
+bm_idx <- which(org == "Bone Marrow")
+tw$sim_group[bm_idx] <- "Gurtner.BM"
+cat(sprintf("  Gurtner BM assigned: %d\n", length(bm_idx)))
+
+blood_idx <- which(org == "Blood")
+tw$sim_group[blood_idx] <- "Gurtner.Blood"
+cat(sprintf("  Gurtner Blood assigned: %d\n", length(blood_idx)))
 
 # Keep only groups we want
 keep_groups <- c(paste0("C", 0:5), "Hu.eWAT", "Hu.scWAT", "Hu.BAT",
