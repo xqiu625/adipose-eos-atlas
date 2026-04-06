@@ -106,11 +106,19 @@ if ("seurat_clusters" %in% colnames(gurtner@meta.data)) {
 }
 
 # Organ / tissue labels
+# Preserve Hu depot detail (BAT, eWAT, scWAT) before setting broad organ label
+if ("organ" %in% colnames(hu@meta.data)) {
+  hu$depot <- hu$organ
+} else {
+  hu$depot <- "Adipose_Healthy"
+}
 qiu$organ <- "Adipose_HFD"
+qiu$depot <- "Adipose_HFD"
 hu$organ  <- "Adipose_Healthy"
 if (!"organ" %in% colnames(gurtner@meta.data)) {
   gurtner$organ <- "Unknown"
 }
+gurtner$depot <- gurtner$organ
 
 # Condition
 if (!"condition" %in% colnames(hu@meta.data)) {

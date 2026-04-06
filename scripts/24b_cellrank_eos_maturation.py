@@ -364,9 +364,12 @@ if "condition" in adata.obs.columns:
     out_cols.append("condition")
 adata.obs[out_cols].to_csv(os.path.join(OUT_DIR, "cellrank_scores.csv"))
 
-# Save AnnData — convert bool/object columns to strings for h5py compatibility
+# Save AnnData — convert all obs columns to plain strings for h5py compatibility
 for col in adata.obs.columns:
-    if adata.obs[col].dtype == object or adata.obs[col].dtype == bool:
+    if hasattr(adata.obs[col], "cat"):
+        # Categorical: convert to plain string series
+        adata.obs[col] = adata.obs[col].astype(str)
+    elif adata.obs[col].dtype == object or adata.obs[col].dtype == bool:
         adata.obs[col] = adata.obs[col].astype(str)
 adata.write_h5ad(os.path.join(OUT_DIR, "three_way_cellrank.h5ad"))
 
