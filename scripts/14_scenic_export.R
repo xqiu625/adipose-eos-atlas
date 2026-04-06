@@ -168,4 +168,19 @@ cat(sprintf("Metadata columns: %s\n", paste(colnames(obs_df), collapse = ", ")))
 cat("\nCluster distribution:\n")
 print(table(obs_df$cluster))
 
+# -- Export mac metadata for SCENIC heatmap (script 16) -----------------------
+mac_rds <- file.path(BASE, "mac_subtyped.rds")
+if (file.exists(mac_rds)) {
+  cat("\nExporting mac metadata for SCENIC heatmap...\n")
+  mac <- readRDS(mac_rds)
+  mac_meta <- data.frame(
+    barcode = colnames(mac),
+    mac_subtype = mac$mac_subtype,
+    row.names = colnames(mac)
+  )
+  write.csv(mac_meta, file.path(BASE, "mac_subtyped_metadata.csv"))
+  cat(sprintf("  Saved mac_subtyped_metadata.csv (%d cells)\n", nrow(mac_meta)))
+  rm(mac); gc()
+}
+
 cat("\nDone! 14_scenic_export.R completed successfully.\n")

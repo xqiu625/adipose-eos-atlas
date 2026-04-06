@@ -196,50 +196,134 @@ print(f"  Total unique top regulons: {len(all_top_regulons)}")
 print()
 
 # -- Step 4: Heatmap of top regulons (z-scored AUCell) -------------------------
+# Manuscript style: tall/narrow, regulon(n_targets) labels, eos + mac columns
 print("Step 4: Plotting heatmap (z-scored AUCell, top regulons)...")
 
-# Subset AUCell to top regulons
+# --- Load macrophage AUCell scores ---
+# Mac cells are in the original AUCell CSV but not in the eos h5ad
+# Re-read full AUCell and match to mac metadata
+MAC_RDS_META = os.path.join(BASE, "scenic", "eos_cell_metadata.csv")
+full_auc = pd.read_csv(AUCELL_CSV, index_col=0)
+full_auc.columns = [c.strip() for c in full_auc.columns]
+
+# Try to load mac subtyped object metadata
+mac_meta_path = os.path.join(BASE, "mac_subtyped_metadata.csv")
+mac_subtypes = None
+if os.path.exists(mac_meta_path):
+    mac_subtypes = pd.read_csv(mac_meta_path, index_col=0)
+    print(f"  Loaded mac metadata: {mac_subtypes.shape[0]} cells")
+
+# --- Count target genes per regulon ---
+regulon_csv = os.path.join(BASE, "scenic", "regulons.csv")
+target_counts = {}
+if os.path.exists(regulon_csv):
+    try:
+        reg_df = pd.read_csv(regulon_csv)
+        # Try different column name patterns
+        for col in ['TF', 'tf', 'Regulon']:
+            if col in reg_df.columns:
+                target_counts = reg_df.groupby(col).size().to_dict()
+                break
+        if not target_counts and len(reg_df.columns) >= 2:
+            # Assume first col = TF, count rows per TF
+            target_counts = reg_df.iloc[:, 0].value_counts().to_dict()
+    except:
+        pass
+print(f"  Target gene counts found for {len(target_counts)} regulons")
+
+# --- Build regulon labels with target count ---
+def regulon_label(reg_name):
+    """Convert 'Tcf4(+)' -> 'Tcf4(N)' where N = number of target genes"""
+    tf = reg_name.replace("(+)", "").replace("(-)", "").strip()
+    n = target_counts.get(tf, target_counts.get(reg_name, "?"))
+    return f"{tf}({n})"
+
+# --- Compute eos cluster means (z-scored) ---
 auc_top = auc_mtx[all_top_regulons].copy()
-
-# Z-score across cells
 auc_z = (auc_top - auc_top.mean()) / auc_top.std()
-
-# Compute mean z-score per cluster
 auc_z["cluster"] = clusters_series.values
-cluster_means = auc_z.groupby("cluster").mean()
+eos_means = auc_z.groupby("cluster").mean()
 
-# Sort regulons by cluster with highest specificity
+# --- Compute mac subtype means if available ---
+mac_means = None
+if mac_subtypes is not None and "mac_subtype" in mac_subtypes.columns:
+    mac_cells = mac_subtypes.index.intersection(full_auc.index)
+    if len(mac_cells) > 100:
+        mac_auc = full_auc.loc[mac_cells, [r for r in all_top_regulons if r in full_auc.columns]]
+        # Z-score using eos parameters for comparability
+        for col in mac_auc.columns:
+            if col in auc_top.columns:
+                mac_auc[col] = (mac_auc[col] - auc_top[col].mean()) / auc_top[col].std()
+        mac_auc["subtype"] = mac_subtypes.loc[mac_cells, "mac_subtype"].values
+        mac_means = mac_auc.groupby("subtype").mean()
+        # Rename for display
+        mac_rename = {"Mac_M1": "M1", "Mac_M2_Func": "M2\nFunct.", "Mac_M2_Surf": "M2\nSurf."}
+        mac_means.index = [mac_rename.get(x, x) for x in mac_means.index]
+        print(f"  Mac subtypes in heatmap: {list(mac_means.index)}")
+
+# --- Sort regulons by cluster ---
 regulon_order = []
-for cluster in sorted(cluster_means.index):
+for cluster in sorted(eos_means.index):
     if cluster in top_regulons_per_cluster:
         for reg in top_regulons_per_cluster[cluster]:
             if reg not in regulon_order:
                 regulon_order.append(reg)
-# Add any remaining
 for reg in all_top_regulons:
     if reg not in regulon_order:
         regulon_order.append(reg)
 
-cluster_means = cluster_means[regulon_order]
+# --- Combine eos + mac into one matrix ---
+if mac_means is not None:
+    # Align columns
+    common_regs = [r for r in regulon_order if r in eos_means.columns and r in mac_means.columns]
+    combined_means = pd.concat([eos_means[common_regs], mac_means[common_regs]])
+    regulon_order = common_regs
+else:
+    combined_means = eos_means[regulon_order]
 
-fig, ax = plt.subplots(figsize=(max(12, len(regulon_order) * 0.5),
-                                max(5, len(cluster_means) * 0.8)))
+# Apply regulon labels with target counts
+regulon_labels = [regulon_label(r) for r in regulon_order]
+plot_data = combined_means[regulon_order].T
+plot_data.index = regulon_labels
+
+# Clip extremes
+plot_data = plot_data.clip(-2.5, 2.5)
+
+# --- Plot tall/narrow heatmap (manuscript style) ---
+n_rows = len(regulon_labels)
+n_cols = len(plot_data.columns)
+fig_h = max(6, n_rows * 0.28 + 1.5)
+fig_w = max(3.5, n_cols * 0.4 + 2)
+
+fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 sns.heatmap(
-    cluster_means.T,
+    plot_data,
     cmap="RdBu_r",
     center=0,
-    linewidths=0.5,
+    vmin=-2.5, vmax=2.5,
+    linewidths=0.8,
     linecolor="white",
     ax=ax,
-    cbar_kws={"label": "Mean z-scored AUCell"},
+    cbar_kws={"label": "Z-score", "shrink": 0.5},
     xticklabels=True,
     yticklabels=True
 )
-ax.set_title("Top Regulon Activity per Eosinophil Cluster", fontsize=14, pad=15)
-ax.set_xlabel("Cluster", fontsize=12)
-ax.set_ylabel("Regulon", fontsize=12)
-ax.tick_params(axis="y", labelsize=9)
-ax.tick_params(axis="x", labelsize=10)
+
+# Add vertical separator between eos and mac
+if mac_means is not None:
+    n_eos = len(eos_means)
+    ax.axvline(x=n_eos, color="black", linewidth=2)
+    # Add "Eosinophils" and "Mac" labels
+    ax.text(n_eos / 2, -0.8, "Eosinophils", ha="center", va="top",
+            fontsize=9, fontweight="bold", transform=ax.get_xaxis_transform())
+    ax.text(n_eos + (n_cols - n_eos) / 2, -0.8, "Mac", ha="center", va="top",
+            fontsize=9, fontweight="bold", transform=ax.get_xaxis_transform())
+
+ax.set_title("Eos Subcluster Unique Regulons", fontsize=11, fontweight="bold", pad=10)
+ax.set_xlabel("")
+ax.set_ylabel("")
+ax.tick_params(axis="y", labelsize=8, length=0)
+ax.tick_params(axis="x", labelsize=9, rotation=0)
 plt.tight_layout()
 
 heatmap_path = os.path.join(FIG_DIR, "16_regulon_heatmap.pdf")
