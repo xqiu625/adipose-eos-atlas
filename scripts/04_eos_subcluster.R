@@ -755,8 +755,8 @@ top7 <- markers %>%
 # Order genes: C0 markers first, then C1, etc.
 gene_order <- unique(top7$gene[order(match(top7$cluster, paste0("C", 0:5)))])
 
-# Clusters on y-axis: C0 at bottom, C5 at top
-Idents(eos) <- factor(eos$eos_cluster, levels = rev(paste0("C", 0:5)))
+# Clusters on y-axis: C0 at bottom, C5 at top (ggplot2 maps first level to bottom)
+Idents(eos) <- factor(eos$eos_cluster, levels = paste0("C", 0:5))
 
 pdf(file.path(fig_dir, "04_eos_marker_dotplot.pdf"), width = max(14, length(gene_order) * 0.35), height = 5)
 print(DotPlot(eos, features = gene_order, scale = TRUE,
