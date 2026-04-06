@@ -107,7 +107,7 @@ sc.pp.neighbors(adata, use_rep="X_harmony", n_neighbors=15)
 # Let compute_cytotrace() use log-normalized X directly (no manual Ms layer)
 print("Computing CytoTRACE kernel ...")
 ctk = cr.kernels.CytoTRACEKernel(adata)
-ctk.compute_cytotrace(layer=None)
+ctk.compute_cytotrace(layer="X")
 ctk.compute_transition_matrix(threshold_scheme="soft")
 
 print(f"  CytoTRACE score range: {adata.obs['ct_score'].min():.3f} - {adata.obs['ct_score'].max():.3f}")
