@@ -223,6 +223,69 @@ cat("Saving integrated object ...\n")
 saveRDS(combined, file.path(outdir, "qiu_hu_integrated.rds"))
 cat("  Saved qiu_hu_integrated.rds\n")
 
+# --- Which Qiu cluster overlaps most with Hu? --------------------------------
+cat("\n=== Cluster overlap: Qiu C0-C5 vs Hu ===\n")
+
+# For each integrated cluster, compute fraction from Qiu vs Hu
+overlap_df <- combined@meta.data %>%
+  group_by(seurat_clusters, dataset, original_cluster) %>%
+  summarise(n = n(), .groups = "drop")
+
+# For each Qiu cluster, find which integrated clusters it shares with Hu
+qiu_cells <- combined@meta.data %>% filter(dataset == "Qiu_2025")
+hu_cells  <- combined@meta.data %>% filter(dataset == "Hu_Reference")
+
+# Nearest-neighbor overlap: for each Qiu cluster, what fraction of its
+# integrated-cluster neighbors are Hu cells?
+cat("\n  Qiu cluster co-localization with Hu cells (same integrated cluster):\n")
+colocal <- data.frame()
+for (cl in sort(unique(qiu_cells$original_cluster))) {
+  qiu_int_clusters <- qiu_cells$seurat_clusters[qiu_cells$original_cluster == cl]
+  # Count Hu cells in the same integrated clusters
+  hu_in_same <- sum(hu_cells$seurat_clusters %in% unique(qiu_int_clusters))
+  total_hu <- nrow(hu_cells)
+  frac <- round(hu_in_same / total_hu * 100, 1)
+  # Also: what fraction of THIS Qiu cluster's integrated clusters have Hu cells?
+  shared_clusters <- intersect(unique(qiu_int_clusters), unique(hu_cells$seurat_clusters))
+  qiu_in_shared <- sum(qiu_int_clusters %in% shared_clusters)
+  frac_qiu <- round(qiu_in_shared / length(qiu_int_clusters) * 100, 1)
+  cat(sprintf("    %s: %d/%d cells (%.1f%%) share integrated clusters with Hu\n",
+              cl, qiu_in_shared, length(qiu_int_clusters), frac_qiu))
+  colocal <- rbind(colocal, data.frame(
+    qiu_cluster = cl, n_qiu = length(qiu_int_clusters),
+    n_shared = qiu_in_shared, pct_shared = frac_qiu))
+}
+write.csv(colocal, file.path(outdir, "hu_qiu_cluster_colocalization.csv"), row.names = FALSE)
+
+# --- Fig 2G replacement: UMAP colored by Qiu cluster + Hu ---
+cat("\nGenerating Fig 2G: Qiu clusters + Hu on integrated UMAP ...\n")
+
+# Create a unified label: Qiu cells get C0-C5, Hu cells get "Hu"
+combined$fig2g_label <- ifelse(combined$dataset == "Hu_Reference",
+                                "Hu", combined$original_cluster)
+combined$fig2g_label <- factor(combined$fig2g_label,
+                                levels = c("C0", "C1", "C2", "C3", "C4", "C5", "Hu"))
+
+fig2g_colors <- c(eos_colors[paste0("C", 0:5)], "Hu" = "#999999")
+
+pdf(file.path(outdir, "fig2G_qiu_hu_umap.pdf"), width = 9, height = 7)
+print(DimPlot(combined, group.by = "fig2g_label",
+              cols = fig2g_colors, pt.size = 0.3,
+              order = c("C0", "C1", "C2", "C3", "C4", "C5")) +
+        ggtitle("Qiu Eosinophil Clusters + Hu Healthy Adipose") +
+        theme_umap())
+dev.off()
+cat("  Saved: fig2G_qiu_hu_umap.pdf\n")
+
+# Split view
+pdf(file.path(outdir, "fig2G_qiu_hu_umap_split.pdf"), width = 16, height = 7)
+print(DimPlot(combined, group.by = "fig2g_label",
+              split.by = "dataset",
+              cols = fig2g_colors, pt.size = 0.3) +
+        ggtitle("Split: Qiu vs Hu") +
+        theme_umap())
+dev.off()
+cat("  Saved: fig2G_qiu_hu_umap_split.pdf\n")
+
 cat("\n========== Hu integration complete ==========\n")
 cat("Output directory:", outdir, "\n")
-sessionInfo()
