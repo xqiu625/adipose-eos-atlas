@@ -255,6 +255,16 @@ sbatch --job-name=24b_cellrank --partition=epyc \
   --wrap="source activate ${CONDA} && python ${SCRIPTS}/24b_cellrank_eos_maturation.py"
 
 # ==============================================================================
+# BLOCK 13: DEG Excel export (depends on 04 + 07 + 07c)
+# ==============================================================================
+sbatch --job-name=27_excel --partition=batch --mem=16G --cpus-per-task=1 --time=00:30:00 --output=${LOGS}/27_excel_%j.out --error=${LOGS}/27_excel_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/27_deg_excel_export.R"
+
+# ==============================================================================
+# BLOCK 14: Gurtner BM vs Blood heatmap (depends on 13)
+# ==============================================================================
+sbatch --job-name=28_bm_blood --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/28_bm_blood_%j.out --error=${LOGS}/28_bm_blood_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/28_gurtner_bm_blood_heatmap.R"
+
+# ==============================================================================
 # Monitor jobs:
 #   squeue -u $USER
 #   sacct --format=JobID,JobName,State,Elapsed,MaxRSS -j <JOB_IDs>
