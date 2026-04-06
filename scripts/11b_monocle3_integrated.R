@@ -10,8 +10,10 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 
 suppressPackageStartupMessages({
-  library(Seurat)
+  library(Biobase)
+  library(SingleCellExperiment)
   library(monocle3)
+  library(Seurat)
   library(ggplot2)
   library(dplyr)
 })
