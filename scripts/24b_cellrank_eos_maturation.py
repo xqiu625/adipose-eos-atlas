@@ -103,15 +103,12 @@ sc.pp.highly_variable_genes(adata, n_top_genes=2000)
 # Use Harmony embeddings for neighbors (fewer neighbors for better local structure)
 sc.pp.neighbors(adata, use_rep="X_harmony", n_neighbors=15)
 
-# CytoTRACE needs 'Ms' layer (moment-smoothed expression)
-# Without RNA velocity data, use normalized log-transformed expression
-adata.layers["Ms"] = adata.X.copy()
-
 # --- CytoTRACE Kernel -------------------------------------------------------
+# Let compute_cytotrace() use log-normalized X directly (no manual Ms layer)
 print("Computing CytoTRACE kernel ...")
 ctk = cr.kernels.CytoTRACEKernel(adata)
-ctk.compute_cytotrace()
-ctk.compute_transition_matrix()
+ctk.compute_cytotrace(layer=None)
+ctk.compute_transition_matrix(threshold_scheme="soft")
 
 print(f"  CytoTRACE score range: {adata.obs['ct_score'].min():.3f} - {adata.obs['ct_score'].max():.3f}")
 
@@ -132,29 +129,52 @@ for col in ["original_cluster", "dataset", "organ", "study", "dataset_cluster"]:
     if col in adata.obs.columns:
         adata.obs[col] = adata.obs[col].astype("category")
 
-# --- Diffusion pseudotime from BM root (compute FIRST, independent of GPCCA) -
-print("\nComputing diffusion pseudotime rooted on Gurtner BM cells ...")
+# --- Robust root cell selection -----------------------------------------------
+print("\nSelecting root cell (Gurtner Bone Marrow) ...")
 
-bm_mask = adata.obs["organ"] == "Bone Marrow"
-print(f"  Bone Marrow cells: {bm_mask.sum()}")
+# Priority 1: Gurtner BM cells by organ label
+bm_mask = (
+    adata.obs.get("dataset", pd.Series(dtype=str)).astype(str).str.contains("Gurtner", case=False, na=False) &
+    adata.obs.get("organ", pd.Series(dtype=str)).astype(str).str.contains("Bone Marrow", case=False, na=False)
+)
+print(f"  Gurtner BM cells (exact): {bm_mask.sum()}")
 
+# Priority 2: broader organ-only match
+if bm_mask.sum() == 0:
+    bm_mask = adata.obs["organ"].astype(str).str.contains("Bone Marrow", case=False, na=False)
+    print(f"  Bone Marrow cells (any dataset): {bm_mask.sum()}")
+
+# Priority 3: any Gurtner cell
+if bm_mask.sum() == 0:
+    bm_mask = adata.obs["dataset"].astype(str).str.contains("Gurtner", case=False, na=False)
+    print(f"  Gurtner cells (any organ): {bm_mask.sum()}")
+
+# Select root: highest ct_score among matched cells (most progenitor-like)
 if bm_mask.sum() > 0:
     bm_ct = adata.obs.loc[bm_mask, "ct_score"]
-    root_cell_idx = adata.obs_names.get_loc(bm_ct.idxmax())
-    adata.uns["iroot"] = root_cell_idx
-    sc.tl.diffmap(adata, n_comps=5)
-    sc.tl.dpt(adata, n_dcs=5)
-    print(f"  DPT range: {adata.obs['dpt_pseudotime'].min():.3f} - {adata.obs['dpt_pseudotime'].max():.3f}")
-    # Per-dataset DPT summary
-    for ds in adata.obs["dataset"].unique():
-        mask = adata.obs["dataset"] == ds
-        vals = adata.obs.loc[mask, "dpt_pseudotime"]
-        vals = vals[vals < 1.0]
-        print(f"    {ds}: median={vals.median():.3f}, mean={vals.mean():.3f}")
-    has_dpt = True
+    root_cell_name = bm_ct.idxmax()
+    root_cell_idx = adata.obs_names.get_loc(root_cell_name)
+    print(f"  Root cell: {root_cell_name} (ct_score={bm_ct.max():.3f})")
 else:
-    print("  WARNING: No Bone Marrow cells found. Skipping DPT.")
-    has_dpt = False
+    # Final fallback: global highest ct_score
+    root_cell_name = adata.obs["ct_score"].idxmax()
+    root_cell_idx = adata.obs_names.get_loc(root_cell_name)
+    print(f"  WARNING: No BM/Gurtner cells. Fallback to global highest ct_score: {root_cell_name}")
+
+# --- Diffusion pseudotime from root ------------------------------------------
+print("\nComputing diffusion pseudotime ...")
+adata.uns["iroot"] = root_cell_idx
+sc.tl.diffmap(adata, n_comps=5)
+sc.tl.dpt(adata, n_dcs=5)
+has_dpt = True
+
+print(f"  DPT range: {adata.obs['dpt_pseudotime'].min():.3f} - {adata.obs['dpt_pseudotime'].max():.3f}")
+for ds in adata.obs["dataset"].unique():
+    mask = adata.obs["dataset"] == ds
+    vals = adata.obs.loc[mask, "dpt_pseudotime"]
+    vals = vals[vals < 1.0]
+    if len(vals) > 0:
+        print(f"    {ds}: median={vals.median():.3f}, mean={vals.mean():.3f}")
 
 # --- GPCCA estimator (optional — wrap in try/except) -------------------------
 print("\nComputing macrostates with GPCCA ...")
