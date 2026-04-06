@@ -11,6 +11,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 
 suppressPackageStartupMessages({
   library(Seurat)
+  library(SeuratWrappers)
   library(monocle3)
   library(ggplot2)
   library(dplyr)

@@ -70,9 +70,54 @@ if (!is.null(depot_col)) {
 }
 rm(hu); gc()
 
-# Map Hu depot to three-way barcodes (prefixed with "Hu_")
-hu_depot$tw_barcode <- paste0("Hu_", hu_depot$hu_barcode)
-depot_map <- setNames(hu_depot$depot, hu_depot$tw_barcode)
+# Map Hu depot to three-way barcodes
+# Barcodes in the three-way object may have various prefixes from Seurat merge
+hu_barcodes_tw <- colnames(tw)[tw$dataset == "Hu_2026_Healthy"]
+hu_barcodes_orig <- hu_depot$hu_barcode
+cat(sprintf("  Hu cells in three-way: %d\n", length(hu_barcodes_tw)))
+cat(sprintf("  Hu cells in original: %d\n", length(hu_barcodes_orig)))
+cat("  Example three-way barcodes:", paste(head(hu_barcodes_tw, 3), collapse=", "), "\n")
+cat("  Example original barcodes:", paste(head(hu_barcodes_orig, 3), collapse=", "), "\n")
+
+# Try multiple matching strategies
+depot_map <- setNames(rep(NA_character_, ncol(tw)), colnames(tw))
+
+# Strategy 1: exact match with "Hu_" prefix
+match1 <- match(hu_barcodes_tw, paste0("Hu_", hu_barcodes_orig))
+n1 <- sum(!is.na(match1))
+cat(sprintf("  Strategy 1 (Hu_ prefix): %d matches\n", n1))
+if (n1 > 0) {
+  depot_map[hu_barcodes_tw[!is.na(match1)]] <- hu_depot$depot[match1[!is.na(match1)]]
+}
+
+# Strategy 2: strip prefix from three-way barcodes, match directly
+if (n1 < length(hu_barcodes_tw) * 0.5) {
+  stripped <- sub("^Hu_", "", hu_barcodes_tw)
+  match2 <- match(stripped, hu_barcodes_orig)
+  n2 <- sum(!is.na(match2))
+  cat(sprintf("  Strategy 2 (strip Hu_): %d matches\n", n2))
+  if (n2 > n1) {
+    depot_map[hu_barcodes_tw[!is.na(match2)]] <- hu_depot$depot[match2[!is.na(match2)]]
+  }
+}
+
+# Strategy 3: strip all prefixes up to last underscore before barcode
+if (sum(!is.na(depot_map[hu_barcodes_tw])) < length(hu_barcodes_tw) * 0.5) {
+  # Try matching by barcode suffix (e.g., ACGTACGT-1)
+  tw_suffix <- sub("^.*_([ACGT]+-\\d+)$", "\\1", hu_barcodes_tw)
+  orig_suffix <- sub("^.*_([ACGT]+-\\d+)$", "\\1", hu_barcodes_orig)
+  match3 <- match(tw_suffix, orig_suffix)
+  n3 <- sum(!is.na(match3))
+  cat(sprintf("  Strategy 3 (barcode suffix): %d matches\n", n3))
+  if (n3 > sum(!is.na(depot_map[hu_barcodes_tw]))) {
+    depot_map[hu_barcodes_tw[!is.na(match3)]] <- hu_depot$depot[match3[!is.na(match3)]]
+  }
+}
+
+matched_hu <- sum(!is.na(depot_map[hu_barcodes_tw]))
+cat(sprintf("  Final Hu depot matches: %d / %d\n", matched_hu, length(hu_barcodes_tw)))
+cat("  Depot distribution:\n")
+print(table(depot_map[hu_barcodes_tw], useNA = "ifany"))
 
 # ==============================================================================
 # 3. Assign comparison groups
@@ -80,12 +125,14 @@ depot_map <- setNames(hu_depot$depot, hu_depot$tw_barcode)
 cat("Assigning comparison groups...\n")
 
 tw$sim_group <- case_when(
-  tw$dataset == "Qiu_2025_Adipose" ~ tw$original_cluster,  # C0-C5
-  tw$dataset == "Hu_2026_Healthy"  ~ paste0("Hu.", depot_map[colnames(tw)]),
-  tw$organ == "Bone Marrow"         ~ "Gurtner.BM",
-  tw$organ == "Blood"               ~ "Gurtner.Blood",
-  TRUE                              ~ NA_character_
+  tw$dataset == "Qiu_2025_Adipose"  ~ tw$original_cluster,  # C0-C5
+  tw$dataset == "Hu_2026_Healthy"   ~ paste0("Hu.", depot_map[colnames(tw)]),
+  tw$organ == "Bone Marrow"          ~ "Gurtner.BM",
+  tw$organ == "Blood"                ~ "Gurtner.Blood",
+  TRUE                               ~ NA_character_
 )
+# Clean up Hu.NA entries
+tw$sim_group[tw$sim_group == "Hu.NA"] <- NA
 
 # Keep only groups we want
 keep_groups <- c(paste0("C", 0:5), "Hu.eWAT", "Hu.scWAT", "Hu.BAT",
