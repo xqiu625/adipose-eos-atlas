@@ -168,11 +168,14 @@ cat(sprintf("Metadata columns: %s\n", paste(colnames(obs_df), collapse = ", ")))
 cat("\nCluster distribution:\n")
 print(table(obs_df$cluster))
 
-# -- Export mac metadata for SCENIC heatmap (script 16) -----------------------
+# -- Export mac data for SCENIC heatmap (script 16) ---------------------------
 mac_rds <- file.path(BASE, "mac_subtyped.rds")
 if (file.exists(mac_rds)) {
-  cat("\nExporting mac metadata for SCENIC heatmap...\n")
+  cat("\nExporting mac data for SCENIC heatmap...\n")
   mac <- readRDS(mac_rds)
+  if (inherits(mac[["RNA"]], "Assay5")) mac[["RNA"]] <- JoinLayers(mac[["RNA"]])
+
+  # Metadata CSV
   mac_meta <- data.frame(
     barcode = colnames(mac),
     mac_subtype = mac$mac_subtype,
@@ -180,6 +183,25 @@ if (file.exists(mac_rds)) {
   )
   write.csv(mac_meta, file.path(BASE, "mac_subtyped_metadata.csv"))
   cat(sprintf("  Saved mac_subtyped_metadata.csv (%d cells)\n", nrow(mac_meta)))
+
+  # Export mac as h5ad for AUCell scoring in script 16
+  mac <- NormalizeData(mac, verbose = FALSE)
+  mac_counts <- GetAssayData(mac, layer = "data")
+  mac_t <- t(mac_counts)
+  mac_scipy <- scipy$csc_matrix(
+    tuple(np$array(mac_t@x), np$array(as.integer(mac_t@i)), np$array(as.integer(mac_t@p))),
+    shape = tuple(as.integer(nrow(mac_t)), as.integer(ncol(mac_t)))
+  )
+
+  pd <- import("pandas")
+  mac_obs <- pd$DataFrame(mac_meta)
+  mac_obs$index <- colnames(mac)
+  mac_var <- pd$DataFrame(index = rownames(mac))
+
+  mac_adata <- anndata$AnnData(X = mac_scipy, obs = mac_obs, var = mac_var)
+  mac_h5ad <- file.path(out_dir, "mac_for_scenic_scoring.h5ad")
+  mac_adata$write_h5ad(mac_h5ad)
+  cat(sprintf("  Saved mac h5ad: %s (%d cells)\n", mac_h5ad, ncol(mac)))
   rm(mac); gc()
 }
 

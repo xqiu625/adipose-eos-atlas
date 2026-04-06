@@ -199,19 +199,74 @@ print()
 # Manuscript style: tall/narrow, regulon(n_targets) labels, eos + mac columns
 print("Step 4: Plotting heatmap (z-scored AUCell, top regulons)...")
 
-# --- Load macrophage AUCell scores ---
-# Mac cells are in the original AUCell CSV but not in the eos h5ad
-# Re-read full AUCell and match to mac metadata
-MAC_RDS_META = os.path.join(BASE, "scenic", "eos_cell_metadata.csv")
-full_auc = pd.read_csv(AUCELL_CSV, index_col=0)
-full_auc.columns = [c.strip() for c in full_auc.columns]
-
-# Try to load mac subtyped object metadata
+# --- Score macrophage cells with eos regulons via sc.tl.score_genes ---
 mac_meta_path = os.path.join(BASE, "mac_subtyped_metadata.csv")
+mac_h5ad_path = os.path.join(BASE, "scenic", "mac_for_scenic_scoring.h5ad")
+mac_scored_csv = os.path.join(BASE, "scenic", "mac_aucell_scored.csv")
 mac_subtypes = None
-if os.path.exists(mac_meta_path):
+mac_means = None
+
+# Parse regulon gene sets from regulons.csv
+regulon_csv = os.path.join(BASE, "scenic", "regulons.csv")
+regulon_gene_sets = {}
+if os.path.exists(regulon_csv):
+    reg_df = pd.read_csv(regulon_csv)
+    # Find TF and target columns
+    tf_col = target_col = None
+    for c in reg_df.columns:
+        cl = c.lower()
+        if cl in ['tf', 'regulon'] and tf_col is None:
+            tf_col = c
+        if cl in ['target', 'gene', 'target_gene'] and target_col is None:
+            target_col = c
+    if tf_col and target_col:
+        for tf, grp in reg_df.groupby(tf_col):
+            regulon_gene_sets[tf] = list(grp[target_col].dropna().unique())
+    print(f"  Parsed {len(regulon_gene_sets)} regulon gene sets from regulons.csv")
+
+if os.path.exists(mac_meta_path) and os.path.exists(mac_h5ad_path) and len(regulon_gene_sets) > 0:
     mac_subtypes = pd.read_csv(mac_meta_path, index_col=0)
     print(f"  Loaded mac metadata: {mac_subtypes.shape[0]} cells")
+
+    if os.path.exists(mac_scored_csv):
+        print(f"  Loading pre-computed mac regulon scores...")
+        mac_score_df = pd.read_csv(mac_scored_csv, index_col=0)
+    else:
+        print(f"  Scoring mac cells with {len(all_top_regulons)} regulons...")
+        mac_adata = sc.read_h5ad(mac_h5ad_path)
+        print(f"  Mac AnnData: {mac_adata.shape[0]} cells x {mac_adata.shape[1]} genes")
+
+        # Score each top regulon using sc.tl.score_genes
+        mac_score_df = pd.DataFrame(index=mac_adata.obs_names)
+        for reg in all_top_regulons:
+            tf = reg.replace("(+)", "").replace("(-)", "").strip()
+            genes = regulon_gene_sets.get(tf, [])
+            if len(genes) < 2:
+                mac_score_df[reg] = 0.0
+                continue
+            # Filter to genes present in mac data
+            genes_present = [g for g in genes if g in mac_adata.var_names]
+            if len(genes_present) < 2:
+                mac_score_df[reg] = 0.0
+                continue
+            sc.tl.score_genes(mac_adata, gene_list=genes_present,
+                              score_name=f"score_{tf}", use_raw=False)
+            mac_score_df[reg] = mac_adata.obs[f"score_{tf}"].values
+
+        mac_score_df.to_csv(mac_scored_csv)
+        print(f"  Saved mac scores: {mac_scored_csv}")
+        del mac_adata
+
+    # Compute mac subtype means
+    common_mac = mac_subtypes.index.intersection(mac_score_df.index)
+    mac_score_df = mac_score_df.loc[common_mac]
+    mac_score_df["subtype"] = mac_subtypes.loc[common_mac, "mac_subtype"].values
+    mac_means = mac_score_df.groupby("subtype").mean()
+    mac_rename = {"Mac_M1": "M1", "Mac_M2_Func": "M2\nFunct.", "Mac_M2_Surf": "M2\nSurf."}
+    mac_means.index = [mac_rename.get(x, x) for x in mac_means.index]
+    print(f"  Mac subtype means computed: {list(mac_means.index)}")
+else:
+    print("  Mac scoring not available -- heatmap will show eos only")
 
 # --- Count target genes per regulon ---
 regulon_csv = os.path.join(BASE, "scenic", "regulons.csv")
@@ -244,22 +299,12 @@ auc_z = (auc_top - auc_top.mean()) / auc_top.std()
 auc_z["cluster"] = clusters_series.values
 eos_means = auc_z.groupby("cluster").mean()
 
-# --- Compute mac subtype means if available ---
-mac_means = None
-if mac_subtypes is not None and "mac_subtype" in mac_subtypes.columns:
-    mac_cells = mac_subtypes.index.intersection(full_auc.index)
-    if len(mac_cells) > 100:
-        mac_auc = full_auc.loc[mac_cells, [r for r in all_top_regulons if r in full_auc.columns]]
-        # Z-score using eos parameters for comparability
-        for col in mac_auc.columns:
-            if col in auc_top.columns:
-                mac_auc[col] = (mac_auc[col] - auc_top[col].mean()) / auc_top[col].std()
-        mac_auc["subtype"] = mac_subtypes.loc[mac_cells, "mac_subtype"].values
-        mac_means = mac_auc.groupby("subtype").mean()
-        # Rename for display
-        mac_rename = {"Mac_M1": "M1", "Mac_M2_Func": "M2\nFunct.", "Mac_M2_Surf": "M2\nSurf."}
-        mac_means.index = [mac_rename.get(x, x) for x in mac_means.index]
-        print(f"  Mac subtypes in heatmap: {list(mac_means.index)}")
+# --- Z-score mac means using eos parameters for comparability ---
+if mac_means is not None:
+    for col in mac_means.columns:
+        if col in auc_top.columns:
+            mac_means[col] = (mac_means[col] - auc_top[col].mean()) / auc_top[col].std()
+    print(f"  Mac subtypes in heatmap: {list(mac_means.index)}")
 
 # --- Sort regulons by cluster ---
 regulon_order = []
