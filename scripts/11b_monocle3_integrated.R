@@ -10,9 +10,8 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 
 suppressPackageStartupMessages({
-  library(monocle3)
   library(Seurat)
-  library(SeuratWrappers)
+  library(monocle3)
   library(ggplot2)
   library(dplyr)
 })
@@ -35,9 +34,15 @@ if (inherits(combined[["RNA"]], "Assay5")) {
 }
 cat(sprintf("  Loaded: %d cells\n", ncol(combined)))
 
-# --- 2. Convert to Monocle3 CDS ----------------------------------------------
+# --- 2. Convert to Monocle3 CDS (manual — avoids SeuratWrappers version issues)
 cat("Converting to Monocle3 cell_data_set...\n")
-cds <- as.cell_data_set(combined)
+combined <- JoinLayers(combined)
+expr_mat <- GetAssayData(combined, layer = "counts")
+cell_meta <- combined@meta.data
+gene_meta <- data.frame(gene_short_name = rownames(combined), row.names = rownames(combined))
+cds <- new_cell_data_set(expr_mat,
+                         cell_metadata = cell_meta,
+                         gene_metadata = gene_meta)
 
 # Transfer UMAP coordinates
 umap_coords <- Embeddings(combined, "umap")
