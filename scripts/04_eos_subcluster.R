@@ -744,16 +744,45 @@ print(ggplot(comp_df, aes(x = condition, y = frac, fill = eos_cluster)) +
         theme(axis.text.x = element_text(angle = 45, hjust = 1)))
 dev.off()
 
-# Top 5 marker heatmap
-cat("Plotting top 5 marker heatmap...\n")
-top5 <- markers %>%
+# Top 7 marker dotplot (Fig 2B — manuscript style)
+cat("Plotting top 7 marker dotplot (Fig 2B)...\n")
+top7 <- markers %>%
+  filter(p_val_adj < 0.05) %>%
   group_by(cluster) %>%
-  slice_max(order_by = avg_log2FC, n = 5)
+  slice_max(order_by = avg_log2FC, n = 7) %>%
+  ungroup()
 
+# Order genes: C0 markers first, then C1, etc.
+gene_order <- unique(top7$gene[order(match(top7$cluster, paste0("C", 0:5)))])
+
+# Clusters on y-axis: C0 at bottom, C5 at top
+Idents(eos) <- factor(eos$eos_cluster, levels = rev(paste0("C", 0:5)))
+
+pdf(file.path(fig_dir, "04_eos_marker_dotplot.pdf"), width = max(14, length(gene_order) * 0.35), height = 5)
+print(DotPlot(eos, features = gene_order, scale = TRUE,
+              col.min = -1.5, col.max = 2.5) +
+        scale_color_gradientn(
+          colors = c("#3B4CC0", "#7092D5", "#AAC7FD", "#DDDDDD",
+                     "#F7B799", "#E8744A", "#B40426"),
+          name = "Average\nExpression") +
+        scale_size_continuous(range = c(0.5, 6), name = "Percent\nExpressed") +
+        labs(x = "", y = "") +
+        theme_pub() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8, face = "italic"),
+              axis.text.y = element_text(size = 10),
+              legend.position = "right",
+              panel.grid.major = element_blank()))
+dev.off()
+
+# Reset ident order
+Idents(eos) <- factor(eos$eos_cluster, levels = paste0("C", 0:5))
+
+# Also keep heatmap as supplement
+cat("Plotting top 7 marker heatmap (supplement)...\n")
 pdf(file.path(fig_dir, "04_eos_marker_heatmap.pdf"), width = 12, height = 10)
-print(DoHeatmap(eos, features = top5$gene, group.colors = eos_colors_use) +
-        ggtitle("Top 5 Markers per Eosinophil Cluster") +
-        theme(axis.text.y = element_text(size = 8)))
+print(DoHeatmap(eos, features = gene_order, group.colors = eos_colors_use) +
+        ggtitle("Top 7 Markers per Eosinophil Cluster") +
+        theme(axis.text.y = element_text(size = 7)))
 dev.off()
 
 # ══════════════════════════════════════════════════════════════════════════════
