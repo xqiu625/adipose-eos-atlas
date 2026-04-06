@@ -45,14 +45,22 @@ compute_cluster_correlation <- function(obj, group_col, groups_a, groups_b,
   hvg <- hvg[hvg %in% rownames(obj)]
 
   # Average expression per group
+  # Seurat replaces underscores with dashes in identity names — use dots instead
+  obj@meta.data[[group_col]] <- gsub("_", ".", obj@meta.data[[group_col]])
+  groups_a <- gsub("_", ".", groups_a)
+  groups_b <- gsub("_", ".", groups_b)
+
   Idents(obj) <- group_col
   avg <- AverageExpression(obj, features = hvg, assays = "RNA", layer = "data")$RNA
   avg <- as.matrix(avg)
 
+  cat("  AverageExpression columns:", paste(colnames(avg), collapse = ", "), "\n")
+
   # Keep only requested groups
-  all_groups <- c(groups_a, groups_b)
+  all_groups <- unique(c(groups_a, groups_b))
   keep <- colnames(avg) %in% all_groups
   avg <- avg[, keep, drop = FALSE]
+  cat("  Kept", ncol(avg), "of", length(all_groups), "groups\n")
 
   # Spearman correlation
   cor_mat <- cor(avg, method = "spearman")
@@ -209,8 +217,8 @@ if (file.exists(three_way_file)) {
   # Annotation for dataset source
   ann_row <- data.frame(
     Dataset = case_when(
-      grepl("^Qiu_", rownames(res_tw$cor)) ~ "Qiu",
-      grepl("^Hu_", rownames(res_tw$cor)) ~ "Hu",
+      grepl("^Qiu", rownames(res_tw$cor)) ~ "Qiu",
+      grepl("^Hu", rownames(res_tw$cor)) ~ "Hu",
       TRUE ~ "Gurtner"
     ),
     row.names = rownames(res_tw$cor)
