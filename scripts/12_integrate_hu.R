@@ -235,27 +235,37 @@ overlap_df <- combined@meta.data %>%
 qiu_cells <- combined@meta.data %>% filter(dataset == "Qiu_2025")
 hu_cells  <- combined@meta.data %>% filter(dataset == "Hu_Reference")
 
-# Nearest-neighbor overlap: for each Qiu cluster, what fraction of its
-# integrated-cluster neighbors are Hu cells?
-cat("\n  Qiu cluster co-localization with Hu cells (same integrated cluster):\n")
+# Per-integrated-cluster composition: what % of each integrated cluster is Hu?
+cat("\n  Per-integrated-cluster Hu fraction:\n")
+int_comp <- combined@meta.data %>%
+  group_by(seurat_clusters, dataset) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  tidyr::pivot_wider(names_from = dataset, values_from = n, values_fill = 0) %>%
+  mutate(total = Qiu_2025 + Hu_Reference,
+         hu_frac = round(Hu_Reference / total * 100, 1))
+print(as.data.frame(int_comp))
+
+# For each Qiu cluster: weighted average Hu fraction across its integrated clusters
+cat("\n  Qiu cluster proximity to Hu (weighted Hu fraction in shared integrated clusters):\n")
 colocal <- data.frame()
 for (cl in sort(unique(qiu_cells$original_cluster))) {
-  qiu_int_clusters <- qiu_cells$seurat_clusters[qiu_cells$original_cluster == cl]
-  # Count Hu cells in the same integrated clusters
-  hu_in_same <- sum(hu_cells$seurat_clusters %in% unique(qiu_int_clusters))
-  total_hu <- nrow(hu_cells)
-  frac <- round(hu_in_same / total_hu * 100, 1)
-  # Also: what fraction of THIS Qiu cluster's integrated clusters have Hu cells?
-  shared_clusters <- intersect(unique(qiu_int_clusters), unique(hu_cells$seurat_clusters))
-  qiu_in_shared <- sum(qiu_int_clusters %in% shared_clusters)
-  frac_qiu <- round(qiu_in_shared / length(qiu_int_clusters) * 100, 1)
-  cat(sprintf("    %s: %d/%d cells (%.1f%%) share integrated clusters with Hu\n",
-              cl, qiu_in_shared, length(qiu_int_clusters), frac_qiu))
+  # Which integrated clusters does this Qiu cluster belong to?
+  cl_int <- table(qiu_cells$seurat_clusters[qiu_cells$original_cluster == cl])
+  # Weighted Hu fraction: sum(n_qiu_in_int_cl * hu_frac_of_int_cl) / total_qiu
+  weighted_hu <- 0
+  for (ic in names(cl_int)) {
+    hu_in_ic <- sum(hu_cells$seurat_clusters == ic)
+    total_in_ic <- sum(combined$seurat_clusters == ic)
+    weighted_hu <- weighted_hu + cl_int[ic] * (hu_in_ic / total_in_ic)
+  }
+  n_qiu <- sum(cl_int)
+  hu_proximity <- round(weighted_hu / n_qiu * 100, 1)
+  cat(sprintf("    %s (n=%d): %.1f%% Hu proximity\n", cl, n_qiu, hu_proximity))
   colocal <- rbind(colocal, data.frame(
-    qiu_cluster = cl, n_qiu = length(qiu_int_clusters),
-    n_shared = qiu_in_shared, pct_shared = frac_qiu))
+    qiu_cluster = cl, n_qiu = n_qiu, hu_proximity_pct = hu_proximity))
 }
 write.csv(colocal, file.path(outdir, "hu_qiu_cluster_colocalization.csv"), row.names = FALSE)
+cat("\n  Higher % = Qiu cluster co-localizes more with Hu healthy adipose eos\n")
 
 # --- Fig 2G replacement: UMAP colored by Qiu cluster + Hu ---
 cat("\nGenerating Fig 2G: Qiu clusters + Hu on integrated UMAP ...\n")
