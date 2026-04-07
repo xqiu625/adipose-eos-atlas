@@ -27,16 +27,8 @@ fig_dir <- file.path(outdir, "figures")
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
 # --- 1. Load data (use saved CDS if available, otherwise build from scratch) --
-cds_path <- file.path(outdir, "monocle3_threeway_cds.rds")
-if (file.exists(cds_path)) {
-  cat("Loading pre-computed CDS (skipping trajectory computation)...\n")
-  cds <- readRDS(cds_path)
-  cat(sprintf("  Loaded CDS: %d cells\n", ncol(cds)))
-  # Skip to figure generation (section 5)
-  SKIP_TO_FIGURES <- TRUE
-} else {
-  SKIP_TO_FIGURES <- FALSE
-}
+# Force recompute trajectory (root cell was wrong in previous run)
+SKIP_TO_FIGURES <- FALSE
 
 if (!SKIP_TO_FIGURES) {
 cat("Loading three-way integrated object...\n")
@@ -69,18 +61,17 @@ cds <- preprocess_cds(cds, num_dim = 30)
 cds <- cluster_cells(cds, reduction_method = "UMAP")
 cds <- learn_graph(cds)
 
-# --- 4. Set root = Gurtner Bone Marrow cells ----------------------------------
+# --- 4. Set root = Gurtner Bone Marrow cells (BM ONLY, not Blood) -------------
 cat("Setting root to Gurtner Bone Marrow cells...\n")
-bm_mask <- colData(cds)$organ == "Bone Marrow" | 
-           (colData(cds)$dataset == "Gurtner_2022_Blood_BM" & 
-            colData(cds)$organ %in% c("Bone Marrow", "Blood"))
+bm_mask <- colData(cds)$organ == "Bone Marrow"
+cat(sprintf("  Bone Marrow cells: %d\n", sum(bm_mask)))
 
 if (sum(bm_mask) == 0) {
-  cat("WARNING: No Gurtner BM cells found. Using first Gurtner cell as fallback.\n")
+  cat("  WARNING: No BM cells found. Trying any Gurtner cell.\n")
   bm_mask <- colData(cds)$dataset == "Gurtner_2022_Blood_BM"
 }
 
-# Prefer highest CytoTRACE score if available (most immature)
+# Pick BM cell with highest CytoTRACE (most progenitor-like)
 if ("ct_score" %in% colnames(colData(cds))) {
   bm_ct <- colData(cds)$ct_score[bm_mask]
   root_idx <- which.max(bm_ct)
@@ -88,6 +79,8 @@ if ("ct_score" %in% colnames(colData(cds))) {
 } else {
   root_cell <- colnames(cds)[bm_mask][1]
 }
+cat(sprintf("  Selected root: %s (organ: %s)\n", root_cell,
+            colData(cds)[root_cell, "organ"]))
 
 # Map to principal graph node
 closest_vertex <- cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
