@@ -141,19 +141,16 @@ tw$sim_group[hu_idx] <- paste0("Hu.", depot_map[colnames(tw)[hu_idx]])
 cat(sprintf("  Hu assigned: %d (example: %s)\n", length(hu_idx),
             paste(head(tw$sim_group[hu_idx], 3), collapse=", ")))
 
-# Gurtner BM and Blood
-bm_idx <- which(org == "Bone Marrow")
-tw$sim_group[bm_idx] <- "Gurtner.BM"
-cat(sprintf("  Gurtner BM assigned: %d\n", length(bm_idx)))
+# Gurtner: ALL tissues
+gurtner_idx <- which(ds == "Gurtner_2022_Blood_BM")
+tw$sim_group[gurtner_idx] <- paste0("Gurtner.", gsub(" ", ".", org[gurtner_idx]))
+cat(sprintf("  Gurtner assigned: %d\n", length(gurtner_idx)))
 
-blood_idx <- which(org == "Blood")
-tw$sim_group[blood_idx] <- "Gurtner.Blood"
-cat(sprintf("  Gurtner Blood assigned: %d\n", length(blood_idx)))
-
-# Keep only groups we want
-keep_groups <- c(paste0("C", 0:5), "Hu.eWAT", "Hu.scWAT", "Hu.BAT",
-                 "Gurtner.BM", "Gurtner.Blood")
+# Drop groups with < 50 cells
+group_counts <- table(tw$sim_group)
+keep_groups <- names(group_counts[group_counts >= 50])
 tw$sim_group[!tw$sim_group %in% keep_groups] <- NA
+cat(sprintf("  Groups with >= 50 cells: %d\n", length(keep_groups)))
 
 cat("  Group sizes:\n")
 print(table(tw$sim_group, useNA = "ifany"))
@@ -183,20 +180,14 @@ write.csv(cor_mat, file.path(outdir, "cross_dataset_spearman_correlation.csv"))
 # 5. Dendrogram (Hu-paper style) + heatmap
 # ==============================================================================
 
-# Display labels
-display_names <- c(
-  "C0" = "C0", "C1" = "C1", "C2" = "C2", "C3" = "C3", "C4" = "C4", "C5" = "C5",
-  "Hu.eWAT" = "Hu eWAT", "Hu.scWAT" = "Hu scWAT", "Hu.BAT" = "Hu BAT",
-  "Gurtner.BM" = "Gurtner BM", "Gurtner.Blood" = "Gurtner Blood"
-)
+# Display labels — auto-generate from group names
+make_display <- function(x) gsub("\\.", " ", x)
 
-# Label colors by dataset
-label_colors <- c(
-  "C0" = "#E63946", "C1" = "#E63946", "C2" = "#E63946",
-  "C3" = "#E63946", "C4" = "#E63946", "C5" = "#E63946",
-  "Hu.eWAT" = "#4DAF4A", "Hu.scWAT" = "#4DAF4A", "Hu.BAT" = "#4DAF4A",
-  "Gurtner.BM" = "#1D3557", "Gurtner.Blood" = "#1D3557"
-)
+# Label colors by dataset source
+get_label_color <- function(x) {
+  ifelse(grepl("^C[0-5]$", x), "#E63946",
+  ifelse(grepl("^Hu", x), "#4DAF4A", "#1D3557"))
+}
 
 # Hierarchical clustering on correlation distance
 dist_mat <- as.dist(1 - cor_mat)
@@ -210,14 +201,8 @@ dend <- as.dendrogram(hc)
 
 # Map labels to display names and colors
 orig_labels <- labels(dend)
-new_labels <- display_names[orig_labels]
-new_labels[is.na(new_labels)] <- orig_labels[is.na(new_labels)]
-labels(dend) <- new_labels
-
-# Color labels by dataset
-lab_cols <- label_colors[orig_labels]
-lab_cols[is.na(lab_cols)] <- "black"
-labels_colors(dend) <- lab_cols
+labels(dend) <- make_display(orig_labels)
+labels_colors(dend) <- sapply(orig_labels, get_label_color)
 labels_cex(dend) <- 1.1
 
 pdf(file.path(outdir, "cross_dataset_dendrogram.pdf"), width = 12, height = 7)
@@ -237,17 +222,18 @@ cat("  Saved: cross_dataset_dendrogram.pdf\n")
 # --- Also save heatmap as supplement ---
 cat("Plotting similarity heatmap (supplement)...\n")
 ann_row <- data.frame(
-  Source = ifelse(grepl("^C[0-5]", rownames(cor_mat)), "Qiu HFD",
+  Source = ifelse(grepl("^C[0-5]$", rownames(cor_mat)), "Qiu HFD",
            ifelse(grepl("^Hu", rownames(cor_mat)), "Hu Healthy", "Gurtner")),
   row.names = rownames(cor_mat)
 )
 ann_colors <- list(
   Source = c("Qiu HFD" = "#E63946", "Hu Healthy" = "#4DAF4A", "Gurtner" = "#1D3557")
 )
-row_labels <- display_names[rownames(cor_mat)]
-row_labels[is.na(row_labels)] <- rownames(cor_mat)[is.na(row_labels)]
+row_labels <- make_display(rownames(cor_mat))
 
-pdf(file.path(outdir, "cross_dataset_similarity_heatmap.pdf"), width = 10, height = 8)
+n_groups <- ncol(cor_mat)
+pdf(file.path(outdir, "cross_dataset_similarity_heatmap.pdf"),
+    width = max(10, n_groups * 0.8), height = max(8, n_groups * 0.7))
 pheatmap(cor_mat,
          color = colorRampPalette(c("#2166AC", "white", "#B2182B"))(100),
          breaks = seq(0.5, 1, length.out = 101),
@@ -255,8 +241,8 @@ pheatmap(cor_mat,
          annotation_row = ann_row, annotation_col = ann_row,
          annotation_colors = ann_colors,
          display_numbers = TRUE, number_format = "%.2f",
-         fontsize_number = 8,
-         fontsize_row = 11, fontsize_col = 11,
+         fontsize_number = max(5, 10 - n_groups * 0.3),
+         fontsize_row = 10, fontsize_col = 10,
          labels_row = row_labels, labels_col = row_labels,
          main = "Cross-Dataset Eosinophil Similarity (Spearman)",
          border_color = NA)
