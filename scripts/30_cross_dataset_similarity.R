@@ -180,28 +180,69 @@ cor_mat <- cor(avg, method = "spearman")
 write.csv(cor_mat, file.path(outdir, "cross_dataset_spearman_correlation.csv"))
 
 # ==============================================================================
-# 5. Heatmap
+# 5. Dendrogram (Hu-paper style) + heatmap
 # ==============================================================================
-cat("Plotting similarity heatmap...\n")
 
-# Annotation
-ann_row <- data.frame(
-  Source = case_when(
-    grepl("^C[0-5]", rownames(cor_mat)) ~ "Qiu HFD",
-    grepl("^Hu", rownames(cor_mat))     ~ "Hu Healthy",
-    TRUE                                 ~ "Gurtner"
-  ),
-  row.names = rownames(cor_mat)
-)
-ann_colors <- list(
-  Source = c("Qiu HFD" = "#E63946", "Hu Healthy" = "#4DAF4A", "Gurtner" = "#1D3557")
-)
-
-# Display labels (prettier names)
+# Display labels
 display_names <- c(
   "C0" = "C0", "C1" = "C1", "C2" = "C2", "C3" = "C3", "C4" = "C4", "C5" = "C5",
   "Hu.eWAT" = "Hu eWAT", "Hu.scWAT" = "Hu scWAT", "Hu.BAT" = "Hu BAT",
   "Gurtner.BM" = "Gurtner BM", "Gurtner.Blood" = "Gurtner Blood"
+)
+
+# Label colors by dataset
+label_colors <- c(
+  "C0" = "#E63946", "C1" = "#E63946", "C2" = "#E63946",
+  "C3" = "#E63946", "C4" = "#E63946", "C5" = "#E63946",
+  "Hu.eWAT" = "#4DAF4A", "Hu.scWAT" = "#4DAF4A", "Hu.BAT" = "#4DAF4A",
+  "Gurtner.BM" = "#1D3557", "Gurtner.Blood" = "#1D3557"
+)
+
+# Hierarchical clustering on correlation distance
+dist_mat <- as.dist(1 - cor_mat)
+hc <- hclust(dist_mat, method = "average")
+
+# --- Dendrogram (main figure, Hu-paper style) ---
+cat("Plotting dendrogram...\n")
+library(dendextend)
+
+dend <- as.dendrogram(hc)
+
+# Map labels to display names and colors
+orig_labels <- labels(dend)
+new_labels <- display_names[orig_labels]
+new_labels[is.na(new_labels)] <- orig_labels[is.na(new_labels)]
+labels(dend) <- new_labels
+
+# Color labels by dataset
+lab_cols <- label_colors[orig_labels]
+lab_cols[is.na(lab_cols)] <- "black"
+labels_colors(dend) <- lab_cols
+labels_cex(dend) <- 1.1
+
+pdf(file.path(outdir, "cross_dataset_dendrogram.pdf"), width = 12, height = 7)
+par(mar = c(8, 4, 4, 2))
+plot(dend, main = "Eosinophil scRNA-seq Cross-Dataset Similarity",
+     ylab = "1 - Spearman correlation", las = 2)
+# Legend
+legend("topright",
+       legend = c("Qiu et al. 2025 (HFD adipose)",
+                  "Hu et al. 2026 (healthy adipose)",
+                  "Gurtner et al. 2022 (blood/BM)"),
+       text.col = c("#E63946", "#4DAF4A", "#1D3557"),
+       bty = "n", cex = 1.0)
+dev.off()
+cat("  Saved: cross_dataset_dendrogram.pdf\n")
+
+# --- Also save heatmap as supplement ---
+cat("Plotting similarity heatmap (supplement)...\n")
+ann_row <- data.frame(
+  Source = ifelse(grepl("^C[0-5]", rownames(cor_mat)), "Qiu HFD",
+           ifelse(grepl("^Hu", rownames(cor_mat)), "Hu Healthy", "Gurtner")),
+  row.names = rownames(cor_mat)
+)
+ann_colors <- list(
+  Source = c("Qiu HFD" = "#E63946", "Hu Healthy" = "#4DAF4A", "Gurtner" = "#1D3557")
 )
 row_labels <- display_names[rownames(cor_mat)]
 row_labels[is.na(row_labels)] <- rownames(cor_mat)[is.na(row_labels)]
