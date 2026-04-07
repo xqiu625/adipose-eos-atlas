@@ -79,10 +79,34 @@ if ("ct_score" %in% colnames(colData(cds))) {
 
 # Map to principal graph node
 closest_vertex <- cds@principal_graph_aux[["UMAP"]]$pr_graph_cell_proj_closest_vertex
-root_pr_node <- closest_vertex[root_cell, ]
+root_pr_node <- paste0("Y_", closest_vertex[root_cell, ])
+cat(sprintf("  Root cell: %s -> graph node: %s\n", root_cell, root_pr_node))
 
-cds <- order_cells(cds, root_pr_nodes = root_pr_node)
-cat(sprintf("  Root cell set: %s (Gurtner BM)\n", root_cell))
+# Verify node exists in graph; fallback to interactive-style root selection
+graph_nodes <- igraph::V(principal_graph(cds)[["UMAP"]])$name
+cat(sprintf("  Graph has %d nodes. Example: %s\n", length(graph_nodes),
+            paste(head(graph_nodes, 5), collapse = ", ")))
+
+if (root_pr_node %in% graph_nodes) {
+  cds <- order_cells(cds, root_pr_nodes = root_pr_node)
+  cat(sprintf("  Root set successfully: %s\n", root_pr_node))
+} else {
+  # Fallback: find graph node closest to BM cells centroid
+  cat("  Direct node mapping failed. Finding closest graph node to BM centroid...\n")
+  bm_umap <- reducedDims(cds)[["UMAP"]][bm_mask, , drop = FALSE]
+  bm_centroid <- colMeans(bm_umap)
+
+  # Get graph node positions
+  graph_coords <- cds@principal_graph_aux[["UMAP"]]$dp_mst
+  if (!is.null(graph_coords)) {
+    dists <- apply(t(graph_coords), 1, function(x) sqrt(sum((x - bm_centroid)^2)))
+    root_pr_node <- names(which.min(dists))
+    cds <- order_cells(cds, root_pr_nodes = root_pr_node)
+    cat(sprintf("  Root set via centroid: %s\n", root_pr_node))
+  } else {
+    cat("  ERROR: Cannot find graph node positions. Skipping order_cells.\n")
+  }
+}
 
 # --- 5. Generate figures ------------------------------------------------------
 cat("Generating figures...\n")
