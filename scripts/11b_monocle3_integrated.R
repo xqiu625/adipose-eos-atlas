@@ -26,7 +26,19 @@ outdir <- file.path(BASE, "monocle_threeway")
 fig_dir <- file.path(outdir, "figures")
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
-# --- 1. Load three-way integrated object -------------------------------------
+# --- 1. Load data (use saved CDS if available, otherwise build from scratch) --
+cds_path <- file.path(outdir, "monocle3_threeway_cds.rds")
+if (file.exists(cds_path)) {
+  cat("Loading pre-computed CDS (skipping trajectory computation)...\n")
+  cds <- readRDS(cds_path)
+  cat(sprintf("  Loaded CDS: %d cells\n", ncol(cds)))
+  # Skip to figure generation (section 5)
+  SKIP_TO_FIGURES <- TRUE
+} else {
+  SKIP_TO_FIGURES <- FALSE
+}
+
+if (!SKIP_TO_FIGURES) {
 cat("Loading three-way integrated object...\n")
 integrated_path <- file.path(BASE, "integration", "three_way", "three_way_integrated.rds")
 combined <- readRDS(integrated_path)
@@ -108,54 +120,151 @@ if (root_pr_node %in% graph_nodes) {
   }
 }
 
-# --- 5. Generate figures ------------------------------------------------------
+} # end if (!SKIP_TO_FIGURES)
+
+# --- 5. Create unified group labels -------------------------------------------
+cat("Creating group labels...\n")
+
+ds <- as.character(colData(cds)$dataset)
+org <- as.character(colData(cds)$organ)
+cl <- as.character(colData(cds)$original_cluster)
+
+# Parse Hu depot from barcode (Hu_eWAT_1016 -> eWAT)
+group_label <- rep(NA_character_, ncol(cds))
+
+# Qiu: C0-C5
+qiu_idx <- which(ds == "Qiu_2025_Adipose")
+group_label[qiu_idx] <- cl[qiu_idx]
+
+# Hu: depot from barcode prefix
+hu_idx <- which(ds == "Hu_2026_Healthy")
+hu_barcodes <- colnames(cds)[hu_idx]
+hu_depot <- sub("^Hu_([^_]+)_.*", "\\1", hu_barcodes)
+group_label[hu_idx] <- paste0("Hu ", hu_depot)
+
+# Gurtner: BM and Blood
+bm_idx <- which(org == "Bone Marrow")
+group_label[bm_idx] <- "Gurtner BM"
+blood_idx <- which(org == "Blood")
+group_label[blood_idx] <- "Gurtner Blood"
+
+# Other Gurtner organs
+other_idx <- which(is.na(group_label))
+group_label[other_idx] <- paste0("Gurtner ", org[other_idx])
+
+colData(cds)$group_label <- group_label
+cat("  Group sizes:\n")
+print(table(group_label))
+
+# --- Group colors (matching manuscript) ----------------------------------------
+group_colors <- c(
+  "C0" = "#6CA6CD", "C1" = "#E84A5F", "C2" = "#FF6F1F",
+  "C3" = "#CBAACB", "C4" = "#B03A48", "C5" = "#5BA4A4",
+  "Gurtner BM"    = "#2E8B57",
+  "Gurtner Blood" = "#DAA520",
+  "Hu eWAT"  = "#FF8C00",
+  "Hu scWAT" = "#8B4513",
+  "Hu BAT"   = "#DC143C"
+)
+
+# --- 6. Generate figures ------------------------------------------------------
 cat("Generating figures...\n")
 
-# Pseudotime on UMAP
-pdf(file.path(fig_dir, "monocle3_threeway_pseudotime.pdf"), width = 9, height = 7)
+# Panel 1: UMAP colored by group (Monocle style with trajectory graph)
+pdf(file.path(fig_dir, "monocle3_threeway_groups.pdf"), width = 10, height = 8)
+p <- plot_cells(cds, color_cells_by = "group_label",
+                label_cell_groups = TRUE,
+                label_leaves = FALSE,
+                label_branch_points = FALSE,
+                graph_label_size = 4,
+                cell_size = 0.5,
+                group_label_size = 5) +
+  scale_color_manual(values = group_colors, name = "") +
+  ggtitle("Monocle3 Trajectory") +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+        legend.text = element_text(size = 11),
+        legend.position = "right",
+        axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank())
+print(p)
+dev.off()
+
+# Panel 2: UMAP colored by pseudotime (viridis)
+pdf(file.path(fig_dir, "monocle3_threeway_pseudotime.pdf"), width = 10, height = 8)
 p <- plot_cells(cds, color_cells_by = "pseudotime",
                 label_cell_groups = FALSE,
                 label_leaves = FALSE,
                 label_branch_points = FALSE,
-                cell_size = 0.6) +
-  ggtitle("Pseudotime Trajectory (Root = Gurtner Bone Marrow)") +
-  theme_umap()
+                cell_size = 0.5) +
+  scale_color_viridis_c(name = "Pseudotime", option = "inferno") +
+  ggtitle("Pseudotime (Root = Gurtner Bone Marrow)") +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+        legend.text = element_text(size = 11),
+        legend.position = "right",
+        axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank())
 print(p)
 dev.off()
 
-# By dataset
-pdf(file.path(fig_dir, "monocle3_threeway_dataset.pdf"), width = 9, height = 7)
-p <- plot_cells(cds, color_cells_by = "dataset", label_cell_groups = TRUE, cell_size = 0.6) +
-  ggtitle("Dataset") + theme_umap()
-print(p)
+# Panel 3: Combined two-panel (stacked like the reference image)
+pdf(file.path(fig_dir, "monocle3_threeway_combined.pdf"), width = 10, height = 16)
+
+p1 <- plot_cells(cds, color_cells_by = "group_label",
+                 label_cell_groups = TRUE,
+                 label_leaves = FALSE,
+                 label_branch_points = FALSE,
+                 graph_label_size = 4,
+                 cell_size = 0.5,
+                 group_label_size = 5) +
+  scale_color_manual(values = group_colors, name = "") +
+  ggtitle("Monocle3 Trajectory") +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+        legend.text = element_text(size = 11),
+        axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank())
+
+p2 <- plot_cells(cds, color_cells_by = "pseudotime",
+                 label_cell_groups = FALSE,
+                 label_leaves = FALSE,
+                 label_branch_points = FALSE,
+                 cell_size = 0.5) +
+  scale_color_viridis_c(name = "Pseudotime", option = "inferno") +
+  ggtitle("Pseudotime") +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+        legend.text = element_text(size = 11),
+        axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank())
+
+print(p1 / p2)
 dev.off()
 
-# By organ/tissue (shows Hu eWAT, scWAT, BAT separately)
-pdf(file.path(fig_dir, "monocle3_threeway_organ.pdf"), width = 9, height = 7)
-p <- plot_cells(cds, color_cells_by = "organ", label_cell_groups = TRUE, cell_size = 0.6) +
-  ggtitle("Tissue / Organ") + theme_umap()
-print(p)
-dev.off()
-
-# By original cluster
-pdf(file.path(fig_dir, "monocle3_threeway_cluster.pdf"), width = 9, height = 7)
-p <- plot_cells(cds, color_cells_by = "original_cluster", label_cell_groups = TRUE, cell_size = 0.6) +
-  ggtitle("Original Cluster") + theme_umap()
-print(p)
-dev.off()
-
-# Pseudotime boxplot by dataset
-pdf(file.path(fig_dir, "monocle3_threeway_pseudotime_by_dataset.pdf"), width = 10, height = 6)
+# Pseudotime boxplot by group
+pdf(file.path(fig_dir, "monocle3_threeway_pseudotime_boxplot.pdf"), width = 12, height = 6)
 pt_df <- data.frame(
   pseudotime = pseudotime(cds),
-  dataset = colData(cds)$dataset,
+  group = colData(cds)$group_label,
   stringsAsFactors = FALSE
 )
 pt_df <- pt_df[is.finite(pt_df$pseudotime), ]
-ggplot(pt_df, aes(x = dataset, y = pseudotime, fill = dataset)) +
+# Order by median pseudotime
+med_order <- pt_df %>% group_by(group) %>% summarise(med = median(pseudotime)) %>% arrange(med)
+pt_df$group <- factor(pt_df$group, levels = med_order$group)
+p <- ggplot(pt_df, aes(x = group, y = pseudotime, fill = group)) +
   geom_boxplot(outlier.size = 0.5) +
-  labs(title = "Pseudotime by Dataset") +
-  theme_pub()
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Pseudotime by Group", x = "", y = "Pseudotime") +
+  theme_pub() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none")
+print(p)
 dev.off()
 
 # Save the CDS
