@@ -30,12 +30,14 @@ cc_dir  <- file.path(BASE, "cellchat")
 fig_dir <- file.path(BASE, "cellchat", "figures")
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
-condition_order <- c("WT_Female_HFD", "WT_Male_HFD", "KO_Female_HFD", "KO_Male_HFD",
-                     "WT_Female_HFDInfected", "KO_Female_HFDInfected")
-cond_display <- c("WT_Female_HFD" = "WT \u2640", "WT_Male_HFD" = "WT \u2642",
-                  "KO_Female_HFD" = "KO \u2640", "KO_Male_HFD" = "KO \u2642",
-                  "WT_Female_HFDInfected" = "WT \u2640 Inf",
-                  "KO_Female_HFDInfected" = "KO \u2640 Inf")
+condition_order <- c("WT_Female_HFD", "WT_Male_HFD", "KO_Male_HFD", "KO_Female_HFD",
+                     "KO_Female_HFDInfected", "WT_Female_HFDInfected")
+cond_display <- c("WT_Female_HFD" = "WT Female HFD\n(Baseline)",
+                  "WT_Male_HFD" = "WT Male HFD",
+                  "KO_Male_HFD" = "KO Male HFD",
+                  "KO_Female_HFD" = "KO Female HFD",
+                  "KO_Female_HFDInfected" = "KO Female HFD\nInfected",
+                  "WT_Female_HFDInfected" = "WT Female HFD\nInfected")
 
 # ==============================================================================
 # 1. Load CellChat objects
@@ -311,32 +313,34 @@ if (!is.null(cc_base)) {
   base_out <- out_list2[[baseline_cond]]
   base_in <- in_list2[[baseline_cond]]
 
-  # Plot: 6 small panels in a row (baseline + 5 differences)
+  diff_conds <- setdiff(condition_order, baseline_cond)
+  col_labels <- c("Eos", "M1", "M2\nFunct.", "M2\nSurf.")
+
+  library(gridExtra)
+
   for (direction in c("Outgoing", "Incoming")) {
     sig_list <- if (direction == "Outgoing") out_list2 else in_list2
     sig_base <- if (direction == "Outgoing") base_out else base_in
 
     pdf(file.path(fig_dir, paste0("fig3B_", tolower(direction), "_heatmap.pdf")),
-        width = length(condition_order) * 3.5 + 2, height = 5)
+        width = length(condition_order) * 3.2 + 1, height = 5)
 
-    plot_list <- list()
-
-    # Baseline panel (sequential colorscale)
+    # Baseline panel — viridis colorscale
     base_mat <- sig_list[[baseline_cond]]
-    colnames(base_mat) <- c("Eos", "M1", "M2\nFunct.", "M2\nSurf.")
+    colnames(base_mat) <- col_labels
     max_base <- max(base_mat, na.rm = TRUE)
+    if (max_base == 0) max_base <- 1
+
     p_base <- pheatmap(base_mat,
-             color = colorRampPalette(c("#F7FCF5", "#74C476", "#00441B", "#FFFF00"))(100),
+             color = viridis_palette,  # from 00_theme.R
              breaks = seq(0, max(1.3, max_base * 1.1), length.out = 101),
              cluster_rows = FALSE, cluster_cols = FALSE,
              display_numbers = TRUE, number_format = "%.2f",
              fontsize_number = 8, fontsize_row = 10, fontsize_col = 9,
-             main = paste0("WT Female HFD\n(Baseline)"),
+             main = cond_display[baseline_cond],
              border_color = "grey70", silent = TRUE)
 
-    # Difference panels (diverging)
-    diff_conds <- setdiff(condition_order, baseline_cond)
-    diff_plots <- list()
+    # Difference panels — RdBu diverging colorscale
     all_diffs <- c()
     for (cond in diff_conds) {
       d <- sig_list[[cond]] - sig_base
@@ -345,27 +349,28 @@ if (!is.null(cc_base)) {
     max_diff <- max(abs(all_diffs), na.rm = TRUE)
     if (max_diff == 0) max_diff <- 0.5
 
-    # Draw all panels together
-    library(gridExtra)
     grob_list <- list(p_base[[4]])
 
     for (cond in diff_conds) {
       d <- sig_list[[cond]] - sig_base
-      colnames(d) <- c("Eos", "M1", "M2\nFunct.", "M2\nSurf.")
+      colnames(d) <- col_labels
       p_diff <- pheatmap(d,
-               color = colorRampPalette(c("#2166AC", "#92C5DE", "white",
-                                          "#F4A582", "#B2182B"))(100),
+               color = colorRampPalette(c("#2166AC", "#4393C3", "#92C5DE",
+                                          "#D1E5F0", "white", "#FDDBC7",
+                                          "#F4A582", "#D6604D", "#B2182B"))(100),
                breaks = seq(-max_diff, max_diff, length.out = 101),
                cluster_rows = FALSE, cluster_cols = FALSE,
                display_numbers = TRUE, number_format = "%.2f",
                fontsize_number = 8, fontsize_row = 10, fontsize_col = 9,
-               main = paste0(cond_display[cond], "\nvs Baseline"),
+               main = cond_display[cond],
                border_color = "grey70", silent = TRUE)
       grob_list <- c(grob_list, list(p_diff[[4]]))
     }
 
     grid.arrange(grobs = grob_list, nrow = 1,
-                 top = paste(direction, "Signal"))
+                 top = grid::textGrob(paste(direction, "Signal:"),
+                                      gp = grid::gpar(fontsize = 14, fontface = "bold"),
+                                      x = 0.02, hjust = 0))
     dev.off()
   }
   cat("  Saved fig3B_outgoing_heatmap.pdf and fig3B_incoming_heatmap.pdf\n")
