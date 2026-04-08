@@ -159,6 +159,7 @@ for (cond in condition_order) {
 # Use CellChat's native netAnalysis_signalingRole_network for the correct format
 # Panel 1: Aggregated groups (Eos, M1, M2_Func, M2_Surf)
 # Use baseline condition (WT_Female_HFD) as representative
+baseline_cond <- "WT_Female_HFD"
 cc_base <- cellchat_objects[[baseline_cond]]
 
 pdf(file.path(fig_dir, "fig3C_ccl_signaling_roles.pdf"), width = 8, height = 5)
