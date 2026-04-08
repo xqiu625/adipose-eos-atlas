@@ -42,7 +42,18 @@ Eosinophil-macrophage communication was analyzed using CellChat (v1.6.1) with th
 Qiu HFD adipose eosinophils (C0-C5) were independently integrated with (1) Hu et al. 2026 healthy adipose eosinophils and (2) Gurtner et al. 2022 blood/bone marrow eosinophils (GSE182001) using Harmony batch correction. For each integration: 2,000 variable features were selected, PCA was computed (30 PCs), Harmony was run with `group.by.vars = "dataset"`, and UMAP was generated on Harmony embeddings (dims 1:30). Integrated clustering used resolution 0.5.
 
 ### Three-way integration
-All three datasets were merged and integrated using Harmony (group.by = dataset). The Hu dataset retained depot-level metadata (BAT, eWAT, scWAT). Gurtner clusters were mapped to their published nomenclature based on tissue distribution and Cd80 expression: cluster 4 = Eos Precursors, cluster 3 = Immature Eos, cluster 2 = Circulating Eos, cluster 1 = A-Eos (active, Cd80+), cluster 5 = B-Eos (basal, Cd80-). Data were exported for downstream trajectory analysis in Python (counts matrix, Harmony embeddings, UMAP coordinates, metadata).
+All three datasets were merged and integrated using Harmony (group.by = dataset). The Hu dataset retained depot-level metadata (BAT, eWAT, scWAT). Gurtner clusters were mapped to their published nomenclature (Gurtner et al., *Nature* 2023) based on tissue distribution and validation against six canonical markers from their Figure 1d:
+
+| Cluster | Tissue | Cd80 | Cd274 (PD-L1) | Retnla | Mki67 | Tgfb1 | Label |
+|---------|--------|------|---------------|--------|-------|-------|-------|
+| 4 | BM (94%) | 1.3% | 7.1% | 35.4% | **84.1%** | 18.0% | Eos Precursors |
+| 16 | BM (91%) | 6.4% | 5.4% | 25.0% | **89.3%** | 25.7% | Cycling Precursors |
+| 3 | BM (69%) | 2.8% | 7.5% | 17.7% | 8.0% | 5.0% | Immature Eos |
+| 2 | Blood (64%) | 6.4% | 4.6% | **35.8%** | 2.2% | 1.3% | Circulating Eos |
+| 1 | GI (64%) | **49.1%** | **47.2%** | 22.4% | 0.6% | 3.0% | A-Eos (active) |
+| 5 | GI (68%) | 24.3% | 33.7% | 21.6% | 11.2% | **19.5%** | B-Eos (basal) |
+
+Cluster 4 was identified as eosinophil precursors based on dominant Mki67 expression (84.1%), consistent with cycling progenitors. Cluster 2 was assigned as circulating eosinophils based on the highest Retnla expression (35.8%) and blood-dominant tissue distribution. Cluster 1 was confirmed as A-Eos (active) based on the highest Cd80 (49.1%) and Cd274/PD-L1 (47.2%) expression. Cluster 5 was assigned as B-Eos (basal) based on the highest Tgfb1 expression (19.5%) and GI-dominant tissue localization, though it showed intermediate Cd80/Cd274 levels suggesting a possible transitional phenotype. Cluster 3 was identified as immature eosinophils based on low expression of all subset-specific markers and BM-dominant localization. Cluster 16 (cycling precursors, Mki67 = 89.3%) was excluded from the main dendrogram analysis due to low cell count (n = 280). Data were exported for downstream trajectory analysis in Python (counts matrix, Harmony embeddings, UMAP coordinates, metadata).
 
 ## Trajectory Analysis
 ### CytoTRACE / CellRank
