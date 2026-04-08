@@ -315,43 +315,47 @@ if (!is.null(cc_base)) {
   base_out <- out_list[[baseline_cond]]
   base_in <- in_list[[baseline_cond]]
 
-  n_cond <- length(condition_order)
-  pdf(file.path(fig_dir, "fig3B_difference_heatmaps.pdf"), width = n_cond * 4, height = 12)
-  par(mfrow = c(2, 1))
+  # Separate baseline (sequential colorscale) and differences (diverging)
+  diff_conds <- setdiff(condition_order, baseline_cond)
+  baseline_label <- cond_display[baseline_cond]
+  diff_labels <- sapply(diff_conds, function(x) cond_display[x])
 
-  # Outgoing
-  out_combined <- do.call(cbind, lapply(condition_order, function(cond) {
-    if (cond == baseline_cond) return(out_list[[cond]])
-    return(out_list[[cond]] - base_out)
-  }))
-  colnames(out_combined) <- paste(rep(sapply(condition_order, function(x) cond_display[x]),
-                                       each = length(broad_groups)), broad_groups, sep = "\n")
+  for (direction in c("Outgoing", "Incoming")) {
+    sig_list <- if (direction == "Outgoing") out_list else in_list
+    sig_base <- if (direction == "Outgoing") base_out else base_in
 
-  pheatmap(out_combined,
-           color = colorRampPalette(c("#2166AC", "white", "#B2182B"))(100),
-           cluster_rows = FALSE, cluster_cols = FALSE,
-           display_numbers = TRUE, number_format = "%.2f",
-           fontsize_number = 7, fontsize_row = 10,
-           main = "Outgoing Signal (baseline = WT Female, others = difference)",
-           border_color = "grey80")
+    pdf(file.path(fig_dir, paste0("fig3B_", tolower(direction), "_heatmap.pdf")),
+        width = length(condition_order) * 3.5, height = 5)
 
-  # Incoming
-  in_combined <- do.call(cbind, lapply(condition_order, function(cond) {
-    if (cond == baseline_cond) return(in_list[[cond]])
-    return(in_list[[cond]] - base_in)
-  }))
-  colnames(in_combined) <- colnames(out_combined)
+    # Build: baseline (raw) | diff1 | diff2 | ...
+    mat_list <- list()
+    mat_list[[1]] <- sig_list[[baseline_cond]]
+    colnames(mat_list[[1]]) <- paste(baseline_label, "\n", broad_groups)
+    for (i in seq_along(diff_conds)) {
+      d <- sig_list[[diff_conds[i]]] - sig_base
+      colnames(d) <- paste(diff_labels[i], "\n", broad_groups)
+      mat_list[[i + 1]] <- d
+    }
+    combined <- do.call(cbind, mat_list)
 
-  pheatmap(in_combined,
-           color = colorRampPalette(c("#2166AC", "white", "#B2182B"))(100),
-           cluster_rows = FALSE, cluster_cols = FALSE,
-           display_numbers = TRUE, number_format = "%.2f",
-           fontsize_number = 7, fontsize_row = 10,
-           main = "Incoming Signal (baseline = WT Female, others = difference)",
-           border_color = "grey80")
+    # Two-tone color: baseline uses sequential, diffs use diverging
+    # Use single diverging scale but note baseline is raw
+    max_val <- max(abs(combined), na.rm = TRUE)
+    pheatmap(combined,
+             color = colorRampPalette(c("#2166AC", "#4393C3", "#D1E5F0",
+                                        "white",
+                                        "#FDDBC7", "#D6604D", "#B2182B"))(100),
+             breaks = seq(-max_val, max_val, length.out = 101),
+             cluster_rows = FALSE, cluster_cols = FALSE,
+             display_numbers = TRUE, number_format = "%.2f",
+             fontsize_number = 7, fontsize_row = 10, fontsize_col = 8,
+             main = paste(direction, "Signal (WT Female = raw, others = difference)"),
+             border_color = "grey80",
+             gaps_col = length(broad_groups))  # Gap after baseline
 
-  dev.off()
-  cat("  Saved fig3B_difference_heatmaps.pdf\n")
+    dev.off()
+  }
+  cat("  Saved fig3B_outgoing_heatmap.pdf and fig3B_incoming_heatmap.pdf\n")
 }
 
 cat("\n10b CellChat figures complete.\n")
