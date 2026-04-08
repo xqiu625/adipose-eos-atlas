@@ -67,99 +67,53 @@ group_colors_chord <- c("Eosinophils" = "#777B7E", "M1_Mac" = "#cb416b",
                         "M2_Functional" = "#8FC50E", "M2_Surface" = "#5633AA")
 
 # ==============================================================================
-# Fig 3A: CCL Chord Diagrams — ALL 6 conditions
+# Fig 3A: CCL Chord Diagram — ALL conditions aggregated into ONE diagram
 # ==============================================================================
-cat("\nGenerating Fig 3A: CCL Chord Diagrams (all conditions)...\n")
+cat("\nGenerating Fig 3A: CCL Chord Diagram (all conditions aggregated)...\n")
 
-pdf(file.path(fig_dir, "fig3A_ccl_chord_all_conditions.pdf"), width = 18, height = 12)
-par(mfrow = c(2, 3), mar = c(1, 1, 3, 1))
+# Sum probability matrices across all conditions
+unique_groups <- c("Eosinophils", "M1_Mac", "M2_Functional", "M2_Surface")
+agg_total <- matrix(0, nrow = 4, ncol = 4, dimnames = list(unique_groups, unique_groups))
 
-for (cond in condition_order) {
-  cc <- cellchat_objects[[cond]]
-  if (is.null(cc)) next
-  if (!"CCL" %in% cc@netP$pathways) {
-    plot.new(); title(main = paste("No CCL -", cond_display[cond]))
-    next
-  }
-
-  tryCatch({
-    prob_mat <- cc@netP$prob[,, "CCL"]
-    groups <- chord_group(rownames(prob_mat))
-    keep <- !is.na(groups)
-    prob_sub <- prob_mat[keep, keep]
-    group_labels <- groups[keep]
-
-    unique_groups <- c("Eosinophils", "M1_Mac", "M2_Functional", "M2_Surface")
-    agg_mat <- matrix(0, nrow = 4, ncol = 4, dimnames = list(unique_groups, unique_groups))
-    for (i in seq_along(group_labels)) {
-      for (j in seq_along(group_labels)) {
-        agg_mat[group_labels[i], group_labels[j]] <-
-          agg_mat[group_labels[i], group_labels[j]] + prob_sub[i, j]
-      }
-    }
-
-    circos.clear()
-    circos.par(start.degree = 90, gap.after = c(rep(2, 3), 10))
-    chordDiagram(agg_mat,
-                 grid.col = group_colors_chord,
-                 transparency = 0.25,
-                 directional = 1,
-                 direction.type = c("diffHeight", "arrows"),
-                 link.arr.type = "big.arrow",
-                 annotationTrack = "grid",
-                 preAllocateTracks = list(track.height = 0.15))
-    circos.track(track.index = 1, panel.fun = function(x, y) {
-      circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
-                  facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex = 0.9)
-    }, bg.border = NA)
-    title(main = paste("CCL -", cond_display[cond]), cex.main = 1.4)
-    circos.clear()
-  }, error = function(e) {
-    plot.new(); title(main = paste("Error -", cond))
-    cat(sprintf("  Warning: %s chord failed: %s\n", cond, e$message))
-  })
-}
-dev.off()
-cat("  Saved fig3A_ccl_chord_all_conditions.pdf\n")
-
-# Also save individual chord diagrams
 for (cond in condition_order) {
   cc <- cellchat_objects[[cond]]
   if (is.null(cc) || !"CCL" %in% cc@netP$pathways) next
 
-  tryCatch({
-    prob_mat <- cc@netP$prob[,, "CCL"]
-    groups <- chord_group(rownames(prob_mat))
-    keep <- !is.na(groups)
-    prob_sub <- prob_mat[keep, keep]
-    group_labels <- groups[keep]
+  prob_mat <- cc@netP$prob[,, "CCL"]
+  groups <- chord_group(rownames(prob_mat))
+  keep <- !is.na(groups)
+  prob_sub <- prob_mat[keep, keep]
+  group_labels <- groups[keep]
 
-    unique_groups <- c("Eosinophils", "M1_Mac", "M2_Functional", "M2_Surface")
-    agg_mat <- matrix(0, nrow = 4, ncol = 4, dimnames = list(unique_groups, unique_groups))
-    for (i in seq_along(group_labels)) {
-      for (j in seq_along(group_labels)) {
-        agg_mat[group_labels[i], group_labels[j]] <-
-          agg_mat[group_labels[i], group_labels[j]] + prob_sub[i, j]
-      }
+  for (i in seq_along(group_labels)) {
+    for (j in seq_along(group_labels)) {
+      agg_total[group_labels[i], group_labels[j]] <-
+        agg_total[group_labels[i], group_labels[j]] + prob_sub[i, j]
     }
-
-    pdf(file.path(fig_dir, paste0("fig3A_ccl_chord_", cond, ".pdf")), width = 9, height = 9)
-    circos.clear()
-    circos.par(start.degree = 90, gap.after = c(rep(2, 3), 10))
-    chordDiagram(agg_mat, grid.col = group_colors_chord, transparency = 0.25,
-                 directional = 1, direction.type = c("diffHeight", "arrows"),
-                 link.arr.type = "big.arrow", annotationTrack = "grid",
-                 preAllocateTracks = list(track.height = 0.15))
-    circos.track(track.index = 1, panel.fun = function(x, y) {
-      circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
-                  facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex = 1.1)
-    }, bg.border = NA)
-    title(main = paste("CCL Signaling -", cond_display[cond]), cex.main = 1.4)
-    circos.clear()
-    dev.off()
-  }, error = function(e) cat(sprintf("  Warning: %s individual chord failed\n", cond)))
+  }
 }
-cat("  Saved individual chord diagrams\n")
+# Average across conditions
+agg_total <- agg_total / length(cellchat_objects)
+
+pdf(file.path(fig_dir, "fig3A_ccl_chord_diagram.pdf"), width = 9, height = 9)
+circos.clear()
+circos.par(start.degree = 90, gap.after = c(rep(2, 3), 10))
+chordDiagram(agg_total,
+             grid.col = group_colors_chord,
+             transparency = 0.25,
+             directional = 1,
+             direction.type = c("diffHeight", "arrows"),
+             link.arr.type = "big.arrow",
+             annotationTrack = "grid",
+             preAllocateTracks = list(track.height = 0.15))
+circos.track(track.index = 1, panel.fun = function(x, y) {
+  circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
+              facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex = 1.1)
+}, bg.border = NA)
+title(main = "CCL Signaling (All Conditions)", cex.main = 1.4)
+circos.clear()
+dev.off()
+cat("  Saved fig3A_ccl_chord_diagram.pdf\n")
 
 # ==============================================================================
 # Fig 3C: CCL Signaling Roles — per subcluster (sender/receiver/mediator/influencer)
@@ -311,48 +265,109 @@ if (!is.null(cc_base)) {
     in_list[[cond]] <- in_vals
   }
 
-  # Compute differences from baseline
-  base_out <- out_list[[baseline_cond]]
-  base_in <- in_list[[baseline_cond]]
+  # Use CellChat's signaling strength (normalized, not raw prob sums)
+  # Extract from netP$centr — outdeg_all/indeg_all for each pathway
+  out_list2 <- list()
+  in_list2 <- list()
 
-  # Separate baseline (sequential colorscale) and differences (diverging)
-  diff_conds <- setdiff(condition_order, baseline_cond)
-  baseline_label <- cond_display[baseline_cond]
-  diff_labels <- sapply(diff_conds, function(x) cond_display[x])
+  for (cond in condition_order) {
+    cc <- cellchat_objects[[cond]]
+    if (is.null(cc)) next
 
+    cell_types_cc <- levels(cc@idents)
+    groups_cc <- chord_group(cell_types_cc)
+
+    out_vals <- matrix(0, nrow = length(selected_pathways), ncol = length(broad_groups),
+                       dimnames = list(selected_pathways, broad_groups))
+    in_vals <- out_vals
+
+    for (pw in selected_pathways) {
+      if (pw %in% names(cc@netP$centr)) {
+        centr_pw <- cc@netP$centr[[pw]]
+        # outdeg = sender strength per cell type
+        if (!is.null(centr_pw$outdeg)) {
+          od <- centr_pw$outdeg
+          if (is.matrix(od)) od <- rowSums(od)
+          for (g in broad_groups) {
+            g_ct <- cell_types_cc[groups_cc == g]
+            g_ct <- g_ct[g_ct %in% names(od)]
+            if (length(g_ct) > 0) out_vals[pw, g] <- sum(od[g_ct])
+          }
+        }
+        # indeg = receiver strength per cell type
+        if (!is.null(centr_pw$indeg)) {
+          id <- centr_pw$indeg
+          if (is.matrix(id)) id <- rowSums(id)
+          for (g in broad_groups) {
+            g_ct <- cell_types_cc[groups_cc == g]
+            g_ct <- g_ct[g_ct %in% names(id)]
+            if (length(g_ct) > 0) in_vals[pw, g] <- sum(id[g_ct])
+          }
+        }
+      }
+    }
+    out_list2[[cond]] <- out_vals
+    in_list2[[cond]] <- in_vals
+  }
+
+  base_out <- out_list2[[baseline_cond]]
+  base_in <- in_list2[[baseline_cond]]
+
+  # Plot: 6 small panels in a row (baseline + 5 differences)
   for (direction in c("Outgoing", "Incoming")) {
-    sig_list <- if (direction == "Outgoing") out_list else in_list
+    sig_list <- if (direction == "Outgoing") out_list2 else in_list2
     sig_base <- if (direction == "Outgoing") base_out else base_in
 
     pdf(file.path(fig_dir, paste0("fig3B_", tolower(direction), "_heatmap.pdf")),
-        width = length(condition_order) * 3.5, height = 5)
+        width = length(condition_order) * 3.5 + 2, height = 5)
 
-    # Build: baseline (raw) | diff1 | diff2 | ...
-    mat_list <- list()
-    mat_list[[1]] <- sig_list[[baseline_cond]]
-    colnames(mat_list[[1]]) <- paste(baseline_label, "\n", broad_groups)
-    for (i in seq_along(diff_conds)) {
-      d <- sig_list[[diff_conds[i]]] - sig_base
-      colnames(d) <- paste(diff_labels[i], "\n", broad_groups)
-      mat_list[[i + 1]] <- d
-    }
-    combined <- do.call(cbind, mat_list)
+    plot_list <- list()
 
-    # Two-tone color: baseline uses sequential, diffs use diverging
-    # Use single diverging scale but note baseline is raw
-    max_val <- max(abs(combined), na.rm = TRUE)
-    pheatmap(combined,
-             color = colorRampPalette(c("#2166AC", "#4393C3", "#D1E5F0",
-                                        "white",
-                                        "#FDDBC7", "#D6604D", "#B2182B"))(100),
-             breaks = seq(-max_val, max_val, length.out = 101),
+    # Baseline panel (sequential colorscale)
+    base_mat <- sig_list[[baseline_cond]]
+    colnames(base_mat) <- c("Eos", "M1", "M2\nFunct.", "M2\nSurf.")
+    max_base <- max(base_mat, na.rm = TRUE)
+    p_base <- pheatmap(base_mat,
+             color = colorRampPalette(c("#F7FCF5", "#74C476", "#00441B", "#FFFF00"))(100),
+             breaks = seq(0, max(1.3, max_base * 1.1), length.out = 101),
              cluster_rows = FALSE, cluster_cols = FALSE,
              display_numbers = TRUE, number_format = "%.2f",
-             fontsize_number = 7, fontsize_row = 10, fontsize_col = 8,
-             main = paste(direction, "Signal (WT Female = raw, others = difference)"),
-             border_color = "grey80",
-             gaps_col = length(broad_groups))  # Gap after baseline
+             fontsize_number = 8, fontsize_row = 10, fontsize_col = 9,
+             main = paste0("WT Female HFD\n(Baseline)"),
+             border_color = "grey70", silent = TRUE)
 
+    # Difference panels (diverging)
+    diff_conds <- setdiff(condition_order, baseline_cond)
+    diff_plots <- list()
+    all_diffs <- c()
+    for (cond in diff_conds) {
+      d <- sig_list[[cond]] - sig_base
+      all_diffs <- c(all_diffs, as.vector(d))
+    }
+    max_diff <- max(abs(all_diffs), na.rm = TRUE)
+    if (max_diff == 0) max_diff <- 0.5
+
+    # Draw all panels together
+    library(gridExtra)
+    grob_list <- list(p_base[[4]])
+
+    for (cond in diff_conds) {
+      d <- sig_list[[cond]] - sig_base
+      colnames(d) <- c("Eos", "M1", "M2\nFunct.", "M2\nSurf.")
+      p_diff <- pheatmap(d,
+               color = colorRampPalette(c("#2166AC", "#92C5DE", "white",
+                                          "#F4A582", "#B2182B"))(100),
+               breaks = seq(-max_diff, max_diff, length.out = 101),
+               cluster_rows = FALSE, cluster_cols = FALSE,
+               display_numbers = TRUE, number_format = "%.2f",
+               fontsize_number = 8, fontsize_row = 10, fontsize_col = 9,
+               main = paste0(cond_display[cond], "\nvs Baseline"),
+               border_color = "grey70", silent = TRUE)
+      grob_list <- c(grob_list, list(p_diff[[4]]))
+    }
+
+    grid.arrange(grobs = grob_list, nrow = 1,
+                 top = paste(direction, "Signal"))
     dev.off()
   }
   cat("  Saved fig3B_outgoing_heatmap.pdf and fig3B_incoming_heatmap.pdf\n")
