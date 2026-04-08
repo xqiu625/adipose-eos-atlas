@@ -122,34 +122,42 @@ ds <- as.character(colData(cds)$dataset)
 org <- as.character(colData(cds)$organ)
 cl <- as.character(colData(cds)$original_cluster)
 
-# Parse Hu depot from barcode (Hu_eWAT_1016 -> eWAT)
 group_label <- rep(NA_character_, ncol(cds))
 
 # Qiu: C0-C5
 qiu_idx <- which(ds == "Qiu_2025_Adipose")
 group_label[qiu_idx] <- cl[qiu_idx]
 
-# Hu: depot from barcode prefix
-hu_idx <- which(ds == "Hu_2026_Healthy")
-hu_barcodes <- colnames(cds)[hu_idx]
-hu_depot <- sub("^Hu_([^_]+)_.*", "\\1", hu_barcodes)
-group_label[hu_idx] <- paste0("Hu ", hu_depot)
-
-# Gurtner: BM and Blood
+# Gurtner: BM and Blood only (main figure)
 bm_idx <- which(org == "Bone Marrow")
 group_label[bm_idx] <- "Gurtner BM"
 blood_idx <- which(org == "Blood")
 group_label[blood_idx] <- "Gurtner Blood"
 
-# Other Gurtner organs
-other_idx <- which(is.na(group_label))
-group_label[other_idx] <- paste0("Gurtner ", org[other_idx])
+# Hu: depot from barcode prefix (supplement only)
+hu_idx <- which(ds == "Hu_2026_Healthy")
+hu_barcodes <- colnames(cds)[hu_idx]
+hu_depot <- sub("^Hu_([^_]+)_.*", "\\1", hu_barcodes)
+group_label[hu_idx] <- paste0("Hu ", hu_depot)
 
+# Other Gurtner organs → NA (excluded from main figure)
 colData(cds)$group_label <- group_label
-cat("  Group sizes:\n")
-print(table(group_label))
+cat("  All group sizes:\n")
+print(table(group_label, useNA = "ifany"))
 
-# --- Group colors (matching manuscript) ----------------------------------------
+# Main figure groups: BM + Blood + C0-C5 (no Hu, no other Gurtner)
+main_groups <- c("Gurtner BM", "Gurtner Blood",
+                 "C0", "C1", "C2", "C3", "C4", "C5")
+colData(cds)$main_group <- ifelse(group_label %in% main_groups, group_label, NA)
+
+# Supplement groups: adds Hu depots
+supp_groups <- c(main_groups, "Hu eWAT", "Hu scWAT", "Hu BAT")
+colData(cds)$supp_group <- ifelse(group_label %in% supp_groups, group_label, NA)
+
+cat("  Main figure cells:", sum(!is.na(colData(cds)$main_group)), "\n")
+cat("  Supplement cells:", sum(!is.na(colData(cds)$supp_group)), "\n")
+
+# --- Group colors ---------------------------------------------------------------
 group_colors <- c(
   "C0" = "#6CA6CD", "C1" = "#E84A5F", "C2" = "#FF6F1F",
   "C3" = "#CBAACB", "C4" = "#B03A48", "C5" = "#5BA4A4",
@@ -163,100 +171,106 @@ group_colors <- c(
 # --- 6. Generate figures ------------------------------------------------------
 cat("Generating figures...\n")
 
-# Panel 1: UMAP colored by group (Monocle style with trajectory graph)
-pdf(file.path(fig_dir, "monocle3_threeway_groups.pdf"), width = 10, height = 8)
-p <- plot_cells(cds, color_cells_by = "group_label",
-                label_cell_groups = TRUE,
-                label_leaves = FALSE,
-                label_branch_points = FALSE,
-                graph_label_size = 4,
-                cell_size = 0.5,
-                group_label_size = 5) +
+# Helper: shared monocle3 theme
+monocle_theme <- theme(
+  plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+  legend.text = element_text(size = 11),
+  legend.position = "right",
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.text = element_blank(),
+  axis.ticks = element_blank(),
+  panel.background = element_blank()
+)
+
+# === MAIN FIGURE: BM + Blood + C0-C5 only ===
+cat("  Main figure (BM + Blood + C0-C5)...\n")
+main_cells <- colnames(cds)[!is.na(colData(cds)$main_group)]
+cds_main <- cds[, main_cells]
+
+pdf(file.path(fig_dir, "monocle3_main_groups.pdf"), width = 10, height = 8)
+p <- plot_cells(cds_main, color_cells_by = "main_group",
+                label_cell_groups = TRUE, label_leaves = FALSE,
+                label_branch_points = FALSE, graph_label_size = 4,
+                cell_size = 0.5, group_label_size = 5) +
   scale_color_manual(values = group_colors, name = "") +
-  ggtitle("Monocle3 Trajectory") +
-  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-        legend.text = element_text(size = 11),
-        legend.position = "right",
-        axis.title = element_text(size = 12, face = "bold"),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        panel.background = element_blank())
+  ggtitle("Monocle3 Trajectory") + monocle_theme
 print(p)
 dev.off()
 
-# Panel 2: UMAP colored by pseudotime (viridis)
-pdf(file.path(fig_dir, "monocle3_threeway_pseudotime.pdf"), width = 10, height = 8)
-p <- plot_cells(cds, color_cells_by = "pseudotime",
-                label_cell_groups = FALSE,
-                label_leaves = FALSE,
-                label_branch_points = FALSE,
-                cell_size = 0.5) +
+pdf(file.path(fig_dir, "monocle3_main_pseudotime.pdf"), width = 10, height = 8)
+p <- plot_cells(cds_main, color_cells_by = "pseudotime",
+                label_cell_groups = FALSE, label_leaves = FALSE,
+                label_branch_points = FALSE, cell_size = 0.5) +
   scale_color_viridis_c(name = "Pseudotime", option = "inferno") +
-  ggtitle("Pseudotime (Root = Gurtner Bone Marrow)") +
-  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-        legend.text = element_text(size = 11),
-        legend.position = "right",
-        axis.title = element_text(size = 12, face = "bold"),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        panel.background = element_blank())
+  ggtitle("Pseudotime (Root = Gurtner BM)") + monocle_theme
 print(p)
 dev.off()
 
-# Panel 3: Combined two-panel (stacked like the reference image)
-pdf(file.path(fig_dir, "monocle3_threeway_combined.pdf"), width = 10, height = 16)
-
-p1 <- plot_cells(cds, color_cells_by = "group_label",
-                 label_cell_groups = TRUE,
-                 label_leaves = FALSE,
-                 label_branch_points = FALSE,
-                 graph_label_size = 4,
-                 cell_size = 0.5,
-                 group_label_size = 5) +
+# Main combined (stacked)
+pdf(file.path(fig_dir, "monocle3_main_combined.pdf"), width = 10, height = 16)
+p1 <- plot_cells(cds_main, color_cells_by = "main_group",
+                 label_cell_groups = TRUE, label_leaves = FALSE,
+                 label_branch_points = FALSE, graph_label_size = 4,
+                 cell_size = 0.5, group_label_size = 5) +
   scale_color_manual(values = group_colors, name = "") +
-  ggtitle("Monocle3 Trajectory") +
-  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-        legend.text = element_text(size = 11),
-        axis.title = element_text(size = 12, face = "bold"),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        panel.background = element_blank())
-
-p2 <- plot_cells(cds, color_cells_by = "pseudotime",
-                 label_cell_groups = FALSE,
-                 label_leaves = FALSE,
-                 label_branch_points = FALSE,
-                 cell_size = 0.5) +
+  ggtitle("Monocle3 Trajectory") + monocle_theme
+p2 <- plot_cells(cds_main, color_cells_by = "pseudotime",
+                 label_cell_groups = FALSE, label_leaves = FALSE,
+                 label_branch_points = FALSE, cell_size = 0.5) +
   scale_color_viridis_c(name = "Pseudotime", option = "inferno") +
-  ggtitle("Pseudotime") +
-  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-        legend.text = element_text(size = 11),
-        axis.title = element_text(size = 12, face = "bold"),
-        axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        panel.background = element_blank())
-
+  ggtitle("Pseudotime") + monocle_theme
 print(p1 / p2)
 dev.off()
 
-# Pseudotime boxplot by group
-pdf(file.path(fig_dir, "monocle3_threeway_pseudotime_boxplot.pdf"), width = 12, height = 6)
+# Main pseudotime boxplot
+pdf(file.path(fig_dir, "monocle3_main_pseudotime_boxplot.pdf"), width = 10, height = 6)
 pt_df <- data.frame(
-  pseudotime = pseudotime(cds),
-  group = colData(cds)$group_label,
+  pseudotime = pseudotime(cds_main),
+  group = colData(cds_main)$main_group,
   stringsAsFactors = FALSE
 )
-pt_df <- pt_df[is.finite(pt_df$pseudotime), ]
-# Order by median pseudotime
+pt_df <- pt_df[is.finite(pt_df$pseudotime) & !is.na(pt_df$group), ]
 med_order <- pt_df %>% group_by(group) %>% summarise(med = median(pseudotime)) %>% arrange(med)
 pt_df$group <- factor(pt_df$group, levels = med_order$group)
 p <- ggplot(pt_df, aes(x = group, y = pseudotime, fill = group)) +
   geom_boxplot(outlier.size = 0.5) +
   scale_fill_manual(values = group_colors) +
-  labs(title = "Pseudotime by Group", x = "", y = "Pseudotime") +
+  labs(title = "Pseudotime by Group (BM + Blood + C0-C5)", x = "", y = "Pseudotime") +
   theme_pub() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.position = "none")
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+print(p)
+dev.off()
+
+# === SUPPLEMENT: adds Hu depots ===
+cat("  Supplement (+ Hu eWAT/scWAT/BAT)...\n")
+supp_cells <- colnames(cds)[!is.na(colData(cds)$supp_group)]
+cds_supp <- cds[, supp_cells]
+
+pdf(file.path(fig_dir, "monocle3_supp_groups.pdf"), width = 10, height = 8)
+p <- plot_cells(cds_supp, color_cells_by = "supp_group",
+                label_cell_groups = TRUE, label_leaves = FALSE,
+                label_branch_points = FALSE, graph_label_size = 4,
+                cell_size = 0.5, group_label_size = 5) +
+  scale_color_manual(values = group_colors, name = "") +
+  ggtitle("Monocle3 Trajectory (with Hu Adipose)") + monocle_theme
+print(p)
+dev.off()
+
+pdf(file.path(fig_dir, "monocle3_supp_pseudotime_boxplot.pdf"), width = 12, height = 6)
+pt_df <- data.frame(
+  pseudotime = pseudotime(cds_supp),
+  group = colData(cds_supp)$supp_group,
+  stringsAsFactors = FALSE
+)
+pt_df <- pt_df[is.finite(pt_df$pseudotime) & !is.na(pt_df$group), ]
+med_order <- pt_df %>% group_by(group) %>% summarise(med = median(pseudotime)) %>% arrange(med)
+pt_df$group <- factor(pt_df$group, levels = med_order$group)
+p <- ggplot(pt_df, aes(x = group, y = pseudotime, fill = group)) +
+  geom_boxplot(outlier.size = 0.5) +
+  scale_fill_manual(values = group_colors) +
+  labs(title = "Pseudotime by Group (with Hu Adipose)", x = "", y = "Pseudotime") +
+  theme_pub() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
 print(p)
 dev.off()
 

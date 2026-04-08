@@ -141,16 +141,28 @@ tw$sim_group[hu_idx] <- paste0("Hu.", depot_map[colnames(tw)[hu_idx]])
 cat(sprintf("  Hu assigned: %d (example: %s)\n", length(hu_idx),
             paste(head(tw$sim_group[hu_idx], 3), collapse=", ")))
 
-# Gurtner: ALL tissues
+# Gurtner: use published cluster labels (Gurtner et al. 2022, Nature)
+# Mapping: 4=Precursors, 3=Immature, 16=Cycling, 2=Circulating, 1=A-Eos, 5=B-Eos
+gurtner_label_map <- c(
+  "4"  = "Gurtner.Precursors",
+  "3"  = "Gurtner.Immature",
+  "16" = "Gurtner.Cycling",
+  "2"  = "Gurtner.Circulating",
+  "1"  = "Gurtner.A-Eos",
+  "5"  = "Gurtner.B-Eos"
+)
 gurtner_idx <- which(ds == "Gurtner_2022_Blood_BM")
-tw$sim_group[gurtner_idx] <- paste0("Gurtner.", gsub(" ", ".", org[gurtner_idx]))
-cat(sprintf("  Gurtner assigned: %d\n", length(gurtner_idx)))
+gurtner_cl <- cl[gurtner_idx]
+tw$sim_group[gurtner_idx] <- gurtner_label_map[gurtner_cl]
+cat(sprintf("  Gurtner assigned: %d\n", sum(!is.na(tw$sim_group[gurtner_idx]))))
 
-# Drop groups with < 50 cells
-group_counts <- table(tw$sim_group)
-keep_groups <- names(group_counts[group_counts >= 50])
+# Keep only relevant groups (per Rebecca: BM + Blood + intestinal + Hu depots + C0-C5)
+keep_groups <- c(paste0("C", 0:5),
+                 "Hu.eWAT", "Hu.scWAT", "Hu.BAT",
+                 "Gurtner.Precursors", "Gurtner.Immature",
+                 "Gurtner.Circulating", "Gurtner.A-Eos", "Gurtner.B-Eos")
 tw$sim_group[!tw$sim_group %in% keep_groups] <- NA
-cat(sprintf("  Groups with >= 50 cells: %d\n", length(keep_groups)))
+cat(sprintf("  Keeping %d groups\n", length(keep_groups)))
 
 cat("  Group sizes:\n")
 print(table(tw$sim_group, useNA = "ifany"))
@@ -213,7 +225,7 @@ plot(dend, main = "Eosinophil scRNA-seq Cross-Dataset Similarity",
 legend("topright",
        legend = c("Qiu et al. 2025 (HFD adipose)",
                   "Hu et al. 2026 (healthy adipose)",
-                  "Gurtner et al. 2022 (blood/BM)"),
+                  "Gurtner et al. 2022 (BM/Blood/GI)"),
        text.col = c("#E63946", "#4DAF4A", "#1D3557"),
        bty = "n", cex = 1.0)
 dev.off()
