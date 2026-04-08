@@ -156,105 +156,68 @@ for (cond in condition_order) {
   }
 }
 
-# Use CellChat's native netAnalysis_signalingRole_network for the correct format
-# Panel 1: Aggregated groups (Eos, M1, M2_Func, M2_Surf)
-# Use baseline condition (WT_Female_HFD) as representative
+# Use CellChat's native netAnalysis_signalingRole_network
+# This computes sender/receiver/mediator/influencer correctly from the full network
 baseline_cond <- "WT_Female_HFD"
 cc_base <- cellchat_objects[[baseline_cond]]
 
-pdf(file.path(fig_dir, "fig3C_ccl_signaling_roles.pdf"), width = 8, height = 5)
+# Panel 1: All eos (aggregated) + Mac subtypes
+# Create a copy with eos subclusters merged into "Eosinophils"
+cat("  Panel 1: Aggregated Eos + Mac subtypes...\n")
+cc_agg <- cc_base
+idents_agg <- as.character(cc_agg@idents)
+idents_agg[grepl("^Eos_", idents_agg)] <- "Eosinophils"
+idents_agg[idents_agg == "Mac_M1"] <- "M1_Mac"
+idents_agg[idents_agg == "Mac_M2_Func"] <- "M2_Functional"
+idents_agg[idents_agg == "Mac_M2_Surf"] <- "M2_Surface"
+cc_agg@idents <- factor(idents_agg,
+                         levels = c("Eosinophils", "M1_Mac", "M2_Functional", "M2_Surface"))
+
+# Re-run communication on aggregated identities
 tryCatch({
-  netAnalysis_signalingRole_network(cc_base, signaling = "CCL",
+  cc_agg <- computeCommunProb(cc_agg, type = "triMean")
+  cc_agg <- filterCommunication(cc_agg, min.cells = 10)
+  cc_agg <- computeCommunProbPathway(cc_agg)
+  cc_agg <- aggregateNet(cc_agg)
+  cc_agg <- netAnalysis_computeCentrality(cc_agg)
+
+  pdf(file.path(fig_dir, "fig3C_ccl_signaling_roles.pdf"), width = 8, height = 5)
+  netAnalysis_signalingRole_network(cc_agg, signaling = "CCL",
                                     width = 8, height = 4, font.size = 10)
-}, error = function(e) {
-  cat(sprintf("  Native plot failed: %s\n  Falling back to manual...\n", e$message))
-  # Manual fallback using centrality data
-  if (!is.null(cc_base@netP$centr$CCL)) {
-    centr <- cc_base@netP$centr$CCL
-    role_names <- c("outdeg" = "Sender", "indeg" = "Receiver",
-                    "flowbet" = "Mediator", "info" = "Influencer")
-    ct <- levels(cc_base@idents)
-    mat <- matrix(0, nrow = 4, ncol = length(ct), dimnames = list(
-      c("Sender", "Receiver", "Mediator", "Influencer"), ct))
-    for (r in names(role_names)) {
-      if (!is.null(centr[[r]])) {
-        v <- centr[[r]]
-        if (is.matrix(v)) v <- rowSums(v)
-        mat[role_names[r], names(v)] <- v
-      }
-    }
-    # Aggregate eos subclusters
-    eos_ct <- ct[grepl("^Eos_", ct)]
-    mac_ct <- ct[grepl("^Mac_", ct)]
-    agg_mat <- cbind(
-      Eosinophils = rowSums(mat[, eos_ct, drop = FALSE]),
-      M1_Mac = if ("Mac_M1" %in% ct) mat[, "Mac_M1"] else rep(0, 4),
-      M2_Functional = if ("Mac_M2_Func" %in% ct) mat[, "Mac_M2_Func"] else rep(0, 4),
-      M2_Surface = if ("Mac_M2_Surf" %in% ct) mat[, "Mac_M2_Surf"] else rep(0, 4)
-    )
-    # Color bar annotation
-    ann_col <- data.frame(
-      CellType = c("Eosinophils", "M1_Mac", "M2_Functional", "M2_Surface"),
-      row.names = colnames(agg_mat))
-    ann_colors_ct <- list(CellType = c(
-      "Eosinophils" = "#777B7E", "M1_Mac" = "#cb416b",
-      "M2_Functional" = "#8FC50E", "M2_Surface" = "#5633AA"))
-    pheatmap(agg_mat,
-             color = colorRampPalette(c("#F7FCF5", "#74C476", "#006D2C", "#00441B"))(100),
-             cluster_rows = FALSE, cluster_cols = FALSE,
-             annotation_col = ann_col, annotation_colors = ann_colors_ct,
-             fontsize_row = 12, fontsize_col = 11,
-             main = "CCL signaling pathway network",
-             border_color = NA)
-  }
-})
-dev.off()
-cat("  Saved fig3C_ccl_signaling_roles.pdf\n")
+  dev.off()
+  cat("  Saved fig3C_ccl_signaling_roles.pdf\n")
+}, error = function(e) cat(sprintf("  Panel 1 failed: %s\n", e$message)))
 
-# Panel 2: C3 focus (Eos_C3 vs Mac subtypes)
-pdf(file.path(fig_dir, "fig3C_ccl_signaling_roles_C3_focus.pdf"), width = 8, height = 5)
+# Panel 2: Eos_C3 + Mac subtypes
+cat("  Panel 2: Eos_C3 + Mac subtypes...\n")
+cc_c3 <- cc_base
+idents_c3 <- as.character(cc_c3@idents)
+# Keep only Eos_C3 and Mac subtypes
+keep_cells <- grepl("^Eos_C3$|^Mac_", idents_c3)
+
 tryCatch({
-  # Build matrix with C3 separated
-  if (!is.null(cc_base@netP$centr$CCL)) {
-    centr <- cc_base@netP$centr$CCL
-    role_names <- c("outdeg" = "Sender", "indeg" = "Receiver",
-                    "flowbet" = "Mediator", "info" = "Influencer")
-    ct <- levels(cc_base@idents)
-    mat <- matrix(0, nrow = 4, ncol = length(ct), dimnames = list(
-      c("Sender", "Receiver", "Mediator", "Influencer"), ct))
-    for (r in names(role_names)) {
-      if (!is.null(centr[[r]])) {
-        v <- centr[[r]]
-        if (is.matrix(v)) v <- rowSums(v)
-        mat[role_names[r], names(v)] <- v
-      }
-    }
-    focus_mat <- cbind(
-      Eos_C3 = if ("Eos_C3" %in% ct) mat[, "Eos_C3"] else rep(0, 4),
-      M1 = if ("Mac_M1" %in% ct) mat[, "Mac_M1"] else rep(0, 4),
-      "M2 Funct." = if ("Mac_M2_Func" %in% ct) mat[, "Mac_M2_Func"] else rep(0, 4),
-      "M2 Surf." = if ("Mac_M2_Surf" %in% ct) mat[, "Mac_M2_Surf"] else rep(0, 4)
-    )
-    ann_col <- data.frame(
-      CellType = c("Eos_C3", "M1", "M2_Functional", "M2_Surface"),
-      row.names = colnames(focus_mat))
-    ann_colors_ct <- list(CellType = c(
-      "Eos_C3" = "#CBAACB", "M1" = "#cb416b",
-      "M2_Functional" = "#8FC50E", "M2_Surface" = "#5633AA"))
-    pheatmap(focus_mat,
-             color = colorRampPalette(c("#F7FCF5", "#74C476", "#006D2C", "#00441B"))(100),
-             cluster_rows = FALSE, cluster_cols = FALSE,
-             annotation_col = ann_col, annotation_colors = ann_colors_ct,
-             fontsize_row = 12, fontsize_col = 11,
-             main = "CCL signaling pathway network (Eos_C3 Focus)",
-             border_color = NA)
-  }
-}, error = function(e) cat(sprintf("  C3 focus failed: %s\n", e$message)))
-dev.off()
-cat("  Saved fig3C_ccl_signaling_roles_C3_focus.pdf\n")
+  cc_c3 <- subsetCellChat(cc_c3, idents.use = c("Eos_C3", "Mac_M1", "Mac_M2_Func", "Mac_M2_Surf"))
 
-# Save CSV of all roles
-write.csv(all_roles, file.path(fig_dir, "ccl_signaling_roles.csv"), row.names = FALSE)
+  # Rename for display
+  idents_c3 <- as.character(cc_c3@idents)
+  idents_c3[idents_c3 == "Mac_M1"] <- "M1_Mac"
+  idents_c3[idents_c3 == "Mac_M2_Func"] <- "M2_Functional"
+  idents_c3[idents_c3 == "Mac_M2_Surf"] <- "M2_Surface"
+  cc_c3@idents <- factor(idents_c3,
+                          levels = c("Eos_C3", "M1_Mac", "M2_Functional", "M2_Surface"))
+
+  cc_c3 <- computeCommunProb(cc_c3, type = "triMean")
+  cc_c3 <- filterCommunication(cc_c3, min.cells = 10)
+  cc_c3 <- computeCommunProbPathway(cc_c3)
+  cc_c3 <- aggregateNet(cc_c3)
+  cc_c3 <- netAnalysis_computeCentrality(cc_c3)
+
+  pdf(file.path(fig_dir, "fig3C_ccl_signaling_roles_C3_focus.pdf"), width = 8, height = 5)
+  netAnalysis_signalingRole_network(cc_c3, signaling = "CCL",
+                                    width = 8, height = 4, font.size = 10)
+  dev.off()
+  cat("  Saved fig3C_ccl_signaling_roles_C3_focus.pdf\n")
+}, error = function(e) cat(sprintf("  Panel 2 failed: %s\n", e$message)))
 
 # ==============================================================================
 # Fig 3B: Difference heatmaps (outgoing/incoming, top 5 pathways)
