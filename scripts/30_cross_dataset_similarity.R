@@ -174,19 +174,29 @@ Idents(tw_sub) <- "sim_group"
 cat(sprintf("  Keeping %d cells in %d groups\n", ncol(tw_sub), length(keep_groups)))
 
 # ==============================================================================
-# 4. Compute Spearman correlation of average expression
+# 4. Compute similarity using Harmony embeddings (batch-corrected)
 # ==============================================================================
-cat("Computing average expression...\n")
-tw_sub <- FindVariableFeatures(tw_sub, nfeatures = 2000, verbose = FALSE)
-hvg <- VariableFeatures(tw_sub)
+cat("Computing average Harmony embeddings per group...\n")
 
-avg <- AverageExpression(tw_sub, features = hvg, assays = "RNA", layer = "data")$RNA
-avg <- as.matrix(avg)
-cat(sprintf("  Average expression matrix: %d genes x %d groups\n", nrow(avg), ncol(avg)))
-cat("  Columns:", paste(colnames(avg), collapse = ", "), "\n")
+# Use Harmony embeddings (batch-corrected) instead of raw expression
+harmony_emb <- Embeddings(tw_sub, "harmony")
+cat(sprintf("  Harmony embeddings: %d cells x %d dims\n", nrow(harmony_emb), ncol(harmony_emb)))
 
-cor_mat <- cor(avg, method = "spearman")
-write.csv(cor_mat, file.path(outdir, "cross_dataset_spearman_correlation.csv"))
+# Average Harmony embedding per group
+groups <- as.character(Idents(tw_sub))
+unique_groups <- levels(Idents(tw_sub))
+unique_groups <- unique_groups[unique_groups %in% unique(groups)]
+
+avg_harmony <- do.call(rbind, lapply(unique_groups, function(g) {
+  colMeans(harmony_emb[groups == g, , drop = FALSE])
+}))
+rownames(avg_harmony) <- unique_groups
+cat(sprintf("  Average embedding matrix: %d groups x %d dims\n", nrow(avg_harmony), ncol(avg_harmony)))
+cat("  Groups:", paste(rownames(avg_harmony), collapse = ", "), "\n")
+
+# Spearman correlation on Harmony embeddings
+cor_mat <- cor(t(avg_harmony), method = "spearman")
+write.csv(cor_mat, file.path(outdir, "cross_dataset_spearman_correlation_harmony.csv"))
 
 # ==============================================================================
 # 5. Dendrogram (Hu-paper style) + heatmap
