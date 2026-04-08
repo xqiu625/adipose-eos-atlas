@@ -173,24 +173,31 @@ for (cond in condition_order) {
   if (is.null(cc)) next
   if (!"CCL" %in% cc@netP$pathways) next
 
-  centr <- cc@netP$centr$CCL
-  if (is.null(centr)) {
+  centr <- cc@netP$centr
+  if (is.null(centr) || !"CCL" %in% names(centr)) {
     cat(sprintf("  WARNING: No centrality for CCL in %s\n", cond))
     next
   }
+  ccl_centr <- centr$CCL
 
   for (role in c("outdeg", "indeg", "flowbet", "info")) {
-    if (!is.null(centr[[role]])) {
+    if (!is.null(ccl_centr[[role]])) {
       role_name <- switch(role,
         "outdeg" = "Sender", "indeg" = "Receiver",
         "flowbet" = "Mediator", "info" = "Influencer")
-      vals <- centr[[role]]
-      df <- data.frame(
-        cell_type = names(vals), value = as.numeric(vals),
-        role = role_name, condition = cond,
-        stringsAsFactors = FALSE
-      )
-      all_roles <- rbind(all_roles, df)
+      vals <- ccl_centr[[role]]
+      # Handle both named vector and matrix formats
+      if (is.matrix(vals)) {
+        vals <- rowSums(vals)
+      }
+      if (length(vals) > 0 && !is.null(names(vals))) {
+        df <- data.frame(
+          cell_type = names(vals), value = as.numeric(vals),
+          role = role_name, condition = cond,
+          stringsAsFactors = FALSE
+        )
+        all_roles <- rbind(all_roles, df)
+      }
     }
   }
 }
