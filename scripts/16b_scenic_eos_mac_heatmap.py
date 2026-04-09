@@ -268,70 +268,65 @@ if mac_mean_df is not None:
     print(f"  Mac subtypes available: {list(mac_mean_df.index)}")
 
 # =============================================================================
-# Step 5: Find Eos-unique regulons
+# Step 5: Select top regulons per cluster using RSS (Regulon Specificity Score)
 # =============================================================================
-print("\nStep 5: Selecting Eos-unique regulons...")
+print("\nStep 5: Selecting top regulons per cluster via RSS...")
 
-results = []
-for reg in regulon_cols:
-    if reg not in eos_mean_df.index:
-        continue
-    tf = reg.replace("(+)", "").replace("(-)", "").strip()
-    if tf in EXCLUDE_REGULONS:
-        continue
+rss_path = os.path.join(BASE, "scenic", "regulon_specificity_scores.csv")
+top_df = None
 
-    eos_vals = eos_mean_df.loc[reg, [c for c in EOS_CLUSTERS if c in eos_mean_df.columns]]
-    if eos_vals.empty:
-        continue
-    max_eos_cluster = eos_vals.idxmax()
-    max_eos_auc     = eos_vals.max()
+if os.path.exists(rss_path):
+    rss = pd.read_csv(rss_path, index_col=0)
+    print(f"  RSS loaded: {rss.shape[0]} regulons x {rss.shape[1]} clusters")
 
-    if mac_mean_df is not None and reg in mac_mean_df.columns:
-        mac_vals = mac_mean_df[reg]
-        mac_mean = mac_vals.mean()
-    else:
-        mac_mean = 0.0
+    # Normalize cluster column names (strip 'C' prefix if needed)
+    rss.columns = [c.replace("Eos_", "") for c in rss.columns]
 
-    fold_change = max_eos_auc / mac_mean if mac_mean > 0 else 0
-    sorted_eos  = sorted(eos_vals.values, reverse=True)
-    uniqueness  = sorted_eos[0] - sorted_eos[1] if len(sorted_eos) >= 2 else sorted_eos[0]
+    top_rows = []
+    for cl in EOS_CLUSTERS:
+        if cl not in rss.columns:
+            print(f"  WARNING: cluster {cl} not in RSS columns {list(rss.columns)}")
+            continue
+        # Exclude unwanted TFs
+        valid = rss[~rss.index.str.replace(r"\(\+\)|\(\-\)", "", regex=True)
+                    .str.strip().isin(EXCLUDE_REGULONS)]
+        top = valid[cl].nlargest(TOP_PER_CLUSTER)
+        for reg, score in top.items():
+            tf = reg.replace("(+)", "").replace("(-)", "").strip()
+            top_rows.append({"regulon": reg, "tf": tf,
+                             "max_cluster": cl, "rss": score})
 
-    results.append({
-        "regulon": reg, "tf": tf,
-        "max_cluster": max_eos_cluster,
-        "max_auc": max_eos_auc,
-        "fold_change": fold_change,
-        "uniqueness": uniqueness,
-    })
+    top_df = pd.DataFrame(top_rows).drop_duplicates("regulon")
+    print(f"  Selected {len(top_df)} regulons ({TOP_PER_CLUSTER} per cluster)")
+    for cl in EOS_CLUSTERS:
+        sub = top_df[top_df["max_cluster"] == cl]
+        if len(sub):
+            print(f"    {cl}: {', '.join(sub['tf'].tolist())}")
 
-if not results:
-    raise RuntimeError("No Eos regulon results computed — check cluster labels match EOS_CLUSTERS")
-
-res_df = pd.DataFrame(results)
-print(f"  Total regulons evaluated: {len(res_df)}")
-
-if mac_mean_df is not None:
-    eos_unique = res_df[
-        (res_df["max_auc"] >= MIN_EOS_AUC) &
-        (res_df["fold_change"] >= MIN_FOLD_CHANGE) &
-        (res_df["uniqueness"] >= MIN_UNIQUENESS)
-    ]
 else:
-    eos_unique = res_df[res_df["max_auc"] >= MIN_EOS_AUC]
-
-# Top N per Eos cluster
-top_rows = []
-for cl in EOS_CLUSTERS:
-    sub = eos_unique[eos_unique["max_cluster"] == cl].nlargest(TOP_PER_CLUSTER, "uniqueness")
-    top_rows.append(sub)
-top_df = pd.concat(top_rows, ignore_index=True).drop_duplicates("regulon")
-
-print(f"  Selected {len(top_df)} Eos-unique regulons "
-      f"({TOP_PER_CLUSTER} per cluster)")
-for cl in EOS_CLUSTERS:
-    sub = top_df[top_df["max_cluster"] == cl]
-    if len(sub):
-        print(f"    {cl}: {', '.join(sub['tf'].tolist())}")
+    # Fallback: uniqueness score from AUCell means
+    print("  RSS not found — falling back to AUCell uniqueness")
+    results = []
+    for reg in regulon_cols:
+        tf = reg.replace("(+)", "").replace("(-)", "").strip()
+        if tf in EXCLUDE_REGULONS or reg not in eos_mean_df.index:
+            continue
+        eos_vals = eos_mean_df.loc[reg, [c for c in EOS_CLUSTERS if c in eos_mean_df.columns]]
+        if eos_vals.empty:
+            continue
+        sorted_eos = sorted(eos_vals.values, reverse=True)
+        uniqueness = sorted_eos[0] - sorted_eos[1] if len(sorted_eos) >= 2 else sorted_eos[0]
+        results.append({"regulon": reg, "tf": tf,
+                        "max_cluster": eos_vals.idxmax(),
+                        "max_auc": eos_vals.max(), "uniqueness": uniqueness})
+    if not results:
+        raise RuntimeError("No regulons found — check cluster labels")
+    res_df = pd.DataFrame(results)
+    top_rows = []
+    for cl in EOS_CLUSTERS:
+        sub = res_df[res_df["max_cluster"] == cl].nlargest(TOP_PER_CLUSTER, "uniqueness")
+        top_rows.append(sub)
+    top_df = pd.concat(top_rows, ignore_index=True).drop_duplicates("regulon")
 
 # =============================================================================
 # Step 6: Build heatmap matrix and plot
@@ -360,19 +355,23 @@ if mac_mean_df is not None:
 else:
     mac_heat = None
 
-# Z-score: compute per-regulon mean/std from ALL Eos cells (not just sampled)
-reg_data = auc_mtx[selected_regs]
-z_mean = reg_data.mean()
-z_std  = reg_data.std().replace(0, 1)
-
-eos_z = ((eos_heat - z_mean) / z_std).clip(-ZSCORE_CAP, ZSCORE_CAP)
-eos_z.index = [f"C{c}" if not str(c).startswith("C") else str(c) for c in eos_z.index]
+# Z-score row-wise across ALL columns (Eos + Mac combined) for comparability
+eos_z = eos_heat.copy()
+eos_z.index = [str(c) for c in eos_z.index]
 
 if mac_heat is not None:
-    mac_z = ((mac_heat - z_mean) / z_std).clip(-ZSCORE_CAP, ZSCORE_CAP)
-    combined = pd.concat([eos_z, mac_z])
+    mac_z = mac_heat.copy()
+    mac_z.index = [MAC_DISPLAY.get(s, s) for s in mac_z.index]
+    combined_raw = pd.concat([eos_z, mac_z])  # cell_types x regulons
 else:
-    combined = eos_z
+    combined_raw = eos_z
+
+# Row-wise z-score per regulon (transpose: regulons x cell_types, z-score per row)
+mat = combined_raw.T  # regulons x cell_types
+row_mean = mat.mean(axis=1)
+row_std  = mat.std(axis=1).replace(0, 1)
+combined_z = ((mat.T - row_mean) / row_std).T.clip(-ZSCORE_CAP, ZSCORE_CAP)
+combined = combined_z.T  # back to cell_types x regulons
 
 # Regulon labels with target gene count
 def reg_label(reg):
