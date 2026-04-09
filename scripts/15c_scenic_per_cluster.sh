@@ -16,10 +16,10 @@ CLUSTER_DIR="${BASE}/${CLUSTER}"
 PYTHON="/bigdata/godziklab/shared/Xinru/cellrank_env/bin/python"
 PYSCENIC="/bigdata/godziklab/shared/Xinru/cellrank_env/bin/pyscenic"
 
-# SCENIC resources (same as main run)
-TF_LIST="/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas/scenic/mus_musculus_tf.txt"
-RANKING_DB="/bigdata/nairlab/shared/XQiu/SCENIC/mm10_10kbp_up_10kbp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather"
-MOTIF_ANN="/bigdata/nairlab/shared/XQiu/SCENIC/motifs-v10nr_clust-nr.mgi-m0.001-o0.0.tbl"
+# SCENIC resources
+TF_LIST="/bigdata/godziklab/shared/Xinru/scenic_data/allTFs_mm.txt"
+RANKING_DB="/bigdata/godziklab/shared/Xinru/scenic_data/mm10__refseq-r80__10kb_up_and_down_tss.mc9nr.genes_vs_motifs.rankings.feather"
+MOTIF_ANN="/bigdata/godziklab/shared/Xinru/scenic_data/motifs-v9-nr.mgi-m0.001-o0.0.tbl"
 
 INPUT_LOOM="${CLUSTER_DIR}/input.loom"
 ADJ_CSV="${CLUSTER_DIR}/adj.csv"
@@ -61,6 +61,7 @@ fi
 
 # --- Step 3: AUCell ---
 echo "Step 3: AUCell..."
+export CLUSTER="${CLUSTER}"
 if [ ! -f "$AUC_CSV" ]; then
     $PYTHON << 'PYEOF'
 import os, sys
@@ -127,7 +128,6 @@ auc_mtx = aucell(ex_mtx, gene_sigs, num_workers=8)
 auc_mtx.to_csv(auc_csv)
 print(f"  Saved AUCell: {auc_csv}")
 PYEOF
-    export CLUSTER="${CLUSTER}"
     echo "  AUCell done: $AUC_CSV"
 else
     echo "  AUCell exists, skipping"
