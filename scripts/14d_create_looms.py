@@ -50,8 +50,10 @@ def write_loom(path, X_cells_genes, obs_names, var_names):
         f.create_group("layers")
         f.create_group("col_graphs")
         f.create_group("row_graphs")
-        f.attrs["CreationDate"]      = "2025-01-01"
-        f.attrs["LOOM_SPEC_VERSION"] = "3.0.0"
+        # loompy requires an /attrs group (not HDF5 file attrs)
+        ag = f.create_group("attrs")
+        ag.create_dataset("CreationDate",      data="2025-01-01", dtype=str_dt)
+        ag.create_dataset("LOOM_SPEC_VERSION", data="3.0.0",      dtype=str_dt)
 
 
 for cl in CLUSTERS:
