@@ -441,5 +441,125 @@ if (!is.null(cc_base)) {
   cat("  Saved fig3B_difference_heatmaps.pdf\n")
 }
 
+# ==============================================================================
+# Fig 4D: CCL Ligand Senders & Receivers per cell type
+# Left: red heatmap (senders), Right: blue heatmap (receivers)
+# Averaged across all conditions
+# ==============================================================================
+cat("\nGenerating Fig 4D: CCL Ligand Senders & Receivers...\n")
+
+tryCatch({
+  # Cell type display order: C3, C5, C0, C1, C2, C4, M1, M2 Funct., M2 Surf.
+  ct_order <- c("Eos_C3", "Eos_C5", "Eos_C0", "Eos_C1", "Eos_C2", "Eos_C4",
+                "Mac_M1", "Mac_M2_Func", "Mac_M2_Surf")
+  ct_display <- c("Eos_C3" = "C3", "Eos_C5" = "C5", "Eos_C0" = "C0",
+                  "Eos_C1" = "C1", "Eos_C2" = "C2", "Eos_C4" = "C4",
+                  "Mac_M1" = "M1", "Mac_M2_Func" = "M2\nFunct.",
+                  "Mac_M2_Surf" = "M2\nSurf.")
+
+  # Collect ligand-level sender/receiver probabilities across conditions
+  sender_all <- list()
+  receiver_all <- list()
+
+  for (cond in names(cellchat_objects)) {
+    cc <- cellchat_objects[[cond]]
+    if (is.null(cc)) next
+
+    # Get CCL L-R pairs
+    lr_pairs <- cc@LR$LRsig
+    ccl_pairs <- lr_pairs[grepl("^CCL", lr_pairs$pathway_name, ignore.case = TRUE), ]
+    if (nrow(ccl_pairs) == 0) next
+
+    prob_array <- cc@net$prob  # sender x receiver x LR
+    lr_names <- dimnames(prob_array)[[3]]
+    ct_names <- dimnames(prob_array)[[1]]
+
+    for (idx in seq_len(nrow(ccl_pairs))) {
+      lr_name <- ccl_pairs$interaction_name_2[idx]
+      ligand <- ccl_pairs$ligand[idx]
+
+      if (!lr_name %in% lr_names) next
+      mat <- prob_array[, , lr_name]
+
+      # Sender strength: sum across receivers (row sums)
+      for (ct in ct_order) {
+        if (ct %in% ct_names) {
+          s_val <- sum(mat[ct, ])
+          sender_all <- c(sender_all, list(data.frame(
+            ligand = ligand, celltype = ct, value = s_val,
+            condition = cond, stringsAsFactors = FALSE)))
+
+          r_val <- sum(mat[, ct])
+          receiver_all <- c(receiver_all, list(data.frame(
+            ligand = ligand, celltype = ct, value = r_val,
+            condition = cond, stringsAsFactors = FALSE)))
+        }
+      }
+    }
+  }
+
+  sender_df <- do.call(rbind, sender_all)
+  receiver_df <- do.call(rbind, receiver_all)
+
+  # Average across conditions
+  avg_sender <- sender_df %>%
+    group_by(ligand, celltype) %>%
+    summarise(value = mean(value, na.rm = TRUE), .groups = "drop")
+  avg_receiver <- receiver_df %>%
+    group_by(ligand, celltype) %>%
+    summarise(value = mean(value, na.rm = TRUE), .groups = "drop")
+
+  # Keep top ligands (by total signal)
+  top_ligands_s <- avg_sender %>% group_by(ligand) %>%
+    summarise(total = sum(value)) %>% arrange(desc(total)) %>%
+    filter(total > 0) %>% head(7) %>% pull(ligand)
+  top_ligands_r <- avg_receiver %>% group_by(ligand) %>%
+    summarise(total = sum(value)) %>% arrange(desc(total)) %>%
+    filter(total > 0) %>% head(7) %>% pull(ligand)
+
+  avg_sender <- avg_sender %>% filter(ligand %in% top_ligands_s)
+  avg_receiver <- avg_receiver %>% filter(ligand %in% top_ligands_r)
+
+  # Factor ordering
+  avg_sender$ligand <- factor(avg_sender$ligand, levels = rev(top_ligands_s))
+  avg_sender$celltype <- factor(avg_sender$celltype, levels = ct_order)
+  avg_receiver$ligand <- factor(avg_receiver$ligand, levels = rev(top_ligands_r))
+  avg_receiver$celltype <- factor(avg_receiver$celltype, levels = ct_order)
+
+  ct_labels_vec <- ct_display[ct_order]
+
+  # Sender heatmap (red)
+  p_sender <- ggplot(avg_sender, aes(x = celltype, y = ligand, fill = value)) +
+    geom_tile(color = "grey70", linewidth = 0.3) +
+    scale_fill_gradient(low = "white", high = "#B2182B", name = "") +
+    scale_x_discrete(labels = ct_labels_vec) +
+    labs(title = "CCL Ligand Senders", x = "", y = "") +
+    theme_minimal(base_size = 11) +
+    theme(axis.text.x = element_text(size = 9, angle = 0, hjust = 0.5),
+          axis.text.y = element_text(size = 10, face = "italic"),
+          plot.title = element_text(size = 13, face = "bold", hjust = 0.5),
+          panel.grid = element_blank(),
+          legend.key.height = unit(1.5, "cm"))
+
+  # Receiver heatmap (blue)
+  p_receiver <- ggplot(avg_receiver, aes(x = celltype, y = ligand, fill = value)) +
+    geom_tile(color = "grey70", linewidth = 0.3) +
+    scale_fill_gradient(low = "white", high = "#2166AC", name = "") +
+    scale_x_discrete(labels = ct_labels_vec) +
+    labs(title = "CCL Ligand Receivers", x = "", y = "") +
+    theme_minimal(base_size = 11) +
+    theme(axis.text.x = element_text(size = 9, angle = 0, hjust = 0.5),
+          axis.text.y = element_text(size = 10, face = "italic"),
+          plot.title = element_text(size = 13, face = "bold", hjust = 0.5),
+          panel.grid = element_blank(),
+          legend.key.height = unit(1.5, "cm"))
+
+  pdf(file.path(fig_dir, "fig4D_ccl_ligand_sender_receiver.pdf"), width = 16, height = 5)
+  print(plot_grid(p_sender, p_receiver, nrow = 1, rel_widths = c(1, 1)))
+  dev.off()
+  cat("  Saved fig4D_ccl_ligand_sender_receiver.pdf\n")
+
+}, error = function(e) cat(sprintf("  Fig 4D failed: %s\n", e$message)))
+
 cat("\n10b CellChat figures complete.\n")
 cat("Output:", fig_dir, "\n")
