@@ -315,62 +315,114 @@ if (!is.null(cc_base)) {
 
   diff_conds <- setdiff(condition_order, baseline_cond)
   col_labels <- c("Eos", "M1", "M2\nFunct.", "M2\nSurf.")
+  pathway_order <- rev(selected_pathways)  # bottom to top
 
-  library(gridExtra)
+  library(cowplot)
 
   for (direction in c("Outgoing", "Incoming")) {
     sig_list <- if (direction == "Outgoing") out_list2 else in_list2
     sig_base <- if (direction == "Outgoing") base_out else base_in
 
-    pdf(file.path(fig_dir, paste0("fig3B_", tolower(direction), "_heatmap.pdf")),
-        width = length(condition_order) * 3.2 + 1, height = 5)
+    # --- Build long dataframe for all panels ---
+    all_df <- data.frame()
 
-    # Baseline panel — viridis colorscale
+    # Baseline
     base_mat <- sig_list[[baseline_cond]]
-    colnames(base_mat) <- col_labels
-    max_base <- max(base_mat, na.rm = TRUE)
-    if (max_base == 0) max_base <- 1
+    for (i in seq_along(selected_pathways)) {
+      for (j in seq_along(broad_groups)) {
+        all_df <- rbind(all_df, data.frame(
+          pathway = selected_pathways[i], celltype = col_labels[j],
+          value = base_mat[i, j], panel = cond_display[baseline_cond],
+          type = "baseline", stringsAsFactors = FALSE))
+      }
+    }
 
-    p_base <- pheatmap(base_mat,
-             color = viridis_palette,  # from 00_theme.R
-             breaks = seq(0, max(1.3, max_base * 1.1), length.out = 101),
-             cluster_rows = FALSE, cluster_cols = FALSE,
-             display_numbers = TRUE, number_format = "%.2f",
-             fontsize_number = 8, fontsize_row = 10, fontsize_col = 9,
-             main = cond_display[baseline_cond],
-             border_color = "grey70", silent = TRUE)
-
-    # Difference panels — RdBu diverging colorscale
-    all_diffs <- c()
+    # Differences
     for (cond in diff_conds) {
       d <- sig_list[[cond]] - sig_base
-      all_diffs <- c(all_diffs, as.vector(d))
+      for (i in seq_along(selected_pathways)) {
+        for (j in seq_along(broad_groups)) {
+          all_df <- rbind(all_df, data.frame(
+            pathway = selected_pathways[i], celltype = col_labels[j],
+            value = d[i, j], panel = cond_display[cond],
+            type = "diff", stringsAsFactors = FALSE))
+        }
+      }
     }
-    max_diff <- max(abs(all_diffs), na.rm = TRUE)
+
+    all_df$pathway <- factor(all_df$pathway, levels = pathway_order)
+    all_df$celltype <- factor(all_df$celltype, levels = col_labels)
+    panel_order <- c(cond_display[baseline_cond], cond_display[diff_conds])
+    all_df$panel <- factor(all_df$panel, levels = panel_order)
+
+    # --- Baseline plot (viridis) ---
+    df_base <- all_df[all_df$type == "baseline", ]
+    p_base <- ggplot(df_base, aes(x = celltype, y = pathway, fill = value)) +
+      geom_tile(color = "grey40", linewidth = 0.3) +
+      geom_text(aes(label = sprintf("%.2f", value)), size = 3) +
+      scale_fill_viridis_c(name = "Baseline\n(Raw)", option = "viridis",
+                           limits = c(0, max(df_base$value) * 1.1)) +
+      facet_wrap(~panel, nrow = 1) +
+      labs(x = "", y = "") +
+      theme_minimal(base_size = 10) +
+      theme(axis.text.x = element_text(size = 9),
+            axis.text.y = element_text(size = 10, face = "bold"),
+            strip.text = element_text(size = 9, face = "bold"),
+            panel.grid = element_blank(),
+            legend.position = "none")
+
+    # --- Diff plots (RdBu) ---
+    df_diff <- all_df[all_df$type == "diff", ]
+    max_diff <- max(abs(df_diff$value), na.rm = TRUE)
     if (max_diff == 0) max_diff <- 0.5
 
-    grob_list <- list(p_base[[4]])
+    p_diff <- ggplot(df_diff, aes(x = celltype, y = pathway, fill = value)) +
+      geom_tile(color = "grey40", linewidth = 0.3) +
+      geom_text(aes(label = sprintf("%.2f", value)), size = 3) +
+      scale_fill_gradientn(name = "Diff\n(vs Base)",
+                           colors = c("#2166AC", "#4393C3", "#92C5DE",
+                                      "#D1E5F0", "white", "#FDDBC7",
+                                      "#F4A582", "#D6604D", "#B2182B"),
+                           limits = c(-max_diff, max_diff)) +
+      facet_wrap(~panel, nrow = 1) +
+      labs(x = "", y = "") +
+      theme_minimal(base_size = 10) +
+      theme(axis.text.x = element_text(size = 9),
+            axis.text.y = element_blank(),
+            strip.text = element_text(size = 9, face = "bold"),
+            panel.grid = element_blank(),
+            legend.position = "none")
 
-    for (cond in diff_conds) {
-      d <- sig_list[[cond]] - sig_base
-      colnames(d) <- col_labels
-      p_diff <- pheatmap(d,
-               color = colorRampPalette(c("#2166AC", "#4393C3", "#92C5DE",
-                                          "#D1E5F0", "white", "#FDDBC7",
-                                          "#F4A582", "#D6604D", "#B2182B"))(100),
-               breaks = seq(-max_diff, max_diff, length.out = 101),
-               cluster_rows = FALSE, cluster_cols = FALSE,
-               display_numbers = TRUE, number_format = "%.2f",
-               fontsize_number = 8, fontsize_row = 10, fontsize_col = 9,
-               main = cond_display[cond],
-               border_color = "grey70", silent = TRUE)
-      grob_list <- c(grob_list, list(p_diff[[4]]))
-    }
+    # --- Legends ---
+    leg_base <- cowplot::get_legend(
+      ggplot(df_base, aes(x = celltype, y = pathway, fill = value)) +
+        geom_tile() +
+        scale_fill_viridis_c(name = "Baseline\n(Raw)", option = "viridis",
+                             limits = c(0, max(df_base$value) * 1.1)) +
+        theme(legend.position = "right", legend.key.height = unit(1.5, "cm")))
 
-    grid.arrange(grobs = grob_list, nrow = 1,
-                 top = grid::textGrob(paste(direction, "Signal:"),
-                                      gp = grid::gpar(fontsize = 14, fontface = "bold"),
-                                      x = 0.02, hjust = 0))
+    leg_diff <- cowplot::get_legend(
+      ggplot(df_diff, aes(x = celltype, y = pathway, fill = value)) +
+        geom_tile() +
+        scale_fill_gradientn(name = "Diff\n(vs Base)",
+                             colors = c("#2166AC", "#4393C3", "#92C5DE",
+                                        "#D1E5F0", "white", "#FDDBC7",
+                                        "#F4A582", "#D6604D", "#B2182B"),
+                             limits = c(-max_diff, max_diff)) +
+        theme(legend.position = "right", legend.key.height = unit(1.5, "cm")))
+
+    legends <- plot_grid(leg_base, leg_diff, ncol = 1, rel_heights = c(1, 1))
+
+    # --- Combine ---
+    main_plot <- plot_grid(p_base, p_diff, nrow = 1,
+                           rel_widths = c(1.3, 5), align = "h", axis = "tb")
+    final <- plot_grid(main_plot, legends, nrow = 1, rel_widths = c(6, 0.8))
+
+    pdf(file.path(fig_dir, paste0("fig3B_", tolower(direction), "_heatmap.pdf")),
+        width = 20, height = 4)
+    print(final +
+      draw_label(paste(direction, "Signal:"), x = 0.01, y = 0.97,
+                 hjust = 0, vjust = 1, fontface = "bold", size = 14))
     dev.off()
   }
   cat("  Saved fig3B_outgoing_heatmap.pdf and fig3B_incoming_heatmap.pdf\n")
