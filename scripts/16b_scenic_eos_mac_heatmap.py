@@ -385,8 +385,11 @@ plot_data.index = col_labels
 
 n_rows = len(col_labels)
 n_cols = len(combined.index)
-fig_h  = max(5, n_rows * 0.30 + 2)
-fig_w  = max(4, n_cols * 0.55 + 2.5)
+# Fixed cell size: 0.5 inches per row, 0.7 inches per column
+cell_h = 0.5
+cell_w = 0.7
+fig_h  = n_rows * cell_h + 3.0   # extra for title, x-labels, group labels
+fig_w  = n_cols * cell_w + 3.0   # extra for y-labels and colorbar
 
 fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
