@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=10c_cellchat_fig3d
-#SBATCH --output=/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/logs/10c_cellchat_fig3d.out
-#SBATCH --error=/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/logs/10c_cellchat_fig3d.err
+#SBATCH --output=/bigdata/godziklab/shared/Xinru/302025/06_LOGS/10c_cellchat_fig3d.out
+#SBATCH --error=/bigdata/godziklab/shared/Xinru/302025/06_LOGS/10c_cellchat_fig3d.err
 #SBATCH --time=00:30:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=2
