@@ -79,16 +79,27 @@ print(f"  Eos AUCell: {auc_mtx.shape[0]} cells x {auc_mtx.shape[1]} regulons")
 
 # Load Eos metadata (cluster assignments)
 meta_path = os.path.join(SCENIC, "eos_cell_metadata.csv")
+clusters = None
+
 if os.path.exists(meta_path):
     eos_meta = pd.read_csv(meta_path, index_col=0)
     cluster_col = "cluster" if "cluster" in eos_meta.columns else eos_meta.columns[0]
+
+    # Try direct index match
     common = auc_mtx.index.intersection(eos_meta.index)
-    auc_mtx  = auc_mtx.loc[common]
-    clusters = eos_meta.loc[common, cluster_col].astype(str)
-    # Normalize cluster names to C0–C5
-    clusters = clusters.str.replace("Eos_", "", regex=False)
-else:
-    # Fall back: load h5ad
+    if len(common) == 0 and "barcode" in eos_meta.columns:
+        print("  Direct index match failed — trying barcode column as index")
+        eos_meta = eos_meta.set_index("barcode")
+        common = auc_mtx.index.intersection(eos_meta.index)
+
+    print(f"  Common cells: {len(common)}")
+    if len(common) > 0:
+        auc_mtx  = auc_mtx.loc[common]
+        clusters = eos_meta.loc[common, cluster_col].astype(str)
+        clusters = clusters.str.replace("Eos_", "", regex=False)
+
+if clusters is None or len(clusters) == 0:
+    print("  Metadata match failed — loading cluster info from h5ad")
     h5ad_path = os.path.join(SCENIC, "eos_for_scenic.h5ad")
     adata_eos = sc.read_h5ad(h5ad_path)
     c_col = "cluster" if "cluster" in adata_eos.obs.columns else "eos_cluster"
@@ -96,6 +107,7 @@ else:
     auc_mtx  = auc_mtx.loc[common]
     clusters = adata_eos.obs.loc[common, c_col].astype(str)
     clusters = clusters.str.replace("Eos_", "", regex=False)
+    del adata_eos
 
 auc_mtx["cluster"] = clusters.values
 print(f"  Clusters: {sorted(clusters.unique())}")
@@ -105,44 +117,45 @@ print(f"  Clusters: {sorted(clusters.unique())}")
 # =============================================================================
 print("\nStep 2: Parsing regulon gene sets...")
 regulon_gene_sets = {}
+
+# Prefer adj.csv (GRN output: TF, target, importance) — clean format
+adj_csv     = os.path.join(SCENIC, "adj.csv")
 regulon_csv = os.path.join(SCENIC, "regulons.csv")
-if os.path.exists(regulon_csv):
-    reg_df = pd.read_csv(regulon_csv)
-    print(f"  regulons.csv columns: {list(reg_df.columns)}")
 
-    tf_col = target_col = None
-    for c in reg_df.columns:
-        cl = c.lower()
-        if cl in ["tf", "regulon", "transcription_factor"] and tf_col is None:
-            tf_col = c
-        if cl in ["target", "gene", "target_gene", "targetgenes"] and target_col is None:
-            target_col = c
+if os.path.exists(adj_csv):
+    print(f"  Parsing adj.csv (GRN output)...")
+    adj_df = pd.read_csv(adj_csv)
+    print(f"  adj.csv columns: {list(adj_df.columns)}")
+    tf_col  = next((c for c in adj_df.columns if c.lower() == "tf"), adj_df.columns[0])
+    tgt_col = next((c for c in adj_df.columns if c.lower() in ["target","gene"]), adj_df.columns[1])
+    for tf, grp in adj_df.groupby(tf_col):
+        regulon_gene_sets[str(tf)] = list(grp[tgt_col].dropna().astype(str).unique())
+    print(f"  Parsed {len(regulon_gene_sets)} TF gene sets from adj.csv")
 
-    if tf_col and target_col:
-        if target_col.lower() in ["targetgenes", "target_genes"]:
-            # pySCENIC ctx format: TargetGenes = "[(gene, score), ...]"
+elif os.path.exists(regulon_csv):
+    print(f"  Falling back to regulons.csv...")
+    # Try reading with second row as header (pySCENIC ctx multi-index format)
+    try:
+        reg_df = pd.read_csv(regulon_csv, header=[0, 1])
+        # Look for TF and TargetGenes in multi-index columns
+        tf_col  = [c for c in reg_df.columns if "TF" in str(c) or "tf" in str(c)]
+        tgt_col = [c for c in reg_df.columns if "Target" in str(c) or "target" in str(c)]
+        if tf_col and tgt_col:
             for _, row in reg_df.iterrows():
-                tf = str(row[tf_col]).split("(")[0].strip()
-                tg_str = str(row[target_col])
+                tf = str(row[tf_col[0]]).split("(")[0].strip()
+                tg_str = str(row[tgt_col[0]])
                 try:
                     items = ast.literal_eval(tg_str)
-                    genes = [i[0] if isinstance(i, (list, tuple)) else str(i)
-                             for i in items]
+                    genes = [i[0] if isinstance(i, (list, tuple)) else str(i) for i in items]
                 except Exception:
-                    genes = [g.strip() for g in tg_str.replace("[", "").replace("]", "")
-                             .split(",") if g.strip()]
-                if tf not in regulon_gene_sets:
-                    regulon_gene_sets[tf] = []
-                regulon_gene_sets[tf].extend(genes)
-        else:
-            # Long format: one row per TF-target pair
-            for tf, grp in reg_df.groupby(tf_col):
-                tf_name = str(tf).split("(")[0].strip()
-                regulon_gene_sets[tf_name] = list(grp[target_col].dropna().unique())
-
+                    genes = []
+                if genes:
+                    regulon_gene_sets.setdefault(tf, []).extend(genes)
+    except Exception as e:
+        print(f"  regulons.csv parse failed: {e}")
     print(f"  Parsed {len(regulon_gene_sets)} regulon gene sets")
 else:
-    print("  WARNING: regulons.csv not found — Mac scoring will be skipped")
+    print("  WARNING: neither adj.csv nor regulons.csv found")
 
 # =============================================================================
 # Step 3: Compute Eos cluster means (subsampled)
