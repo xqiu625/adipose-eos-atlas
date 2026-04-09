@@ -82,31 +82,44 @@ meta_path = os.path.join(SCENIC, "eos_cell_metadata.csv")
 clusters = None
 
 if os.path.exists(meta_path):
-    eos_meta = pd.read_csv(meta_path, index_col=0)
-    cluster_col = "cluster" if "cluster" in eos_meta.columns else eos_meta.columns[0]
+    # Read without index_col so we can inspect all columns
+    eos_meta = pd.read_csv(meta_path)
+    print(f"  Metadata columns: {list(eos_meta.columns)}")
 
-    # Try direct index match
-    common = auc_mtx.index.intersection(eos_meta.index)
-    if len(common) == 0 and "barcode" in eos_meta.columns:
-        print("  Direct index match failed — trying barcode column as index")
-        eos_meta = eos_meta.set_index("barcode")
-        common = auc_mtx.index.intersection(eos_meta.index)
+    # Find barcode and cluster columns by name
+    bc_col  = next((c for c in eos_meta.columns if "barcode" in c.lower()), None)
+    cl_col  = next((c for c in eos_meta.columns if c.lower() == "cluster"), None)
 
-    print(f"  Common cells: {len(common)}")
-    if len(common) > 0:
-        auc_mtx  = auc_mtx.loc[common]
-        clusters = eos_meta.loc[common, cluster_col].astype(str)
-        clusters = clusters.str.replace("Eos_", "", regex=False)
+    # If not found as named columns, the CSV may have been saved with index as cluster
+    # Try reading with index_col=0 and reset
+    if bc_col is None or cl_col is None:
+        eos_meta2 = pd.read_csv(meta_path, index_col=0).reset_index()
+        bc_col = next((c for c in eos_meta2.columns if "barcode" in c.lower()), None)
+        cl_col = next((c for c in eos_meta2.columns
+                       if c.lower() in ["cluster", "index"]), None)
+        if bc_col and cl_col:
+            eos_meta = eos_meta2
+
+    if bc_col and cl_col:
+        eos_meta = eos_meta.set_index(bc_col)
+        common   = auc_mtx.index.intersection(eos_meta.index)
+        print(f"  Common cells: {len(common)}")
+        if len(common) > 0:
+            auc_mtx  = auc_mtx.loc[common]
+            clusters = eos_meta.loc[common, cl_col].astype(str)
+            clusters = clusters.str.replace("Eos_", "", regex=False)
+    else:
+        print(f"  WARNING: could not identify barcode/cluster columns")
 
 if clusters is None or len(clusters) == 0:
-    print("  Metadata match failed — loading cluster info from h5ad")
+    print("  Falling back to h5ad for cluster info...")
     h5ad_path = os.path.join(SCENIC, "eos_for_scenic.h5ad")
     adata_eos = sc.read_h5ad(h5ad_path)
     c_col = "cluster" if "cluster" in adata_eos.obs.columns else "eos_cluster"
-    common = auc_mtx.index.intersection(adata_eos.obs_names)
-    auc_mtx  = auc_mtx.loc[common]
-    clusters = adata_eos.obs.loc[common, c_col].astype(str)
-    clusters = clusters.str.replace("Eos_", "", regex=False)
+    common    = auc_mtx.index.intersection(adata_eos.obs_names)
+    auc_mtx   = auc_mtx.loc[common]
+    clusters  = adata_eos.obs.loc[common, c_col].astype(str)
+    clusters  = clusters.str.replace("Eos_", "", regex=False)
     del adata_eos
 
 auc_mtx["cluster"] = clusters.values
@@ -291,7 +304,12 @@ for reg in regulon_cols:
         "uniqueness": uniqueness,
     })
 
+if not results:
+    raise RuntimeError("No Eos regulon results computed — check cluster labels match EOS_CLUSTERS")
+
 res_df = pd.DataFrame(results)
+print(f"  Total regulons evaluated: {len(res_df)}")
+
 if mac_mean_df is not None:
     eos_unique = res_df[
         (res_df["max_auc"] >= MIN_EOS_AUC) &
@@ -299,7 +317,6 @@ if mac_mean_df is not None:
         (res_df["uniqueness"] >= MIN_UNIQUENESS)
     ]
 else:
-    # No Mac data: select top N per cluster by uniqueness
     eos_unique = res_df[res_df["max_auc"] >= MIN_EOS_AUC]
 
 # Top N per Eos cluster
