@@ -8,9 +8,9 @@ suppressPackageStartupMessages({
 })
 
 use_condaenv("/bigdata/godziklab/shared/Xinru/cellrank_env")
-loompy <- import("loompy")
-np     <- import("numpy")
-scipy  <- import("scipy.sparse")
+ad    <- import("anndata")
+np    <- import("numpy")
+scipy <- import("scipy.sparse")
 
 BASE    <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
 out_dir <- file.path(BASE, "scenic_per_cluster")
@@ -39,32 +39,34 @@ for (cl in clusters) {
   dir.create(cl_dir, recursive = TRUE, showWarnings = FALSE)
   loom_path <- file.path(cl_dir, "input.loom")
 
-  # Raw counts (genes x cells)
+  # Raw counts (genes x cells) -> transpose to cells x genes for AnnData
   raw <- GetAssayData(sub, layer = "counts")
 
-  # Convert to scipy sparse (CSC, cells x genes for loom = genes x cells)
-  raw_csc <- scipy$csc_matrix(
+  # Convert to scipy CSR (cells x genes)
+  raw_csr <- scipy$csr_matrix(
     tuple(np$array(raw@x),
           np$array(as.integer(raw@i)),
           np$array(as.integer(raw@p))),
     shape = tuple(as.integer(nrow(raw)), as.integer(ncol(raw)))
+  )$T   # transpose: cells x genes
+
+  # Build AnnData and write as loom (avoids loompy np.string_ bug)
+  obs_df <- reticulate::r_to_py(
+    data.frame(
+      row.names = colnames(raw),
+      cluster   = rep(cl, ncol(raw)),
+      condition = as.character(sub$condition),
+      sex       = as.character(sub$sex)
+    )
+  )
+  var_df <- reticulate::r_to_py(
+    data.frame(row.names = rownames(raw))
   )
 
-  # Build loom via loompy.create
-  row_attrs <- list(Gene = rownames(raw))
-  col_attrs <- list(
-    CellID    = colnames(raw),
-    cluster   = rep(cl, ncol(raw)),
-    condition = as.character(sub$condition),
-    sex       = as.character(sub$sex)
-  )
-
-  loompy$create(
-    loom_path,
-    raw_csc,
-    row_attrs = reticulate::r_to_py(row_attrs),
-    col_attrs = reticulate::r_to_py(col_attrs)
-  )
+  adata <- ad$AnnData(X = raw_csr, obs = obs_df, var = var_df)
+  adata$obs_names <- reticulate::r_to_py(as.list(colnames(raw)))
+  adata$var_names <- reticulate::r_to_py(as.list(rownames(raw)))
+  adata$write_loom(loom_path, write_obsm_varm = FALSE)
   cat(sprintf("  Saved: %s\n", loom_path))
 }
 

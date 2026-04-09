@@ -75,16 +75,14 @@ reg_csv = f"{base}/regulons.csv"
 input_loom = f"{base}/input.loom"
 auc_csv = f"{base}/auc_matrix.csv"
 
-import loompy
+import anndata as ad
 import numpy as np
 
-# Load expression matrix
-with loompy.connect(input_loom, mode="r") as ds:
-    ex_mtx = pd.DataFrame(
-        ds[:, :].T,
-        index=ds.ca["CellID"],
-        columns=ds.ra["Gene"]
-    )
+# Load expression matrix (use anndata to avoid loompy numpy2.0 np.string_ bug)
+adata = ad.read_loom(input_loom, obs_names="obs_names", var_names="var_names")
+import scipy.sparse as _sp
+X = adata.X.toarray() if _sp.issparse(adata.X) else np.array(adata.X)
+ex_mtx = pd.DataFrame(X, index=adata.obs_names, columns=adata.var_names)
 
 print(f"  Expression: {ex_mtx.shape}")
 
