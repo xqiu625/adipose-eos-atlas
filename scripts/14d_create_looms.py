@@ -37,19 +37,21 @@ def write_loom(path, X_cells_genes, obs_names, var_names):
     chunk_r = min(64, n_genes)
     chunk_c = min(64, n_cells)
 
+    str_dt = h5py.string_dtype(encoding="utf-8")   # variable-length UTF-8
+
     with h5py.File(path, "w") as f:
         f.create_dataset("matrix", data=mat,
                          chunks=(chunk_r, chunk_c),
                          compression="gzip", compression_opts=2)
         ra = f.create_group("row_attrs")
-        ra.create_dataset("Gene",   data=np.array(var_names,  dtype="S"))
+        ra.create_dataset("Gene",   data=var_names,  dtype=str_dt)
         ca = f.create_group("col_attrs")
-        ca.create_dataset("CellID", data=np.array(obs_names,  dtype="S"))
+        ca.create_dataset("CellID", data=obs_names,  dtype=str_dt)
         f.create_group("layers")
         f.create_group("col_graphs")
         f.create_group("row_graphs")
-        f.attrs["CreationDate"]      = np.bytes_("2025-01-01")
-        f.attrs["LOOM_SPEC_VERSION"] = np.bytes_("3.0.0")
+        f.attrs["CreationDate"]      = "2025-01-01"
+        f.attrs["LOOM_SPEC_VERSION"] = "3.0.0"
 
 
 for cl in CLUSTERS:
