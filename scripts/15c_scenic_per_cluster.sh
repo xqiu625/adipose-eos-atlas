@@ -78,11 +78,13 @@ auc_csv = f"{base}/auc_matrix.csv"
 import anndata as ad
 import numpy as np
 
-# Load expression matrix (use anndata to avoid loompy numpy2.0 np.string_ bug)
-adata = ad.read_loom(input_loom, obs_names="obs_names", var_names="var_names")
-import scipy.sparse as _sp
-X = adata.X.toarray() if _sp.issparse(adata.X) else np.array(adata.X)
-ex_mtx = pd.DataFrame(X, index=adata.obs_names, columns=adata.var_names)
+# Load expression matrix directly via h5py (bypasses loompy numpy2.0 np.string_ bug)
+import h5py, scipy.sparse as _sp
+with h5py.File(input_loom, "r") as f:
+    mat      = f["matrix"][:]                          # genes x cells
+    genes    = [g.decode() for g in f["row_attrs"]["Gene"][:]]
+    barcodes = [b.decode() for b in f["col_attrs"]["CellID"][:]]
+ex_mtx = pd.DataFrame(mat.T.astype(np.float32), index=barcodes, columns=genes)
 
 print(f"  Expression: {ex_mtx.shape}")
 
