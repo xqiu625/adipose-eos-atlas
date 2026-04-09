@@ -69,35 +69,38 @@ group_colors_chord <- c("Eosinophils" = "#777B7E", "M1_Mac" = "#cb416b",
                         "M2_Functional" = "#8FC50E", "M2_Surface" = "#5633AA")
 
 # ==============================================================================
-# Fig 3A: CCL Chord Diagram — ALL conditions aggregated into ONE diagram
+# Fig 3A: Chord Diagram — ALL pathways, ALL conditions aggregated
+# Shows total Eos <-> Mac communication (not just CCL)
 # ==============================================================================
-cat("\nGenerating Fig 3A: CCL Chord Diagram (all conditions aggregated)...\n")
+cat("\nGenerating Fig 3A: All-pathway Chord Diagram (all conditions aggregated)...\n")
 
-# Sum probability matrices across all conditions
 unique_groups <- c("Eosinophils", "M1_Mac", "M2_Functional", "M2_Surface")
 agg_total <- matrix(0, nrow = 4, ncol = 4, dimnames = list(unique_groups, unique_groups))
 
 for (cond in condition_order) {
   cc <- cellchat_objects[[cond]]
-  if (is.null(cc) || !"CCL" %in% cc@netP$pathways) next
+  if (is.null(cc)) next
 
-  prob_mat <- cc@netP$prob[,, "CCL"]
-  groups <- chord_group(rownames(prob_mat))
-  keep <- !is.na(groups)
-  prob_sub <- prob_mat[keep, keep]
-  group_labels <- groups[keep]
+  # Sum across ALL pathways
+  for (pw in cc@netP$pathways) {
+    prob_mat <- cc@netP$prob[,, pw]
+    groups <- chord_group(rownames(prob_mat))
+    keep <- !is.na(groups)
+    prob_sub <- prob_mat[keep, keep]
+    group_labels <- groups[keep]
 
-  for (i in seq_along(group_labels)) {
-    for (j in seq_along(group_labels)) {
-      agg_total[group_labels[i], group_labels[j]] <-
-        agg_total[group_labels[i], group_labels[j]] + prob_sub[i, j]
+    for (i in seq_along(group_labels)) {
+      for (j in seq_along(group_labels)) {
+        agg_total[group_labels[i], group_labels[j]] <-
+          agg_total[group_labels[i], group_labels[j]] + prob_sub[i, j]
+      }
     }
   }
 }
 # Average across conditions
 agg_total <- agg_total / length(cellchat_objects)
 
-pdf(file.path(fig_dir, "fig3A_ccl_chord_diagram.pdf"), width = 9, height = 9)
+pdf(file.path(fig_dir, "fig3A_chord_all_pathways.pdf"), width = 9, height = 9)
 circos.clear()
 circos.par(start.degree = 90, gap.after = c(rep(2, 3), 10))
 chordDiagram(agg_total,
@@ -112,10 +115,9 @@ circos.track(track.index = 1, panel.fun = function(x, y) {
   circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
               facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5), cex = 1.1)
 }, bg.border = NA)
-title(main = "CCL Signaling (All Conditions)", cex.main = 1.4)
 circos.clear()
 dev.off()
-cat("  Saved fig3A_ccl_chord_diagram.pdf\n")
+cat("  Saved fig3A_chord_all_pathways.pdf\n")
 
 # ==============================================================================
 # Fig 3C: CCL Signaling Roles — per subcluster (sender/receiver/mediator/influencer)
