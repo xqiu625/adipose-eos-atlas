@@ -442,11 +442,11 @@ if (!is.null(cc_base)) {
 }
 
 # ==============================================================================
-# Fig 4D: CCL Ligand Senders & Receivers per cell type
+# Fig 3D: CCL Ligand Senders & Receivers per cell type
 # Left: red heatmap (senders), Right: blue heatmap (receivers)
 # Averaged across all conditions
 # ==============================================================================
-cat("\nGenerating Fig 4D: CCL Ligand Senders & Receivers...\n")
+cat("\nGenerating Fig 3D: CCL Ligand Senders & Receivers...\n")
 
 tryCatch({
   # Cell type display order: C3, C5, C0, C1, C2, C4, M1, M2 Funct., M2 Surf.
@@ -554,12 +554,12 @@ tryCatch({
           panel.grid = element_blank(),
           legend.key.height = unit(1.5, "cm"))
 
-  pdf(file.path(fig_dir, "fig4D_ccl_ligand_sender_receiver.pdf"), width = 16, height = 5)
+  pdf(file.path(fig_dir, "fig3D_ccl_ligand_sender_receiver.pdf"), width = 16, height = 5)
   print(plot_grid(p_sender, p_receiver, nrow = 1, rel_widths = c(1, 1)))
   dev.off()
-  cat("  Saved fig4D_ccl_ligand_sender_receiver.pdf\n")
+  cat("  Saved fig3D_ccl_ligand_sender_receiver.pdf\n")
 
-}, error = function(e) cat(sprintf("  Fig 4D failed: %s\n", e$message)))
+}, error = function(e) cat(sprintf("  Fig 3D failed: %s\n", e$message)))
 
 cat("\n10b CellChat figures complete.\n")
 cat("Output:", fig_dir, "\n")
