@@ -373,7 +373,7 @@ row_std  = mat.std(axis=1).replace(0, 1)
 combined_z = ((mat.T - row_mean) / row_std).T.clip(-ZSCORE_CAP, ZSCORE_CAP)
 combined = combined_z.T  # back to cell_types x regulons
 
-# Regulon labels with target gene count
+# Regulon labels with target gene count from adj.csv
 def reg_label(reg):
     tf = reg.replace("(+)", "").replace("(-)", "").strip()
     n  = len(regulon_gene_sets.get(tf, []))
@@ -385,54 +385,111 @@ plot_data.index = col_labels
 
 n_rows = len(col_labels)
 n_cols = len(combined.index)
-# Fixed cell size: 0.5 inches per row, 0.7 inches per column
-cell_h = 0.5
-cell_w = 0.7
-fig_h  = n_rows * cell_h + 3.0   # extra for title, x-labels, group labels
-fig_w  = n_cols * cell_w + 3.0   # extra for y-labels and colorbar
+n_eos  = len(eos_z)
+
+# Cell size matching reference image (~0.38" per row, 0.55" per col)
+cell_h    = 0.38
+cell_w    = 0.55
+left_pad  = 1.8   # for y-axis labels
+right_pad = 1.2   # for colorbar
+top_pad   = 0.7   # for title
+bot_pad   = 1.0   # for x-axis labels + group labels
+
+fig_h = n_rows * cell_h + top_pad + bot_pad
+fig_w = n_cols * cell_w + left_pad + right_pad
 
 fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+
+# Position axes precisely
+ax_left   = left_pad / fig_w
+ax_bottom = bot_pad  / fig_h
+ax_width  = (n_cols * cell_w) / fig_w
+ax_height = (n_rows * cell_h) / fig_h
+ax.set_position([ax_left, ax_bottom, ax_width, ax_height])
 
 im = ax.imshow(plot_data.values, cmap=ZSCORE_CMAP, aspect="auto",
                vmin=-ZSCORE_CAP, vmax=ZSCORE_CAP)
 
-# X-axis (cell types)
+# X-axis: C0–C5, M1, M2, M2
+x_labels = list(combined.index)
+# Replace Mac display names with short versions for top tick
+x_tick_labels = []
+for lbl in x_labels:
+    if lbl == "M1":
+        x_tick_labels.append("M1")
+    elif "Funct" in lbl or lbl == "M2_Functional":
+        x_tick_labels.append("M2")
+    elif "Surf" in lbl or lbl == "M2_Surface":
+        x_tick_labels.append("M2")
+    else:
+        x_tick_labels.append(lbl)
+
 ax.set_xticks(range(n_cols))
-ax.set_xticklabels(list(combined.index), fontsize=8, rotation=0)
+ax.set_xticklabels(x_tick_labels, fontsize=10, fontweight="bold")
+ax.xaxis.set_ticks_position("bottom")
 
-# Y-axis (regulons)
+# Y-axis on LEFT, italic
 ax.set_yticks(range(n_rows))
-ax.set_yticklabels(col_labels, fontsize=7, fontstyle="italic")
+ax.set_yticklabels(col_labels, fontsize=9, ha="right")
+ax.yaxis.set_ticks_position("left")
+ax.tick_params(axis="both", length=0)
 
-# Separator line between Eos and Mac
-n_eos = len(eos_z)
+# Thick vertical separator between Eos and Mac
 if mac_heat is not None and n_eos < n_cols:
-    ax.axvline(x=n_eos - 0.5, color="black", linewidth=1.5)
-    # Group labels
-    ax.text((n_eos - 1) / 2, -1.2, "Eosinophils",
-            ha="center", va="top", fontsize=9, fontweight="bold",
-            transform=ax.get_xaxis_transform())
-    ax.text(n_eos + (n_cols - n_eos - 1) / 2, -1.2, "Mac",
-            ha="center", va="top", fontsize=9, fontweight="bold",
-            transform=ax.get_xaxis_transform())
+    ax.axvline(x=n_eos - 0.5, color="black", linewidth=2.0)
 
-# Horizontal separators between Eos clusters
-row_idx = 0
-for cl in EOS_CLUSTERS:
-    n_cl = len(top_df[top_df["max_cluster"] == cl])
-    row_idx += n_cl
-    if row_idx < n_rows:
-        ax.axhline(y=row_idx - 0.5, color="white", linewidth=1.2)
+# --- Group labels and underlines below x-axis (in figure coords) ---
+# Transform: x in data coords → figure coords
+def data_x_to_fig(x_data):
+    return ax_left + (x_data + 0.5) / n_cols * ax_width
 
-ax.set_title("Eos Subcluster Unique Regulons", fontsize=11, fontweight="bold", pad=12)
-ax.tick_params(length=0)
+eos_x_center = data_x_to_fig((n_eos - 1) / 2)
+mac_x_center = data_x_to_fig(n_eos + (n_cols - n_eos - 1) / 2)
+
+line_y  = ax_bottom - 0.35 / fig_h   # just below x-tick labels
+label_y = ax_bottom - 0.65 / fig_h
+
+eos_x0 = data_x_to_fig(-0.5)
+eos_x1 = data_x_to_fig(n_eos - 0.5)
+mac_x0 = data_x_to_fig(n_eos - 0.5)
+mac_x1 = data_x_to_fig(n_cols - 0.5)
+
+# Eosinophils underline
+fig.add_artist(plt.Line2D([eos_x0, eos_x1], [line_y, line_y],
+                           transform=fig.transFigure,
+                           color="black", linewidth=1.2, clip_on=False))
+fig.text(eos_x_center, label_y, "Eosinophils",
+         ha="center", va="top", fontsize=10, transform=fig.transFigure)
+
+if mac_heat is not None and n_eos < n_cols:
+    # Mac underline
+    fig.add_artist(plt.Line2D([mac_x0, mac_x1], [line_y, line_y],
+                               transform=fig.transFigure,
+                               color="black", linewidth=1.2, clip_on=False))
+    fig.text(mac_x_center, label_y, "Mac",
+             ha="center", va="top", fontsize=10, transform=fig.transFigure)
+
+    # "Funct." and "Surf." sub-labels
+    sublabel_y = ax_bottom - 0.22 / fig_h
+    if n_cols >= n_eos + 3:
+        fig.text(data_x_to_fig(n_eos + 1), sublabel_y, "Funct.",
+                 ha="center", va="top", fontsize=8, transform=fig.transFigure)
+        fig.text(data_x_to_fig(n_eos + 2), sublabel_y, "Surf.",
+                 ha="center", va="top", fontsize=8, transform=fig.transFigure)
+
+# Title
+ax.set_title("Eos Subcluster Unique Regulons", fontsize=13,
+             fontweight="bold", pad=10)
 
 # Colorbar
-cbar = plt.colorbar(im, ax=ax, fraction=0.025, pad=0.02, shrink=0.6)
-cbar.set_label("Z-score", fontsize=8)
-cbar.ax.tick_params(labelsize=7)
-
-plt.tight_layout()
+cbar_ax = fig.add_axes([ax_left + ax_width + 0.05 / fig_w,
+                         ax_bottom + ax_height * 0.2,
+                         0.03 / fig_w * fig_h,   # width proportional
+                         ax_height * 0.6])
+cbar = fig.colorbar(im, cax=cbar_ax)
+cbar.set_label("Z-score", fontsize=9)
+cbar.set_ticks([-2, -1, 0, 1, 2])
+cbar.ax.tick_params(labelsize=8)
 
 out_pdf = os.path.join(FIG_DIR, "Fig5_regulon_heatmap_eos_mac.pdf")
 fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
