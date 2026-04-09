@@ -319,113 +319,126 @@ if (!is.null(cc_base)) {
 
   library(cowplot)
 
+  # Build data for BOTH directions in one combined figure
+  all_df <- data.frame()
   for (direction in c("Outgoing", "Incoming")) {
     sig_list <- if (direction == "Outgoing") out_list2 else in_list2
     sig_base <- if (direction == "Outgoing") base_out else base_in
-
-    # --- Build long dataframe for all panels ---
-    all_df <- data.frame()
 
     # Baseline
     base_mat <- sig_list[[baseline_cond]]
     for (i in seq_along(selected_pathways)) {
       for (j in seq_along(broad_groups)) {
         all_df <- rbind(all_df, data.frame(
-          pathway = selected_pathways[i], celltype = col_labels[j],
-          value = base_mat[i, j], panel = cond_display[baseline_cond],
+          direction = direction, pathway = selected_pathways[i],
+          celltype = col_labels[j], value = base_mat[i, j],
+          panel = cond_display[baseline_cond],
           type = "baseline", stringsAsFactors = FALSE))
       }
     }
-
     # Differences
     for (cond in diff_conds) {
       d <- sig_list[[cond]] - sig_base
       for (i in seq_along(selected_pathways)) {
         for (j in seq_along(broad_groups)) {
           all_df <- rbind(all_df, data.frame(
-            pathway = selected_pathways[i], celltype = col_labels[j],
-            value = d[i, j], panel = cond_display[cond],
+            direction = direction, pathway = selected_pathways[i],
+            celltype = col_labels[j], value = d[i, j],
+            panel = cond_display[cond],
             type = "diff", stringsAsFactors = FALSE))
         }
       }
     }
+  }
 
-    all_df$pathway <- factor(all_df$pathway, levels = pathway_order)
-    all_df$celltype <- factor(all_df$celltype, levels = col_labels)
-    panel_order <- c(cond_display[baseline_cond], cond_display[diff_conds])
-    all_df$panel <- factor(all_df$panel, levels = panel_order)
+  all_df$pathway <- factor(all_df$pathway, levels = pathway_order)
+  all_df$celltype <- factor(all_df$celltype, levels = col_labels)
+  panel_order <- c(cond_display[baseline_cond], cond_display[diff_conds])
+  all_df$panel <- factor(all_df$panel, levels = panel_order)
 
-    # --- Baseline plot (viridis) ---
-    df_base <- all_df[all_df$type == "baseline", ]
+  # Global max for consistent scales
+  max_base_val <- max(all_df$value[all_df$type == "baseline"], na.rm = TRUE)
+  max_diff_val <- max(abs(all_df$value[all_df$type == "diff"]), na.rm = TRUE)
+  if (max_diff_val == 0) max_diff_val <- 0.5
+
+  # Helper to build one row (outgoing or incoming)
+  make_row <- function(dir_name, show_strip = TRUE) {
+    df_base <- all_df[all_df$type == "baseline" & all_df$direction == dir_name, ]
+    df_diff <- all_df[all_df$type == "diff" & all_df$direction == dir_name, ]
+
     p_base <- ggplot(df_base, aes(x = celltype, y = pathway, fill = value)) +
       geom_tile(color = "grey40", linewidth = 0.3) +
-      geom_text(aes(label = sprintf("%.2f", value)), size = 3) +
-      scale_fill_viridis_c(name = "Baseline\n(Raw)", option = "viridis",
-                           limits = c(0, max(df_base$value) * 1.1)) +
+      geom_text(aes(label = sprintf("%.2f", value)), size = 2.8, color = "white") +
+      scale_fill_viridis_c(option = "viridis", limits = c(0, max_base_val * 1.1)) +
       facet_wrap(~panel, nrow = 1) +
       labs(x = "", y = "") +
       theme_minimal(base_size = 10) +
-      theme(axis.text.x = element_text(size = 9),
-            axis.text.y = element_text(size = 10, face = "bold"),
-            strip.text = element_text(size = 9, face = "bold"),
-            panel.grid = element_blank(),
-            legend.position = "none")
-
-    # --- Diff plots (RdBu) ---
-    df_diff <- all_df[all_df$type == "diff", ]
-    max_diff <- max(abs(df_diff$value), na.rm = TRUE)
-    if (max_diff == 0) max_diff <- 0.5
+      theme(axis.text.x = element_text(size = 8),
+            axis.text.y = element_text(size = 9, face = "bold"),
+            strip.text = if (show_strip) element_text(size = 8, face = "bold") else element_blank(),
+            panel.grid = element_blank(), legend.position = "none",
+            plot.margin = margin(2, 2, 2, 2))
 
     p_diff <- ggplot(df_diff, aes(x = celltype, y = pathway, fill = value)) +
       geom_tile(color = "grey40", linewidth = 0.3) +
-      geom_text(aes(label = sprintf("%.2f", value)), size = 3) +
+      geom_text(aes(label = sprintf("%.2f", value)), size = 2.8) +
+      scale_fill_gradientn(colors = c("#2166AC", "#4393C3", "#92C5DE",
+                                      "#D1E5F0", "white", "#FDDBC7",
+                                      "#F4A582", "#D6604D", "#B2182B"),
+                           limits = c(-max_diff_val, max_diff_val)) +
+      facet_wrap(~panel, nrow = 1) +
+      labs(x = "", y = "") +
+      theme_minimal(base_size = 10) +
+      theme(axis.text.x = element_text(size = 8),
+            axis.text.y = element_blank(),
+            strip.text = if (show_strip) element_text(size = 8, face = "bold") else element_blank(),
+            panel.grid = element_blank(), legend.position = "none",
+            plot.margin = margin(2, 2, 2, 2))
+
+    plot_grid(p_base, p_diff, nrow = 1, rel_widths = c(1.3, 5), align = "h", axis = "tb")
+  }
+
+  row_out <- make_row("Outgoing", show_strip = TRUE)
+  row_in  <- make_row("Incoming", show_strip = FALSE)
+
+  # Shared legends
+  leg_base <- cowplot::get_legend(
+    ggplot(data.frame(x = 1, y = 1, v = 0), aes(x, y, fill = v)) +
+      geom_tile() +
+      scale_fill_viridis_c(name = "Baseline\n(Raw)", option = "viridis",
+                           limits = c(0, max_base_val * 1.1)) +
+      theme(legend.position = "right", legend.key.height = unit(1.2, "cm"),
+            legend.title = element_text(size = 9, face = "bold"),
+            legend.text = element_text(size = 8)))
+
+  leg_diff <- cowplot::get_legend(
+    ggplot(data.frame(x = 1, y = 1, v = 0), aes(x, y, fill = v)) +
+      geom_tile() +
       scale_fill_gradientn(name = "Diff\n(vs Base)",
                            colors = c("#2166AC", "#4393C3", "#92C5DE",
                                       "#D1E5F0", "white", "#FDDBC7",
                                       "#F4A582", "#D6604D", "#B2182B"),
-                           limits = c(-max_diff, max_diff)) +
-      facet_wrap(~panel, nrow = 1) +
-      labs(x = "", y = "") +
-      theme_minimal(base_size = 10) +
-      theme(axis.text.x = element_text(size = 9),
-            axis.text.y = element_blank(),
-            strip.text = element_text(size = 9, face = "bold"),
-            panel.grid = element_blank(),
-            legend.position = "none")
+                           limits = c(-max_diff_val, max_diff_val)) +
+      theme(legend.position = "right", legend.key.height = unit(1.2, "cm"),
+            legend.title = element_text(size = 9, face = "bold"),
+            legend.text = element_text(size = 8)))
 
-    # --- Legends ---
-    leg_base <- cowplot::get_legend(
-      ggplot(df_base, aes(x = celltype, y = pathway, fill = value)) +
-        geom_tile() +
-        scale_fill_viridis_c(name = "Baseline\n(Raw)", option = "viridis",
-                             limits = c(0, max(df_base$value) * 1.1)) +
-        theme(legend.position = "right", legend.key.height = unit(1.5, "cm")))
+  legends <- plot_grid(leg_base, leg_diff, ncol = 1, rel_heights = c(1, 1))
 
-    leg_diff <- cowplot::get_legend(
-      ggplot(df_diff, aes(x = celltype, y = pathway, fill = value)) +
-        geom_tile() +
-        scale_fill_gradientn(name = "Diff\n(vs Base)",
-                             colors = c("#2166AC", "#4393C3", "#92C5DE",
-                                        "#D1E5F0", "white", "#FDDBC7",
-                                        "#F4A582", "#D6604D", "#B2182B"),
-                             limits = c(-max_diff, max_diff)) +
-        theme(legend.position = "right", legend.key.height = unit(1.5, "cm")))
+  # Stack outgoing + incoming, add shared legends on right
+  rows_stacked <- plot_grid(
+    row_out + draw_label("Outgoing Signal:", x = 0.01, y = 0.95,
+                         hjust = 0, vjust = 1, fontface = "bold", size = 11),
+    row_in  + draw_label("Incoming Signal:", x = 0.01, y = 0.95,
+                         hjust = 0, vjust = 1, fontface = "bold", size = 11),
+    ncol = 1, rel_heights = c(1, 1))
 
-    legends <- plot_grid(leg_base, leg_diff, ncol = 1, rel_heights = c(1, 1))
+  final <- plot_grid(rows_stacked, legends, nrow = 1, rel_widths = c(6, 0.7))
 
-    # --- Combine ---
-    main_plot <- plot_grid(p_base, p_diff, nrow = 1,
-                           rel_widths = c(1.3, 5), align = "h", axis = "tb")
-    final <- plot_grid(main_plot, legends, nrow = 1, rel_widths = c(6, 0.8))
-
-    pdf(file.path(fig_dir, paste0("fig3B_", tolower(direction), "_heatmap.pdf")),
-        width = 20, height = 4)
-    print(final +
-      draw_label(paste(direction, "Signal:"), x = 0.01, y = 0.97,
-                 hjust = 0, vjust = 1, fontface = "bold", size = 14))
-    dev.off()
-  }
-  cat("  Saved fig3B_outgoing_heatmap.pdf and fig3B_incoming_heatmap.pdf\n")
+  pdf(file.path(fig_dir, "fig3B_difference_heatmaps.pdf"), width = 20, height = 7.5)
+  print(final)
+  dev.off()
+  cat("  Saved fig3B_difference_heatmaps.pdf\n")
 }
 
 cat("\n10b CellChat figures complete.\n")
