@@ -42,13 +42,14 @@ for (cl in clusters) {
   # Raw counts (genes x cells) -> transpose to cells x genes for AnnData
   raw <- GetAssayData(sub, layer = "counts")
 
-  # Convert to scipy CSR (cells x genes)
-  raw_csr <- scipy$csr_matrix(
+  # R dgCMatrix is CSC (genes x cells); reconstruct as CSC then transpose to cells x genes
+  raw_csc <- scipy$csc_matrix(
     tuple(np$array(raw@x),
           np$array(as.integer(raw@i)),
           np$array(as.integer(raw@p))),
     shape = tuple(as.integer(nrow(raw)), as.integer(ncol(raw)))
-  )$T   # transpose: cells x genes
+  )
+  raw_csr <- raw_csc$T$tocsr()   # cells x genes
 
   # Build AnnData and write as loom (avoids loompy np.string_ bug)
   obs_df <- reticulate::r_to_py(
@@ -64,6 +65,7 @@ for (cl in clusters) {
   )
 
   adata <- ad$AnnData(X = raw_csr, obs = obs_df, var = var_df)
+  cat(sprintf("  AnnData: %d cells x %d genes\n", nrow(raw), ncol(raw)))
   adata$obs_names <- reticulate::r_to_py(as.list(colnames(raw)))
   adata$var_names <- reticulate::r_to_py(as.list(rownames(raw)))
   adata$write_loom(loom_path, write_obsm_varm = FALSE)
