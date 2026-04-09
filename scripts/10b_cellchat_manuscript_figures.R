@@ -467,38 +467,38 @@ tryCatch({
     cc <- cellchat_objects[[cond]]
     if (is.null(cc)) next
 
-    # Get CCL L-R pairs
-    lr_pairs <- cc@LR$LRsig
-    ccl_pairs <- lr_pairs[grepl("^CCL", lr_pairs$pathway_name, ignore.case = TRUE), ]
-    if (nrow(ccl_pairs) == 0) next
+    # Get CCL communications via standard CellChat API
+    ccl_comm <- tryCatch(
+      subsetCommunication(cc, signaling = "CCL"),
+      error = function(e) NULL
+    )
+    if (is.null(ccl_comm) || nrow(ccl_comm) == 0) {
+      cat(sprintf("    No CCL communications in %s\n", cond))
+      next
+    }
 
-    prob_array <- cc@net$prob  # sender x receiver x LR
-    lr_names <- dimnames(prob_array)[[3]]
-    ct_names <- dimnames(prob_array)[[1]]
+    for (idx in seq_len(nrow(ccl_comm))) {
+      ligand      <- ccl_comm$ligand[idx]
+      source_ct   <- ccl_comm$source[idx]
+      target_ct   <- ccl_comm$target[idx]
+      prob_val    <- ccl_comm$prob[idx]
 
-    for (idx in seq_len(nrow(ccl_pairs))) {
-      lr_name <- ccl_pairs$interaction_name_2[idx]
-      ligand <- ccl_pairs$ligand[idx]
-
-      if (!lr_name %in% lr_names) next
-      mat <- prob_array[, , lr_name]
-
-      # Sender strength: sum across receivers (row sums)
-      for (ct in ct_order) {
-        if (ct %in% ct_names) {
-          s_val <- sum(mat[ct, ])
-          sender_all <- c(sender_all, list(data.frame(
-            ligand = ligand, celltype = ct, value = s_val,
-            condition = cond, stringsAsFactors = FALSE)))
-
-          r_val <- sum(mat[, ct])
-          receiver_all <- c(receiver_all, list(data.frame(
-            ligand = ligand, celltype = ct, value = r_val,
-            condition = cond, stringsAsFactors = FALSE)))
-        }
+      # Sender: the cell type sending the ligand
+      if (source_ct %in% ct_order) {
+        sender_all <- c(sender_all, list(data.frame(
+          ligand = ligand, celltype = source_ct, value = prob_val,
+          condition = cond, stringsAsFactors = FALSE)))
+      }
+      # Receiver: the cell type receiving the ligand
+      if (target_ct %in% ct_order) {
+        receiver_all <- c(receiver_all, list(data.frame(
+          ligand = ligand, celltype = target_ct, value = prob_val,
+          condition = cond, stringsAsFactors = FALSE)))
       }
     }
   }
+
+  if (length(sender_all) == 0) stop("No CCL sender data found across any condition")
 
   sender_df <- do.call(rbind, sender_all)
   receiver_df <- do.call(rbind, receiver_all)
