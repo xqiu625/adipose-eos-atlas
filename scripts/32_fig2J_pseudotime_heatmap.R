@@ -13,10 +13,8 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 
 suppressPackageStartupMessages({
-  library(SingleCellExperiment)
   library(Matrix)
   library(pheatmap)
-  library(viridis)
   library(dplyr)
 })
 
@@ -44,19 +42,38 @@ group_colors <- c(
 )
 
 # =============================================================================
-# 1. Load Monocle3 three-way CDS (as SCE — no monocle3 package needed)
+# 1. Load Monocle3 three-way CDS — extract raw slots to avoid loading monocle3
 # =============================================================================
-cat("Loading monocle3_threeway_cds.rds ...\n")
-cds <- readRDS(file.path(BASE, "monocle_threeway", "monocle3_threeway_cds.rds"))
-cat(sprintf("  %d cells x %d genes\n", ncol(cds), nrow(cds)))
+cat("Loading monocle3_threeway_cds.rds (raw slot extraction) ...\n")
 
-# Extract pseudotime directly from colData (monocle3 stores it there)
-pt_all <- colData(cds)$pseudotime
-if (is.null(pt_all)) {
-  # Fallback: try monocle3_pseudotime slot name
-  pt_all <- cds@colData$monocle3_pseudotime
-}
-names(pt_all) <- colnames(cds)
+# Read as raw S4 object without triggering class validation
+old_check <- getOption("strictS4")
+options(strictS4 = FALSE)
+cds_raw <- tryCatch(
+  readRDS(file.path(BASE, "monocle_threeway", "monocle3_threeway_cds.rds")),
+  error = function(e) {
+    # If class loading fails, use low-level read
+    cat("  Standard readRDS failed, trying raw deserialization...\n")
+    con <- gzfile(file.path(BASE, "monocle_threeway", "monocle3_threeway_cds.rds"), "rb")
+    on.exit(close(con))
+    unserialize(con)
+  }
+)
+options(strictS4 = old_check)
+
+# Extract components from the S4 slots
+cell_meta <- as.data.frame(cds_raw@colData)
+counts_mat <- cds_raw@assays@data$counts
+gene_names <- rownames(cds_raw)
+cell_names <- colnames(cds_raw)
+
+cat(sprintf("  %d cells x %d genes\n", length(cell_names), length(gene_names)))
+
+# Pseudotime (monocle3 stores in colData$pseudotime)
+pt_all <- cell_meta$pseudotime
+names(pt_all) <- cell_names
+cat(sprintf("  Pseudotime range: %.1f - %.1f\n",
+            min(pt_all[is.finite(pt_all)]), max(pt_all[is.finite(pt_all)])))
 
 # =============================================================================
 # 2. Subset to main figure groups (BM + Blood + C0-C5)
@@ -64,11 +81,12 @@ names(pt_all) <- colnames(cds)
 cat("Subsetting to main groups ...\n")
 main_groups <- c("Gurtner BM", "Gurtner Blood",
                  "C0", "C1", "C2", "C3", "C4", "C5")
-grp <- colData(cds)$main_group
+grp <- cell_meta$main_group
 keep <- !is.na(grp) & grp %in% main_groups & is.finite(pt_all)
-cds_main <- cds[, keep]
+counts_main <- counts_mat[, keep]
+meta_main <- cell_meta[keep, ]
 pt <- pt_all[keep]
-cat(sprintf("  Main group cells with finite pseudotime: %d\n", ncol(cds_main)))
+cat(sprintf("  Main group cells with finite pseudotime: %d\n", sum(keep)))
 
 # =============================================================================
 # 3. Identify top 1,000 HVGs
@@ -76,17 +94,17 @@ cat(sprintf("  Main group cells with finite pseudotime: %d\n", ncol(cds_main)))
 cat("Identifying top 1,000 HVGs ...\n")
 
 # Get normalized counts (log-normalized)
-counts_mat <- as.matrix(assay(cds_main))
+counts_dense <- as.matrix(counts_main)
 # Normalize: library-size normalize + log1p
-lib_sizes <- colSums(counts_mat)
-norm_mat <- log1p(t(t(counts_mat) / lib_sizes * 1e4))
+lib_sizes <- colSums(counts_dense)
+norm_mat <- log1p(t(t(counts_dense) / lib_sizes * 1e4))
 
 # Compute variance of each gene across cells
 gene_vars <- apply(norm_mat, 1, var)
 gene_means <- rowMeans(norm_mat)
 
 # Filter: keep genes expressed in >= 1% of cells
-pct_expressed <- rowMeans(counts_mat > 0)
+pct_expressed <- rowMeans(counts_dense > 0)
 expressed_genes <- names(pct_expressed[pct_expressed >= 0.01])
 cat(sprintf("  Genes expressed in >= 1%% of cells: %d\n", length(expressed_genes)))
 
@@ -103,7 +121,7 @@ cat("Ordering cells and binning ...\n")
 # Order cells by pseudotime
 cell_order <- order(pt)
 pt_ordered <- pt[cell_order]
-groups_ordered <- as.character(colData(cds_main)$main_group)[cell_order]
+groups_ordered <- as.character(meta_main$main_group)[cell_order]
 
 # Bin cells into 200 bins along pseudotime for cleaner visualization
 n_bins <- 200
