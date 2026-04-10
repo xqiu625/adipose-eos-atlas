@@ -89,42 +89,25 @@ ex_mtx = pd.DataFrame(mat.T.astype(np.float32), index=barcodes, columns=genes)
 
 print(f"  Expression: {ex_mtx.shape}")
 
-# Load regulons
-from ctxcore.genesig import GeneSignature
+# Load regulons using pyscenic's df2regulons (handles MultiIndex format correctly)
 from pyscenic.utils import load_motifs
-import csv
+from pyscenic.prune import df2regulons
 
-regulons = {}
 try:
     motifs = load_motifs(reg_csv)
-    for motif in motifs.itertuples():
-        tf = motif.TF
-        genes = set(g for g, _ in motif.TargetGenes)
-        if tf not in regulons:
-            regulons[tf] = set()
-        regulons[tf].update(genes)
+    regulons = df2regulons(motifs)
+    print(f"  Regulons: {len(regulons)}")
 except Exception as e:
-    print(f"  load_motifs failed: {e}, trying manual parse")
-    with open(reg_csv) as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            tf = row.get("TF", row.get("", ""))
-            tg = row.get("TargetGenes", "")
-            if tf and tg:
-                try:
-                    import ast
-                    genes = [g[0] for g in ast.literal_eval(tg)]
-                    regulons.setdefault(tf, set()).update(genes)
-                except:
-                    pass
+    print(f"  Failed to load regulons: {e}")
+    sys.exit(1)
 
-gene_sigs = [GeneSignature(name=tf, gene2weight={g: 1.0 for g in genes})
-             for tf, genes in regulons.items() if len(genes) >= 5]
-print(f"  Regulons: {len(gene_sigs)}")
+if not regulons:
+    print("  ERROR: No regulons found in regulons.csv")
+    sys.exit(1)
 
 # AUCell
 from pyscenic.aucell import aucell
-auc_mtx = aucell(ex_mtx, gene_sigs, num_workers=8)
+auc_mtx = aucell(ex_mtx, regulons, num_workers=8)
 auc_mtx.to_csv(auc_csv)
 print(f"  Saved AUCell: {auc_csv}")
 PYEOF
