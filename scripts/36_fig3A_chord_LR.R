@@ -50,9 +50,15 @@ group_colors <- c("Eosinophils"    = "#777B7E",
                   "M2 Functional"  = "#8FC50E",
                   "M2 Surface"     = "#5633AA")
 
-# Direction colors for links
-dir_colors <- c("Eos_to_Mac" = "#E31A1C",   # warm red
-                "Mac_to_Eos" = "#2171B5")    # cool blue
+# Link colors by mac subtype and direction
+link_palette <- c(
+  "Eos_to_M1"          = adjustcolor("#cb416b", alpha.f = 0.5),
+  "Eos_to_M2_Func"     = adjustcolor("#8FC50E", alpha.f = 0.5),
+  "Eos_to_M2_Surf"     = adjustcolor("#5633AA", alpha.f = 0.5),
+  "M1_to_Eos"          = adjustcolor("#cb416b", alpha.f = 0.3),
+  "M2_Func_to_Eos"     = adjustcolor("#8FC50E", alpha.f = 0.3),
+  "M2_Surf_to_Eos"     = adjustcolor("#5633AA", alpha.f = 0.3)
+)
 
 # =============================================================================
 # 1. Extract CCL L-R pair interactions from all conditions
@@ -141,12 +147,35 @@ cap_name <- function(x) {
 comm_df$ligand_cap <- cap_name(comm_df$ligand)
 comm_df$receptor_cap <- cap_name(comm_df$receptor)
 
-# Direction label
-comm_df$direction <- ifelse(comm_df$source_group == "Eosinophils",
-                            "Eos_to_Mac", "Mac_to_Eos")
+# Direction label with specific mac subtype
+get_mac_dir <- function(src_grp, tgt_grp) {
+  if (src_grp == "Eosinophils") {
+    return(paste0("Eos_to_",
+      ifelse(tgt_grp == "M1 Mac", "M1",
+      ifelse(tgt_grp == "M2 Functional", "M2_Func", "M2_Surf"))))
+  } else {
+    return(paste0(
+      ifelse(src_grp == "M1 Mac", "M1",
+      ifelse(src_grp == "M2 Functional", "M2_Func", "M2_Surf")),
+      "_to_Eos"))
+  }
+}
+comm_df$direction <- mapply(get_mac_dir, comm_df$source_group, comm_df$target_group)
 
 cat("Ligands:", paste(sort(unique(comm_df$ligand_cap)), collapse = ", "), "\n")
 cat("Receptors:", paste(sort(unique(comm_df$receptor_cap)), collapse = ", "), "\n")
+
+# Diagnostic: interactions per mac subtype
+cat("\nInteractions per direction:\n")
+print(table(comm_df$direction))
+cat("\nM2 Functional interactions:\n")
+m2f <- comm_df[grepl("M2_Func", comm_df$direction), ]
+if (nrow(m2f) > 0) {
+  cat(sprintf("  %d interactions found\n", nrow(m2f)))
+  print(unique(m2f[, c("ligand_cap", "receptor_cap", "direction")]))
+} else {
+  cat("  NONE — M2 Functional has no CCL signaling with Eos in any condition\n")
+}
 
 # =============================================================================
 # 3. Aggregate: average across conditions, then sum by direction per L-R pair
@@ -224,10 +253,8 @@ chord_df <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Link colors by direction
-link_cols <- ifelse(chord_df$direction == "Eos_to_Mac",
-                    adjustcolor(dir_colors["Eos_to_Mac"], alpha.f = 0.55),
-                    adjustcolor(dir_colors["Mac_to_Eos"], alpha.f = 0.55))
+# Link colors by mac subtype
+link_cols <- link_palette[chord_df$direction]
 
 # Sector order: ligands on left, receptors on right, big gap between groups
 sector_order <- c(ligands, receptors)
@@ -294,15 +321,18 @@ if (n_rec > 1) {
 
 circos.clear()
 
-# Legend: direction + cell type group
+# Legend: mac subtype interactions
 legend("bottomleft",
-       legend = c("Eos \u2192 Mac signaling",
-                  "Mac \u2192 Eos signaling",
-                  "", names(group_colors)),
-       fill = c(dir_colors["Eos_to_Mac"], dir_colors["Mac_to_Eos"],
-                NA, group_colors),
-       border = c("black", "black", NA, rep("black", length(group_colors))),
-       bty = "n", cex = 0.85,
+       legend = c("Eos \u2192 M1 Mac", "Eos \u2192 M2 Functional",
+                  "Eos \u2192 M2 Surface", "",
+                  "M1 Mac \u2192 Eos", "M2 Functional \u2192 Eos",
+                  "M2 Surface \u2192 Eos"),
+       fill = c(link_palette["Eos_to_M1"], link_palette["Eos_to_M2_Func"],
+                link_palette["Eos_to_M2_Surf"], NA,
+                link_palette["M1_to_Eos"], link_palette["M2_Func_to_Eos"],
+                link_palette["M2_Surf_to_Eos"]),
+       border = c(rep("black", 3), NA, rep("black", 3)),
+       bty = "n", cex = 0.75,
        title = "CCL Signaling", title.adj = 0)
 
 dev.off()
