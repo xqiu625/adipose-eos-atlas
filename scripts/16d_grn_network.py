@@ -34,7 +34,7 @@ os.makedirs(FIG_DIR, exist_ok=True)
 EOS_CLUSTERS = ["C0", "C1", "C2", "C3", "C4", "C5"]
 
 TOP_PER_CLUSTER = 4       # TFs per cluster to include as nodes
-CORR_THRESH     = 0.3     # Pearson r threshold for edges
+CORR_THRESH     = 0.4     # Pearson r threshold for edges (higher = fewer edges)
 SUBSAMPLE_N     = 500     # cells to subsample for correlation
 RANDOM_SEED     = 42
 MIN_AUC         = 0.02    # minimum mean AUC to include a TF
@@ -187,73 +187,84 @@ print(f"  Edges: {edges_added}")
 # =============================================================================
 print("\nStep 4: Plotting...")
 
-fig, ax = plt.subplots(figsize=(10, 9))
+fig, ax = plt.subplots(figsize=(12, 11))
 
-# Spring layout
-pos = nx.spring_layout(G, k=2.5, iterations=100, seed=RANDOM_SEED)
+# Spring layout — high k for spacing, many iterations to stabilize
+pos = nx.spring_layout(G, k=5.0, iterations=200, seed=RANDOM_SEED, scale=2.0)
 
 # Node colors and sizes
 node_colors = [CLUSTER_COLORS[G.nodes[n]["cluster"]] for n in G.nodes]
 auc_vals = np.array([G.nodes[n]["auc"] for n in G.nodes])
-node_sizes = 200 + auc_vals * 2000   # scale AUC to reasonable node size
+node_sizes = 150 + auc_vals * 1200   # smaller nodes to reduce overlap
 
-# Draw edges
-edge_weights = [G[u][v]["weight"] for u, v in G.edges]
-edge_alphas = [min(1.0, 0.3 + abs(w) * 0.7) for w in edge_weights]
-for (u, v), alpha in zip(G.edges, edge_alphas):
+# Draw edges — thin and transparent
+for u, v in G.edges:
+    r = abs(G[u][v]["weight"])
+    alpha = 0.15 + r * 0.3
+    lw = 0.5 + r * 1.5
     x = [pos[u][0], pos[v][0]]
     y = [pos[u][1], pos[v][1]]
-    ax.plot(x, y, color="#888888", linewidth=1.5, alpha=alpha, zorder=1)
+    ax.plot(x, y, color="#aaaaaa", linewidth=lw, alpha=alpha, zorder=1)
 
 # Draw nodes
 ax.scatter([pos[n][0] for n in G.nodes],
            [pos[n][1] for n in G.nodes],
            s=node_sizes, c=node_colors,
-           edgecolors="white", linewidths=0.8, zorder=2)
+           edgecolors="white", linewidths=1.0, zorder=2)
 
-# Node labels
+# Node labels — offset below each node to avoid overlap
 for n in G.nodes:
-    ax.annotate(n, pos[n], fontsize=9, fontweight="bold",
-                ha="center", va="center", zorder=3)
+    r = np.sqrt(node_sizes[list(G.nodes).index(n)]) / 180  # offset proportional to size
+    ax.annotate(n, (pos[n][0], pos[n][1] - r * 0.12),
+                fontsize=8, fontweight="bold",
+                ha="center", va="top", zorder=3)
 
-# Cluster labels — place near centroid of each cluster's nodes
+# Cluster labels — place at outermost node, pushed outward from graph center
+graph_cx = np.mean([pos[n][0] for n in G.nodes])
+graph_cy = np.mean([pos[n][1] for n in G.nodes])
 for cl in EOS_CLUSTERS:
     cl_nodes = [n for n in G.nodes if G.nodes[n]["cluster"] == cl]
     if not cl_nodes:
         continue
     cx = np.mean([pos[n][0] for n in cl_nodes])
     cy = np.mean([pos[n][1] for n in cl_nodes])
-    # Offset label slightly above the centroid
-    ax.text(cx, cy + 0.12, CLUSTER_LABELS[cl],
-            fontsize=12, fontweight="bold",
-            color=CLUSTER_COLORS[cl], ha="center", va="bottom",
+    # Push label outward from graph center
+    dx = cx - graph_cx
+    dy = cy - graph_cy
+    dist = max(np.sqrt(dx**2 + dy**2), 0.01)
+    offset = 0.35
+    lx = cx + dx / dist * offset
+    ly = cy + dy / dist * offset
+    ax.text(lx, ly, CLUSTER_LABELS[cl],
+            fontsize=13, fontweight="bold",
+            color=CLUSTER_COLORS[cl], ha="center", va="center",
             zorder=4)
 
-# Node size legend
-legend_x = 0.85
-legend_y = -0.05
+# Node size legend — bottom right corner using axes fraction
+ax_xlim = ax.get_xlim()
+ax_ylim = ax.get_ylim()
+leg_x = ax_xlim[1] - 0.3
+leg_y = ax_ylim[0] + 0.2
+ax.text(leg_x, leg_y + 0.35, "Node size", fontsize=9,
+        fontweight="bold", va="bottom", ha="center")
 for auc_val, label in [(0, "AUC =0"), (0.5, "AUC =0.5"), (1.0, "AUC =1")]:
-    size = 200 + auc_val * 2000
-    ax.scatter([legend_x], [legend_y], s=size, c="#aaaaaa",
-               edgecolors="white", linewidths=0.8, zorder=2,
-               clip_on=False)
-    ax.text(legend_x + 0.08, legend_y, label, fontsize=8,
+    size = 150 + auc_val * 1200
+    ax.scatter([leg_x], [leg_y], s=size, c="#aaaaaa",
+               edgecolors="white", linewidths=0.8, zorder=2)
+    ax.text(leg_x + 0.25, leg_y, label, fontsize=8,
             va="center", ha="left", zorder=3)
-    legend_y -= 0.10
+    leg_y -= 0.25
 
-ax.text(legend_x, legend_y + 0.35, "Node size", fontsize=9,
-        fontweight="bold", va="top", ha="center")
-
-ax.set_title("Eosinophil Gene Regulatory Network",
-             fontsize=14, fontweight="bold", pad=15)
+ax.set_title("B        Eosinophil Gene Regulatory Network",
+             fontsize=14, fontweight="bold", pad=15, loc="left")
 ax.axis("off")
 
-# Expand limits slightly for labels
+# Expand limits for labels
 xlim = ax.get_xlim()
 ylim = ax.get_ylim()
-margin = 0.15
+margin = 0.5
 ax.set_xlim(xlim[0] - margin, xlim[1] + margin)
-ax.set_ylim(ylim[0] - margin * 1.5, ylim[1] + margin)
+ax.set_ylim(ylim[0] - margin, ylim[1] + margin)
 
 out_pdf = os.path.join(FIG_DIR, "Fig5_grn_network.pdf")
 fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
