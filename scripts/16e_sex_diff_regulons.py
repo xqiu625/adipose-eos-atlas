@@ -39,7 +39,7 @@ PVAL_THRESH = 0.05
 ZSCORE_CAP  = 2.5
 
 EXCLUDE = {
-    "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Tef", "Bclaf1",
+    "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Bclaf1",
     "Crem", "Atf4", "Etv5", "Zbtb7b", "Sp3", "Elk1", "Cebpb", "Max",
     "Atf3", "Ikzf1", "Atf1", "Cux1", "Stat6", "Elk3"
 }
@@ -231,20 +231,12 @@ cbar.set_ticks([-2, -1, 0, 1, 2])
 cbar.ax.tick_params(labelsize=8)
 
 # Legend
-legend_x = ax_left + ax_width + 0.06
-legend_y  = ax_bottom + ax_height * 0.15
-fig.add_patch(plt.Rectangle((legend_x, legend_y + 0.04),
-                              0.025, 0.025,
-                              color=FEMALE_COLOR, transform=fig.transFigure,
-                              clip_on=False))
-fig.text(legend_x + 0.03, legend_y + 0.052, "Female-enriched in WT",
-         fontsize=8, va="center", transform=fig.transFigure)
-fig.add_patch(plt.Rectangle((legend_x, legend_y),
-                              0.025, 0.025,
-                              color=MALE_COLOR, transform=fig.transFigure,
-                              clip_on=False))
-fig.text(legend_x + 0.03, legend_y + 0.012, "Male-enriched in WT",
-         fontsize=8, va="center", transform=fig.transFigure)
+import matplotlib.patches as mpatches
+female_patch = mpatches.Patch(color=FEMALE_COLOR, label="Female-enriched in WT")
+male_patch   = mpatches.Patch(color=MALE_COLOR,   label="Male-enriched in WT")
+ax.legend(handles=[female_patch, male_patch], fontsize=8,
+          loc="lower right", bbox_to_anchor=(1.0, -0.22),
+          frameon=False)
 
 out_pdf = os.path.join(FIG_DIR, "Fig5_sex_diff_regulons.pdf")
 fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
