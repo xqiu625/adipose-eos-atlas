@@ -163,10 +163,11 @@ print("\nStep 3: Building network...")
 
 G = nx.Graph()
 
-# Add nodes with attributes
-global_means = merged[tf_list].mean()
+# Add nodes — use max cluster mean AUC (not global mean, which dilutes cluster-specific TFs)
 for tf in tf_list:
-    G.add_node(tf, cluster=selected_tfs[tf], auc=global_means[tf])
+    cl = selected_tfs[tf]
+    cl_auc = mean_df.loc[tf, cl] if tf in mean_df.index else 0.0
+    G.add_node(tf, cluster=cl, auc=cl_auc)
 
 # Add edges where correlation >= threshold
 edges_added = 0
