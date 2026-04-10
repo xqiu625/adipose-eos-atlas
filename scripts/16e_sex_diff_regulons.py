@@ -38,6 +38,10 @@ TOP_MALE    = 2      # top male-enriched regulons
 PVAL_THRESH = 0.05
 ZSCORE_CAP  = 2.5
 
+# Set to None for data-driven selection, or specify TFs to lock in reference figure TFs
+FIXED_FEMALE = ["Fli1", "Tef", "Rara"]   # None to use data-driven
+FIXED_MALE   = ["Rel", "Irf4"]            # None to use data-driven
+
 EXCLUDE = {
     "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Bclaf1",
     "Crem", "Atf4", "Etv5", "Zbtb7b", "Sp3", "Elk1", "Cebpb", "Max",
@@ -122,14 +126,24 @@ res["log2fc"] = np.log2(res["fc"])
 sig = res[res["pval"] < PVAL_THRESH].copy()
 print(f"  Significant regulons: {len(sig)}")
 
-female_top = (sig[sig["log2fc"] > 0]
-              .nlargest(TOP_FEMALE, "log2fc")["tf"].tolist())
-male_top   = (sig[sig["log2fc"] < 0]
-              .nsmallest(TOP_MALE, "log2fc")["tf"].tolist())
+if FIXED_FEMALE is not None and FIXED_MALE is not None:
+    # Use manually specified TFs from reference figure
+    available = set(auc.columns)
+    female_top = [tf for tf in FIXED_FEMALE if tf in available]
+    male_top   = [tf for tf in FIXED_MALE   if tf in available]
+    missing = [tf for tf in FIXED_FEMALE + FIXED_MALE if tf not in available]
+    if missing:
+        print(f"  WARNING: TFs not found in AUCell data: {missing}")
+    print(f"  Using fixed TFs — Female: {female_top}, Male: {male_top}")
+else:
+    female_top = (sig[sig["log2fc"] > 0]
+                  .nlargest(TOP_FEMALE, "log2fc")["tf"].tolist())
+    male_top   = (sig[sig["log2fc"] < 0]
+                  .nsmallest(TOP_MALE, "log2fc")["tf"].tolist())
+    print(f"  Female-enriched: {female_top}")
+    print(f"  Male-enriched:   {male_top}")
 
 selected = female_top + male_top
-print(f"  Female-enriched: {female_top}")
-print(f"  Male-enriched:   {male_top}")
 
 if not selected:
     raise ValueError("No significant sex-differential regulons found. "
@@ -244,7 +258,8 @@ ax.legend(handles=[female_patch, male_patch], fontsize=8,
           loc="lower right", bbox_to_anchor=(1.0, -0.22),
           frameon=False)
 
-out_pdf = os.path.join(FIG_DIR, "Fig5_sex_diff_regulons.pdf")
+suffix  = "_reference" if (FIXED_FEMALE is not None) else "_datadriven"
+out_pdf = os.path.join(FIG_DIR, f"Fig5_sex_diff_regulons{suffix}.pdf")
 fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
 plt.close(fig)
 print(f"\nSaved: {out_pdf}")
