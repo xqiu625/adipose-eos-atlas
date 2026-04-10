@@ -60,26 +60,31 @@ print("\nStep 1: Loading per-cluster AUCell matrices...")
 np.random.seed(RANDOM_SEED)
 
 eos_data = {}
-gene_counts = {}   # tf -> n_targets (from regulon names like "Mybl2(10)")
+gene_counts = {}   # tf -> max n_targets across clusters
 
 for cl in EOS_CLUSTERS:
     auc_path = os.path.join(SCENIC_DIR, cl, "auc_matrix.csv")
+    reg_path = os.path.join(SCENIC_DIR, cl, "regulons.csv")
     if os.path.exists(auc_path):
         df = pd.read_csv(auc_path, index_col=0)
         eos_data[cl] = df
-        # Parse target gene counts from column names e.g. "Mybl2(10)"
-        for col in df.columns:
-            if "(" in col:
-                tf   = col.split("(")[0].strip()
-                try:
-                    n = int(col.split("(")[1].rstrip(")").strip())
-                    if tf not in gene_counts or n > gene_counts[tf]:
-                        gene_counts[tf] = n
-                except Exception:
-                    pass
         print(f"  {cl}: {df.shape[0]} cells x {df.shape[1]} regulons")
     else:
         print(f"  WARNING: {auc_path} not found")
+    # Extract target gene counts from regulons.csv (cisTarget output)
+    if os.path.exists(reg_path):
+        try:
+            from pyscenic.utils import load_motifs
+            from pyscenic.prune import df2regulons
+            motifs = load_motifs(reg_path)
+            regs = df2regulons(motifs)
+            for r in regs:
+                tf = r.name
+                n = len(r)
+                if tf not in gene_counts or n > gene_counts[tf]:
+                    gene_counts[tf] = n
+        except Exception as e:
+            print(f"  WARNING: Could not parse {reg_path}: {e}")
 
 if not eos_data:
     raise FileNotFoundError(
