@@ -128,11 +128,6 @@ mac_types <- c("Mac_M1", "Mac_M2_Func", "Mac_M2_Surf")
 eos_short <- setNames(paste0("C", 0:5), eos_types)
 mac_short <- c("Mac_M1" = "M1", "Mac_M2_Func" = "M2\nFunct.", "Mac_M2_Surf" = "M2\nSurf.")
 
-# Annotation colors
-eos_anno_col <- eos_colors[paste0("C", 0:5)]
-mac_anno_col <- c("M1" = unname(mac_colors["Mac_M1"]),
-                  "M2\nFunct." = unname(mac_colors["Mac_M2_Func"]),
-                  "M2\nSurf."  = unname(mac_colors["Mac_M2_Surf"]))
 
 # =============================================================================
 # Helper: build directional matrix
@@ -186,16 +181,14 @@ receiver_e <- mac_short[pairs_e$target]
 names(sender_e) <- pairs_e$col_id
 names(receiver_e) <- pairs_e$col_id
 
-# Bottom annotation: colored blocks with sender/receiver identity
+# Bottom annotation: text labels for sender/receiver identity
 bot_e <- HeatmapAnnotation(
-  `Eos\nSender`   = sender_e,
-  `Mac\nReceiver`  = receiver_e,
-  col = list(`Eos\nSender`  = eos_anno_col,
-             `Mac\nReceiver` = mac_anno_col),
+  `Eos\nSender`   = anno_text(sender_e, gp = gpar(fontsize = 8),
+                               location = 0.5, just = "center"),
+  `Mac\nReceiver`  = anno_text(receiver_e, gp = gpar(fontsize = 8),
+                                location = 0.5, just = "center"),
   annotation_name_side = "left",
   annotation_name_gp = gpar(fontsize = 9),
-  simple_anno_size = unit(5, "mm"),
-  show_legend = TRUE,
   which = "column"
 )
 
@@ -251,14 +244,12 @@ names(sender_f) <- pairs_f$col_id
 names(receiver_f) <- pairs_f$col_id
 
 bot_f <- HeatmapAnnotation(
-  `Mac\nSender`   = sender_f,
-  `Eos\nReceiver`  = receiver_f,
-  col = list(`Mac\nSender`  = mac_anno_col,
-             `Eos\nReceiver` = eos_anno_col),
+  `Mac\nSender`   = anno_text(sender_f, gp = gpar(fontsize = 8),
+                               location = 0.5, just = "center"),
+  `Eos\nReceiver`  = anno_text(receiver_f, gp = gpar(fontsize = 8),
+                                location = 0.5, just = "center"),
   annotation_name_side = "left",
   annotation_name_gp = gpar(fontsize = 9),
-  simple_anno_size = unit(5, "mm"),
-  show_legend = TRUE,
   which = "column"
 )
 
