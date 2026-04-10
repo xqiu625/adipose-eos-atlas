@@ -77,17 +77,20 @@ for (col in c("pseudotime", "monocle3_pseudotime", "Pseudotime")) {
   }
 }
 
-# If not in colData, check internal int_colData (monocle3 default location)
+# If not in colData, check monocle3 internal storage
 if (is.null(pt_all)) {
-  cat("  Pseudotime not in colData, checking int_colData...\n")
-  int_cd <- tryCatch(cds_raw@int_colData, error = function(e) NULL)
-  if (!is.null(int_cd)) {
-    cat("  int_colData columns:", paste(names(int_cd), collapse = ", "), "\n")
-    # monocle3 stores in int_colData$reducedDims or directly
-    for (col in c("pseudotime", "monocle3_pseudotime")) {
-      if (col %in% names(int_cd)) {
-        pt_all <- int_cd[[col]]
-        cat(sprintf("  Found pseudotime in int_colData$%s\n", col))
+  cat("  Pseudotime not in colData, searching internal slots...\n")
+
+  # monocle3 stores pseudotime in cds@principal_graph_aux[["UMAP"]]$pseudotime
+  pga <- tryCatch(cds_raw@principal_graph_aux, error = function(e) NULL)
+  if (!is.null(pga)) {
+    cat("  principal_graph_aux names:", paste(names(pga), collapse = ", "), "\n")
+    for (rd_name in names(pga)) {
+      sub <- pga[[rd_name]]
+      cat(sprintf("    %s contains: %s\n", rd_name, paste(names(sub), collapse = ", ")))
+      if ("pseudotime" %in% names(sub)) {
+        pt_all <- sub$pseudotime
+        cat(sprintf("  Found pseudotime in principal_graph_aux$%s$pseudotime\n", rd_name))
         break
       }
     }
@@ -95,8 +98,7 @@ if (is.null(pt_all)) {
 }
 
 if (is.null(pt_all)) {
-  stop("Cannot find pseudotime in the CDS object. Available colData: ",
-       paste(colnames(cell_meta), collapse = ", "))
+  stop("Cannot find pseudotime. Check that order_cells() was run on this CDS.")
 }
 
 names(pt_all) <- cell_names
