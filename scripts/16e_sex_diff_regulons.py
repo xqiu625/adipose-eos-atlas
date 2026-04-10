@@ -28,10 +28,11 @@ ZSCORE_CMAP = LinearSegmentedColormap.from_list(
     "blue_white_red", ["#2166ac", "#f7f7f7", "#b2182b"])
 
 BASE      = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
-AUC_FILE  = os.path.join(BASE, "scenic", "eos_scenic_aucell.csv")
+SCENIC_DIR = os.path.join(BASE, "scenic_per_cluster")
 META_FILE = os.path.join(BASE, "scenic", "eos_cell_metadata.csv")
 FIG_DIR   = os.path.join(BASE, "scenic", "figures")
 os.makedirs(FIG_DIR, exist_ok=True)
+EOS_CLUSTERS = ["C0", "C1", "C2", "C3", "C4", "C5"]
 
 TOP_FEMALE  = 3      # top female-enriched regulons
 TOP_MALE    = 2      # top male-enriched regulons
@@ -53,11 +54,20 @@ print("16e_sex_diff_regulons.py")
 print("=" * 60)
 
 # =============================================================================
-# Load data
+# Load data — merge per-cluster AUCell matrices
 # =============================================================================
-print("\nLoading AUCell scores...")
-auc = pd.read_csv(AUC_FILE, index_col=0)
-print(f"  {auc.shape[0]} cells x {auc.shape[1]} regulons")
+print("\nLoading per-cluster AUCell scores...")
+auc_parts = []
+for cl in EOS_CLUSTERS:
+    auc_path = os.path.join(SCENIC_DIR, cl, "auc_matrix.csv")
+    if os.path.exists(auc_path):
+        df = pd.read_csv(auc_path, index_col=0)
+        print(f"  {cl}: {df.shape[0]} cells x {df.shape[1]} regulons")
+        auc_parts.append(df)
+    else:
+        print(f"  WARNING: {auc_path} not found")
+auc = pd.concat(auc_parts, join="outer").fillna(0.0)
+print(f"  Combined: {auc.shape[0]} cells x {auc.shape[1]} regulons")
 
 print("Loading metadata...")
 meta = pd.read_csv(META_FILE)
