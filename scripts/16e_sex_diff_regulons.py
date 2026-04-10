@@ -157,20 +157,24 @@ n_rows = len(selected)
 n_cols = len(GROUP_LABELS)
 n_female = len(female_top)
 
-cell_h   = 0.90
-cell_w   = 0.80
-left_pad = 1.6
-right_pad= 1.4
-top_pad  = 0.8
-bot_pad  = 0.8
-sidebar  = 0.12   # inches for color sidebar
+cell_h    = 0.90
+cell_w    = 0.80
+right_pad = 1.5
+top_pad   = 0.8
+bot_pad   = 0.9
+sidebar_w = 0.18   # sidebar bar width in inches
+label_w   = 1.8    # space for y-axis label text
+gap       = 0.10   # gap between sidebar right edge and heatmap
+
+# Layout: [label_w][sidebar_w][gap][heatmap][right_pad]
+left_pad = label_w + sidebar_w + gap
 
 fig_h = n_rows * cell_h + top_pad + bot_pad
-fig_w = sidebar + left_pad + n_cols * cell_w + right_pad
+fig_w = left_pad + n_cols * cell_w + right_pad
 
 fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
-ax_left   = (sidebar + left_pad) / fig_w
+ax_left   = left_pad / fig_w
 ax_bottom = bot_pad / fig_h
 ax_width  = (n_cols * cell_w) / fig_w
 ax_height = (n_rows * cell_h) / fig_h
@@ -204,9 +208,10 @@ for j in range(1, n_cols):
 FEMALE_COLOR = "#b084c8"
 MALE_COLOR   = "#8fbc3b"
 
-sidebar_ax_left   = (left_pad - sidebar - 0.05) / fig_w
+# Sidebar: sits just to the left of heatmap, after label text space
+sidebar_ax_left = (label_w + 0.02) / fig_w
 sidebar_ax = fig.add_axes([sidebar_ax_left, ax_bottom,
-                            sidebar / fig_w, ax_height])
+                            sidebar_w / fig_w, ax_height])
 sidebar_colors = ([FEMALE_COLOR] * n_female +
                   [MALE_COLOR]   * len(male_top))
 for i, color in enumerate(sidebar_colors):
@@ -214,6 +219,7 @@ for i, color in enumerate(sidebar_colors):
                                         color=color, linewidth=0))
 sidebar_ax.set_xlim(0, 1)
 sidebar_ax.set_ylim(-0.5, n_rows - 0.5)
+sidebar_ax.invert_yaxis()   # match imshow top-to-bottom row order
 sidebar_ax.axis("off")
 
 # Title
