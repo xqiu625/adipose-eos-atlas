@@ -199,7 +199,7 @@ node_sizes = 200 + auc_vals * 2000   # scale AUC to reasonable node size
 
 # Draw edges
 edge_weights = [G[u][v]["weight"] for u, v in G.edges]
-edge_alphas = [min(1.0, 0.3 + w * 0.7) for w in edge_weights]
+edge_alphas = [min(1.0, 0.3 + abs(w) * 0.7) for w in edge_weights]
 for (u, v), alpha in zip(G.edges, edge_alphas):
     x = [pos[u][0], pos[v][0]]
     y = [pos[u][1], pos[v][1]]
