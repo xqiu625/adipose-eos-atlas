@@ -42,30 +42,25 @@ group_colors <- c(
 )
 
 # =============================================================================
-# 1. Load Monocle3 three-way CDS — extract raw slots to avoid loading monocle3
+# 1. Load Monocle3 three-way CDS — deserialize without triggering S4 dispatch
 # =============================================================================
-cat("Loading monocle3_threeway_cds.rds (raw slot extraction) ...\n")
+cat("Loading monocle3_threeway_cds.rds (low-level deserialization) ...\n")
 
-# Read as raw S4 object without triggering class validation
-old_check <- getOption("strictS4")
-options(strictS4 = FALSE)
-cds_raw <- tryCatch(
-  readRDS(file.path(BASE, "monocle_threeway", "monocle3_threeway_cds.rds")),
-  error = function(e) {
-    # If class loading fails, use low-level read
-    cat("  Standard readRDS failed, trying raw deserialization...\n")
-    con <- gzfile(file.path(BASE, "monocle_threeway", "monocle3_threeway_cds.rds"), "rb")
-    on.exit(close(con))
-    unserialize(con)
-  }
-)
-options(strictS4 = old_check)
+# Use raw unserialize to avoid S4 class resolution that triggers monocle3
+rds_path <- file.path(BASE, "monocle_threeway", "monocle3_threeway_cds.rds")
+con <- gzfile(rds_path, "rb")
+cds_raw <- .Internal(unserialize(con, NULL))
+close(con)
 
-# Extract components from the S4 slots
+# Extract components using @ (no generics = no S4 dispatch = no monocle3)
 cell_meta <- as.data.frame(cds_raw@colData)
 counts_mat <- cds_raw@assays@data$counts
-gene_names <- rownames(cds_raw)
-cell_names <- colnames(cds_raw)
+gene_names <- cds_raw@rowRanges@partitioning@NAMES
+if (is.null(gene_names)) gene_names <- rownames(cds_raw@assays@data$counts)
+cell_names <- rownames(cell_meta)
+
+rownames(counts_mat) <- gene_names
+colnames(counts_mat) <- cell_names
 
 cat(sprintf("  %d cells x %d genes\n", length(cell_names), length(gene_names)))
 
@@ -74,6 +69,9 @@ pt_all <- cell_meta$pseudotime
 names(pt_all) <- cell_names
 cat(sprintf("  Pseudotime range: %.1f - %.1f\n",
             min(pt_all[is.finite(pt_all)]), max(pt_all[is.finite(pt_all)])))
+
+# Free the raw CDS object
+rm(cds_raw); gc(verbose = FALSE)
 
 # =============================================================================
 # 2. Subset to main figure groups (BM + Blood + C0-C5)
@@ -86,6 +84,7 @@ keep <- !is.na(grp) & grp %in% main_groups & is.finite(pt_all)
 counts_main <- counts_mat[, keep]
 meta_main <- cell_meta[keep, ]
 pt <- pt_all[keep]
+rm(counts_mat, cell_meta); gc(verbose = FALSE)
 cat(sprintf("  Main group cells with finite pseudotime: %d\n", sum(keep)))
 
 # =============================================================================
