@@ -79,7 +79,7 @@ for cl in EOS_CLUSTERS:
             motifs = load_motifs(reg_path)
             regs = df2regulons(motifs)
             for r in regs:
-                tf = r.name
+                tf = r.name.split("(")[0].strip()
                 n = len(r)
                 if tf not in gene_counts or n > gene_counts[tf]:
                     gene_counts[tf] = n
