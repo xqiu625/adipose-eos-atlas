@@ -218,23 +218,23 @@ for j in range(1, n_cols):
     if j != 2:   # skip separator position (already drawn)
         ax.axvline(x=j - 0.5, color="white", linewidth=0.8)
 
-# Color sidebar (female = purple, male = green)
+# Color sidebar drawn directly on ax using transAxes so labels render on top
 FEMALE_COLOR = "#b084c8"
 MALE_COLOR   = "#8fbc3b"
 
-# Sidebar: sits just to the left of heatmap, after label text space
-sidebar_ax_left = (label_w + 0.02) / fig_w
-sidebar_ax = fig.add_axes([sidebar_ax_left, ax_bottom,
-                            sidebar_w / fig_w, ax_height])
-sidebar_colors = ([FEMALE_COLOR] * n_female +
-                  [MALE_COLOR]   * len(male_top))
+sidebar_colors = ([FEMALE_COLOR] * n_female + [MALE_COLOR] * len(male_top))
+# sidebar width & position in ax.transAxes units
+sb_w  = sidebar_w / (n_cols * cell_w)   # sidebar width relative to ax width
+sb_x1 = -0.03                            # right edge (just left of heatmap)
+sb_x0 = sb_x1 - sb_w                    # left edge
+
 for i, color in enumerate(sidebar_colors):
-    sidebar_ax.add_patch(plt.Rectangle((0, i - 0.5), 1, 1,
-                                        color=color, linewidth=0))
-sidebar_ax.set_xlim(0, 1)
-sidebar_ax.set_ylim(-0.5, n_rows - 0.5)
-sidebar_ax.invert_yaxis()   # match imshow top-to-bottom row order
-sidebar_ax.axis("off")
+    y_top = 1.0 - i / n_rows
+    y_bot = 1.0 - (i + 1) / n_rows
+    rect = plt.Rectangle((sb_x0, y_bot), sb_w, y_top - y_bot,
+                           color=color, linewidth=0,
+                           transform=ax.transAxes, clip_on=False)
+    ax.add_patch(rect)
 
 # Title
 ax.set_title("Eosinophil Sex Differential Regulons",
