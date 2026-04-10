@@ -64,13 +64,46 @@ colnames(counts_mat) <- cell_names
 
 cat(sprintf("  %d cells x %d genes\n", length(cell_names), length(gene_names)))
 
-# Pseudotime (monocle3 stores in colData$pseudotime)
-pt_all <- cell_meta$pseudotime
+# Find pseudotime — monocle3 may store it in colData or in internal slots
+cat("  colData columns:", paste(colnames(cell_meta), collapse = ", "), "\n")
+
+pt_all <- NULL
+# Check colData first
+for (col in c("pseudotime", "monocle3_pseudotime", "Pseudotime")) {
+  if (col %in% colnames(cell_meta)) {
+    pt_all <- cell_meta[[col]]
+    cat(sprintf("  Found pseudotime in colData$%s\n", col))
+    break
+  }
+}
+
+# If not in colData, check internal int_colData (monocle3 default location)
+if (is.null(pt_all)) {
+  cat("  Pseudotime not in colData, checking int_colData...\n")
+  int_cd <- tryCatch(cds_raw@int_colData, error = function(e) NULL)
+  if (!is.null(int_cd)) {
+    cat("  int_colData columns:", paste(names(int_cd), collapse = ", "), "\n")
+    # monocle3 stores in int_colData$reducedDims or directly
+    for (col in c("pseudotime", "monocle3_pseudotime")) {
+      if (col %in% names(int_cd)) {
+        pt_all <- int_cd[[col]]
+        cat(sprintf("  Found pseudotime in int_colData$%s\n", col))
+        break
+      }
+    }
+  }
+}
+
+if (is.null(pt_all)) {
+  stop("Cannot find pseudotime in the CDS object. Available colData: ",
+       paste(colnames(cell_meta), collapse = ", "))
+}
+
 names(pt_all) <- cell_names
 cat(sprintf("  Pseudotime range: %.1f - %.1f\n",
             min(pt_all[is.finite(pt_all)]), max(pt_all[is.finite(pt_all)])))
 
-# Free the raw CDS object
+# Free the raw CDS object (kept alive until here for int_colData access)
 rm(cds_raw); gc(verbose = FALSE)
 
 # =============================================================================
