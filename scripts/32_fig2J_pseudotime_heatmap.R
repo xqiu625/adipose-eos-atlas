@@ -231,20 +231,32 @@ col_anno <- data.frame(
   row.names = colnames(bin_scaled_ordered)
 )
 
-# Row annotation: gene cluster
-gene_cluster_labels <- paste0("Module ", match(gene_clusters, cluster_order))
+# Row annotation: label each gene cluster by its top 3 defining genes
+module_numbers <- match(gene_clusters, cluster_order)
+module_top_genes <- character(k)
+for (m in 1:k) {
+  genes_m <- gene_order[module_numbers == m]
+  # Pick top 3 genes by highest peak expression (most characteristic)
+  peak_vals <- apply(bin_scaled_ordered[genes_m, , drop = FALSE], 1, max)
+  top3 <- head(names(sort(peak_vals, decreasing = TRUE)), 3)
+  module_top_genes[m] <- paste(top3, collapse = "/")
+}
+cat("  Gene cluster labels:\n")
+for (m in 1:k) cat(sprintf("    Cluster %d: %s\n", m, module_top_genes[m]))
+
+gene_cluster_labels <- module_top_genes[module_numbers]
 row_anno <- data.frame(
-  Module = factor(gene_cluster_labels, levels = paste0("Module ", 1:k)),
+  Genes = factor(gene_cluster_labels, levels = module_top_genes),
   row.names = gene_order
 )
 
 # Annotation colors
 module_palette <- c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#A65628")
-names(module_palette) <- paste0("Module ", 1:k)
+names(module_palette) <- module_top_genes
 
 anno_colors <- list(
   Group = group_colors,
-  Module = module_palette
+  Genes = module_palette
 )
 
 # =============================================================================
@@ -257,7 +269,7 @@ heatmap_colors <- colorRampPalette(c("#2166AC", "#4393C3", "#92C5DE",
                                      "#FDDBC7", "#F4A582", "#B2182B"))(100)
 
 # Gaps between gene clusters
-cluster_sizes <- table(factor(gene_cluster_labels, levels = paste0("Module ", 1:k)))
+cluster_sizes <- table(factor(gene_cluster_labels, levels = module_top_genes))
 row_gaps <- cumsum(cluster_sizes)[-length(cluster_sizes)]
 
 pdf_path <- file.path(out_dir, "fig2J_pseudotime_heatmap.pdf")
