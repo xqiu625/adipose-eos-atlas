@@ -265,6 +265,22 @@ sbatch --job-name=27_excel --partition=batch --mem=16G --cpus-per-task=1 --time=
 sbatch --job-name=28_bm_blood --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/28_bm_blood_%j.out --error=${LOGS}/28_bm_blood_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/28_gurtner_bm_blood_heatmap.R"
 
 # ==============================================================================
+# BLOCK 15: Revision figures (depends on 10 cellchat)
+# ==============================================================================
+
+# Fig 3E/F: CCL heatmaps (Eos->Mac warm, Mac->Eos cool)
+sbatch --job-name=33_fig3EF --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/33_fig3EF_%j.out --error=${LOGS}/33_fig3EF_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/33_fig3EF_cellchat_ccl_heatmap.R"
+
+# Fig 4A/B: CCL dot plots (Mac->Eos, Eos->Mac top 10 per condition)
+sbatch --job-name=34_fig4AB --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/34_fig4AB_%j.out --error=${LOGS}/34_fig4AB_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/34_fig4AB_ccl_dotplot.R"
+
+# Fig 3A revised: chord diagram with enhanced arrows (Comment 18)
+sbatch --job-name=35_chord --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/35_chord_%j.out --error=${LOGS}/35_chord_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/35_fig3A_chord_revised.R"
+
+# Fig 3A L-R pairs: chord diagram with individual ligand/receptor labels (Comment 9)
+sbatch --job-name=36_chord_lr --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/36_chord_lr_%j.out --error=${LOGS}/36_chord_lr_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/36_fig3A_chord_LR.R"
+
+# ==============================================================================
 # Monitor jobs:
 #   squeue -u $USER
 #   sacct --format=JobID,JobName,State,Elapsed,MaxRSS -j <JOB_IDs>
