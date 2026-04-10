@@ -228,17 +228,21 @@ for j in range(1, n_cols):
     if j != 2:   # skip separator position (already drawn)
         ax.axvline(x=j - 0.5, color="white", linewidth=0.8)
 
-# Color sidebar as a separate axes in figure coordinates (between labels and heatmap)
+# Color sidebar: positioned just left of heatmap, after label space
 FEMALE_COLOR = "#b084c8"
 MALE_COLOR   = "#8fbc3b"
 
 sidebar_colors = ([FEMALE_COLOR] * n_female + [MALE_COLOR] * len(male_top))
-sb_ax = fig.add_axes([label_w / fig_w, ax_bottom, sidebar_w / fig_w, ax_height])
+sb_left = (label_w + 0.05) / fig_w   # after label space + small margin
+sb_w_fig = sidebar_w / fig_w
+sb_ax = fig.add_axes([sb_left, ax_bottom, sb_w_fig, ax_height], zorder=0)
 for i, color in enumerate(sidebar_colors):
     sb_ax.axhspan(n_rows - i - 1, n_rows - i, color=color, linewidth=0)
 sb_ax.set_xlim(0, 1)
 sb_ax.set_ylim(0, n_rows)
 sb_ax.axis("off")
+ax.set_zorder(1)
+ax.patch.set_alpha(0)   # transparent background so sidebar shows through
 
 # Title
 ax.set_title("Eosinophil Sex Differential Regulons",
