@@ -231,32 +231,44 @@ col_anno <- data.frame(
   row.names = colnames(bin_scaled_ordered)
 )
 
-# Row annotation: label each gene cluster by its top 3 defining genes
+# Row annotation: label each gene cluster by top genes + functional description
 module_numbers <- match(gene_clusters, cluster_order)
+
+# Get top 3 genes per module
 module_top_genes <- character(k)
 for (m in 1:k) {
   genes_m <- gene_order[module_numbers == m]
-  # Pick top 3 genes by highest peak expression (most characteristic)
   peak_vals <- apply(bin_scaled_ordered[genes_m, , drop = FALSE], 1, max)
   top3 <- head(names(sort(peak_vals, decreasing = TRUE)), 3)
   module_top_genes[m] <- paste(top3, collapse = "/")
 }
+
+# Functional labels combining genes + biology
+module_func_labels <- c(
+  paste0(module_top_genes[1], "\nRNA splicing &\ngranule biogenesis"),
+  paste0(module_top_genes[2], "\nEffector granule\nloading & RNA stability"),
+  paste0(module_top_genes[3], "\nTranscriptional control\n& adhesion/migration"),
+  paste0(module_top_genes[4], "\nECM interaction &\nmembrane dynamics"),
+  paste0(module_top_genes[5], "\nStress signaling &\nantimicrobial transport"),
+  paste0(module_top_genes[6], "\nMetabolic adaptation\n& bioenergetics")
+)
+
 cat("  Gene cluster labels:\n")
 for (m in 1:k) cat(sprintf("    Cluster %d: %s\n", m, module_top_genes[m]))
 
-gene_cluster_labels <- module_top_genes[module_numbers]
+gene_cluster_labels <- module_func_labels[module_numbers]
 row_anno <- data.frame(
-  Genes = factor(gene_cluster_labels, levels = module_top_genes),
+  Module = factor(gene_cluster_labels, levels = module_func_labels),
   row.names = gene_order
 )
 
 # Annotation colors
 module_palette <- c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#A65628")
-names(module_palette) <- module_top_genes
+names(module_palette) <- module_func_labels
 
 anno_colors <- list(
   Group = group_colors,
-  Genes = module_palette
+  Module = module_palette
 )
 
 # =============================================================================
@@ -269,11 +281,11 @@ heatmap_colors <- colorRampPalette(c("#2166AC", "#4393C3", "#92C5DE",
                                      "#FDDBC7", "#F4A582", "#B2182B"))(100)
 
 # Gaps between gene clusters
-cluster_sizes <- table(factor(gene_cluster_labels, levels = module_top_genes))
+cluster_sizes <- table(factor(gene_cluster_labels, levels = module_func_labels))
 row_gaps <- cumsum(cluster_sizes)[-length(cluster_sizes)]
 
 pdf_path <- file.path(out_dir, "fig2J_pseudotime_heatmap.pdf")
-cairo_pdf(pdf_path, width = 10, height = 12)
+cairo_pdf(pdf_path, width = 12, height = 12)
 pheatmap(bin_scaled_ordered,
          cluster_rows = FALSE,
          cluster_cols = FALSE,
@@ -309,12 +321,11 @@ write.csv(module_df, file.path(out_dir, "fig2J_gene_modules.csv"), row.names = F
 
 # Summary
 cat("\nGene module summary:\n")
-for (m in paste0("Module ", 1:k)) {
+for (m in module_func_labels) {
   genes_m <- module_df$gene[module_df$module == m]
+  m_short <- gsub("\n", " ", m)
   cat(sprintf("  %s: %d genes, median peak pseudotime = %.1f\n",
-              m, length(genes_m), median(module_df$peak_pseudotime[module_df$module == m])))
-  cat(sprintf("    Top genes: %s\n",
-              paste(head(genes_m, 10), collapse = ", ")))
+              m_short, length(genes_m), median(module_df$peak_pseudotime[module_df$module == m])))
 }
 
 cat(sprintf("\nDone! Fig 2J saved to: %s\n", out_dir))
