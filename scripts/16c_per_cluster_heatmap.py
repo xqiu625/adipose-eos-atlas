@@ -86,6 +86,8 @@ for cl in EOS_CLUSTERS:
         except Exception as e:
             print(f"  WARNING: Could not parse {reg_path}: {e}")
 
+print(f"  Gene counts parsed for {len(gene_counts)} TFs")
+
 if not eos_data:
     raise FileNotFoundError(
         f"No per-cluster AUCell files found in {SCENIC_DIR}. "
