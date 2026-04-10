@@ -13,7 +13,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 
 suppressPackageStartupMessages({
-  library(monocle3)
+  library(SingleCellExperiment)
   library(Matrix)
   library(pheatmap)
   library(viridis)
@@ -44,11 +44,19 @@ group_colors <- c(
 )
 
 # =============================================================================
-# 1. Load Monocle3 three-way CDS
+# 1. Load Monocle3 three-way CDS (as SCE — no monocle3 package needed)
 # =============================================================================
 cat("Loading monocle3_threeway_cds.rds ...\n")
 cds <- readRDS(file.path(BASE, "monocle_threeway", "monocle3_threeway_cds.rds"))
 cat(sprintf("  %d cells x %d genes\n", ncol(cds), nrow(cds)))
+
+# Extract pseudotime directly from colData (monocle3 stores it there)
+pt_all <- colData(cds)$pseudotime
+if (is.null(pt_all)) {
+  # Fallback: try monocle3_pseudotime slot name
+  pt_all <- cds@colData$monocle3_pseudotime
+}
+names(pt_all) <- colnames(cds)
 
 # =============================================================================
 # 2. Subset to main figure groups (BM + Blood + C0-C5)
@@ -56,15 +64,10 @@ cat(sprintf("  %d cells x %d genes\n", ncol(cds), nrow(cds)))
 cat("Subsetting to main groups ...\n")
 main_groups <- c("Gurtner BM", "Gurtner Blood",
                  "C0", "C1", "C2", "C3", "C4", "C5")
-keep <- !is.na(colData(cds)$main_group) & colData(cds)$main_group %in% main_groups
+grp <- colData(cds)$main_group
+keep <- !is.na(grp) & grp %in% main_groups & is.finite(pt_all)
 cds_main <- cds[, keep]
-
-# Remove cells with infinite pseudotime
-pt <- pseudotime(cds_main)
-finite_mask <- is.finite(pt)
-cds_main <- cds_main[, finite_mask]
-pt <- pseudotime(cds_main)
-
+pt <- pt_all[keep]
 cat(sprintf("  Main group cells with finite pseudotime: %d\n", ncol(cds_main)))
 
 # =============================================================================
