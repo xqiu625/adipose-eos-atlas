@@ -286,6 +286,14 @@ sbatch --job-name=36_chord_lr --partition=batch --mem=32G --cpus-per-task=4 --ti
 # Supp: Harmony rebuttal (no Harmony needed for eos subclustering)
 sbatch --job-name=37_harmony --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/37_harmony_%j.out --error=${LOGS}/37_harmony_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/37_supp_harmony_rebuttal.R"
 
+# --- Block 17: Reviewer rebuttal supplementary figures -----------------------
+
+# SCENIC AUC violin plots by condition (R1 pts 20, 22)
+sbatch --job-name=38_violin --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/38_violin_%j.out --error=${LOGS}/38_violin_%j.err --wrap="source activate ${CONDA} && python ${SCRIPTS}/38_scenic_auc_violin.py"
+
+# Gurtner intestinal eos comparison (R2 pt 7)
+sbatch --job-name=39_intestinal --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/39_intestinal_%j.out --error=${LOGS}/39_intestinal_%j.err --wrap="export LD_LIBRARY_PATH=/bigdata/godziklab/shared/Xinru/cellrank_env/lib:/opt/linux/rocky/8.x/x86_64/pkgs/gcc/12.2.0/lib64:\$LD_LIBRARY_PATH; module load R/4.5.0; Rscript ${SCRIPTS}/39_gurtner_intestinal_comparison.R"
+
 # ==============================================================================
 # Monitor jobs:
 #   squeue -u $USER
