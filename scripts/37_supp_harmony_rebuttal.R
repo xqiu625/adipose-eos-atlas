@@ -63,9 +63,9 @@ cat(sprintf("  %d genes x %d cells, clusters: %s\n",
             paste(sort(unique(eos$eos_cluster)), collapse = ", ")))
 
 # Derive GEM reaction from sample ID
-eos$gem_reaction <- gem_reaction_map[as.character(
+eos$gem_reaction <- unname(gem_reaction_map[as.character(
   as.integer(sub(".*_(\\d+)$", "\\1", eos$orig.ident))
-)]
+)])
 # Fix: orig.ident might use a different naming convention; use the map from 00_theme.R
 # Actually, the gem_reaction_map uses probe-barcode indices 1-16. Let's parse properly.
 if (all(is.na(eos$gem_reaction))) {
@@ -87,7 +87,7 @@ if (all(is.na(eos$gem_reaction))) {
     )
   )
   gem_map <- setNames(sample_meta$gem_reaction, sample_meta$orig.ident)
-  eos$gem_reaction <- gem_map[eos$orig.ident]
+  eos$gem_reaction <- unname(gem_map[eos$orig.ident])
 }
 
 cat("  GEM distribution:\n")
