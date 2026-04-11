@@ -24,6 +24,8 @@ suppressPackageStartupMessages({
   library(Seurat)
   library(ggplot2)
   library(dplyr)
+  library(tidyr)
+  library(scales)
   library(harmony)
   library(cluster)
   library(patchwork)
@@ -255,23 +257,108 @@ p_b <- DimPlot(eos, reduction = "umap_harmony", group.by = "cluster_harmony",
   theme(legend.title = element_blank(),
         plot.title = element_text(hjust = 0.5))
 
-# Panel C: UMAP no Harmony, colored by sample
-p_c <- DimPlot(eos, reduction = "umap", group.by = "orig.ident",
-               pt.size = 0.2, shuffle = TRUE) +
-  ggtitle("Standard — by Sample") +
-  theme_umap() +
-  theme(plot.title = element_text(hjust = 0.5),
-        legend.text = element_text(size = 6),
-        legend.key.size = unit(0.3, "cm"))
+# Panel C: Within-condition replicate concordance across GEMs
+# For each condition with replicates in different GEMs, compare cluster distributions
+# This directly tests batch effect while controlling for biology
+cat("Computing within-condition replicate concordance...\n")
 
-# Panel D: UMAP with Harmony, colored by sample
-p_d <- DimPlot(eos, reduction = "umap_harmony", group.by = "orig.ident",
-               pt.size = 0.2, shuffle = TRUE) +
-  ggtitle("Harmony — by Sample") +
-  theme_umap() +
-  theme(plot.title = element_text(hjust = 0.5),
-        legend.text = element_text(size = 6),
-        legend.key.size = unit(0.3, "cm"))
+# Build per-sample cluster proportions
+sample_cluster_df <- eos@meta.data %>%
+  group_by(orig.ident, cluster_noHarmony) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(orig.ident) %>%
+  mutate(frac = n / sum(n)) %>%
+  ungroup()
+
+# Add GEM info
+sample_cluster_df$gem <- unname(gem_reaction_map[
+  condition_to_sample[as.character(sample_cluster_df$orig.ident)]
+])
+
+# Add condition (strip trailing _N replicate number)
+sample_cluster_df$condition <- sub("_\\d+$", "", sample_cluster_df$orig.ident)
+
+# Pivot to wide: samples x clusters
+sample_wide <- sample_cluster_df %>%
+  select(orig.ident, cluster_noHarmony, frac) %>%
+  pivot_wider(names_from = cluster_noHarmony, values_from = frac, values_fill = 0)
+
+# Compute pairwise Pearson correlation between replicates of same condition
+conditions_with_reps <- sample_cluster_df %>%
+  distinct(orig.ident, condition, gem) %>%
+  group_by(condition) %>%
+  filter(n() >= 2) %>%
+  ungroup()
+
+cat("  Conditions with replicates across GEMs:\n")
+for (cond in unique(conditions_with_reps$condition)) {
+  reps <- conditions_with_reps %>% filter(condition == cond)
+  gems <- unique(reps$gem)
+  cat(sprintf("    %s: %d replicates across %s\n", cond, nrow(reps),
+              paste(gems, collapse = ", ")))
+}
+
+# Plot: grouped bar chart — cluster % per replicate, faceted by condition
+# Only show conditions with replicates in different GEMs
+cross_gem_conds <- conditions_with_reps %>%
+  group_by(condition) %>%
+  summarise(n_gems = n_distinct(gem), .groups = "drop") %>%
+  filter(n_gems >= 2) %>%
+  pull(condition)
+
+if (length(cross_gem_conds) == 0) {
+  # Fallback: show all conditions with >= 2 replicates
+  cross_gem_conds <- conditions_with_reps %>%
+    group_by(condition) %>%
+    filter(n() >= 2) %>%
+    pull(condition) %>% unique()
+}
+
+rep_plot_df <- sample_cluster_df %>%
+  filter(condition %in% cross_gem_conds) %>%
+  mutate(
+    sample_label = paste0(sub(".*_(\\d+)$", "Rep\\1", orig.ident),
+                          " (", gem, ")"),
+    condition_short = sub("_HFD$", "", sub("_HFDInfected$", "_Inf", condition))
+  )
+
+p_c <- ggplot(rep_plot_df,
+              aes(x = cluster_noHarmony, y = frac,
+                  fill = sample_label)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8),
+           width = 0.7) +
+  facet_wrap(~condition_short, scales = "free_y", ncol = 2) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_fill_brewer(palette = "Set2", name = "Replicate") +
+  labs(x = "Cluster", y = "Fraction of cells",
+       title = "Replicate Concordance Across GEMs") +
+  theme_pub() +
+  theme(plot.title = element_text(hjust = 0.5, size = 11),
+        strip.text = element_text(size = 9, face = "bold"),
+        legend.text = element_text(size = 7),
+        legend.key.size = unit(0.3, "cm"),
+        axis.text.x = element_text(size = 9))
+
+# Panel D: Per-cluster condition composition (stacked bar)
+cond_comp_df <- eos@meta.data %>%
+  mutate(condition = sub("_\\d+$", "", orig.ident)) %>%
+  group_by(cluster_noHarmony, condition) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(cluster_noHarmony) %>%
+  mutate(frac = n / sum(n))
+
+p_d <- ggplot(cond_comp_df,
+              aes(x = cluster_noHarmony, y = frac, fill = condition)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_fill_manual(values = cond_colors, name = "Condition") +
+  labs(x = "Cluster", y = "Fraction",
+       title = "Cluster Composition by Condition") +
+  theme_pub() +
+  theme(plot.title = element_text(hjust = 0.5, size = 11),
+        legend.text = element_text(size = 7),
+        legend.key.size = unit(0.3, "cm"),
+        axis.text.x = element_text(size = 10))
 
 # Panel E: Concordance heatmap (proportion of original cluster in each Harmony cluster)
 ct_prop <- prop.table(ct, margin = 1)  # row-normalize (Harmony cluster -> distribution over original)
@@ -326,10 +413,10 @@ combined <- (p_a | p_b) /
             (p_c | p_d) /
             (p_e | p_f) +
   plot_annotation(tag_levels = "A") +
-  plot_layout(heights = c(1, 1, 1))
+  plot_layout(heights = c(1, 1.3, 1))
 
 pdf_out <- file.path(out_dir, "supp_harmony_rebuttal.pdf")
-cairo_pdf(pdf_out, width = 12, height = 15)
+cairo_pdf(pdf_out, width = 14, height = 16)
 print(combined)
 dev.off()
 cat(sprintf("  Saved: %s\n", pdf_out))
@@ -337,8 +424,8 @@ cat(sprintf("  Saved: %s\n", pdf_out))
 # Individual panels
 save_pdf(p_a, file.path(out_dir, "supp_harmony_A_umap_cluster_noH.pdf"), 6, 5)
 save_pdf(p_b, file.path(out_dir, "supp_harmony_B_umap_cluster_H.pdf"), 6, 5)
-save_pdf(p_c, file.path(out_dir, "supp_harmony_C_umap_gem_noH.pdf"), 6, 5)
-save_pdf(p_d, file.path(out_dir, "supp_harmony_D_umap_gem_H.pdf"), 6, 5)
+save_pdf(p_c, file.path(out_dir, "supp_harmony_C_replicate_concordance.pdf"), 10, 6)
+save_pdf(p_d, file.path(out_dir, "supp_harmony_D_condition_composition.pdf"), 7, 5)
 save_pdf(p_e, file.path(out_dir, "supp_harmony_E_concordance.pdf"), 6, 5)
 save_pdf(p_f, file.path(out_dir, "supp_harmony_F_jaccard.pdf"), 6, 5)
 
