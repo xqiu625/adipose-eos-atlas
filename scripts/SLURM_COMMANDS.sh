@@ -280,6 +280,12 @@ sbatch --job-name=35_chord --partition=batch --mem=32G --cpus-per-task=4 --time=
 # Fig 3A L-R pairs: chord diagram with individual ligand/receptor labels (Comment 9)
 sbatch --job-name=36_chord_lr --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/36_chord_lr_%j.out --error=${LOGS}/36_chord_lr_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/36_fig3A_chord_LR.R"
 
+# --- Block 16: Supplementary figures (Harmony rebuttal) -----------------------
+# Depends on: Block 4 (04b → eos_subclustered.rds)
+
+# Supp: Harmony rebuttal (no Harmony needed for eos subclustering)
+sbatch --job-name=37_harmony --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/37_harmony_%j.out --error=${LOGS}/37_harmony_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/37_supp_harmony_rebuttal.R"
+
 # ==============================================================================
 # Monitor jobs:
 #   squeue -u $USER
