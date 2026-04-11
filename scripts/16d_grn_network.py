@@ -188,7 +188,7 @@ print(f"  Edges: {edges_added}")
 # =============================================================================
 print("\nStep 4: Plotting...")
 
-fig, ax = plt.subplots(figsize=(12, 11))
+fig, ax = plt.subplots(figsize=(8.3 / 2.54, 9.3 / 2.54))  # 8.3cm x 9.3cm
 
 # Spring layout — high k for spacing, many iterations to stabilize
 pos = nx.spring_layout(G, k=5.0, iterations=200, seed=RANDOM_SEED, scale=2.0)
@@ -196,13 +196,13 @@ pos = nx.spring_layout(G, k=5.0, iterations=200, seed=RANDOM_SEED, scale=2.0)
 # Node colors and sizes
 node_colors = [CLUSTER_COLORS[G.nodes[n]["cluster"]] for n in G.nodes]
 auc_vals = np.array([G.nodes[n]["auc"] for n in G.nodes])
-node_sizes = 150 + auc_vals * 1200   # smaller nodes to reduce overlap
+node_sizes = 40 + auc_vals * 350   # scaled for 8.3x9.3cm figure
 
 # Draw edges — thin and transparent
 for u, v in G.edges:
     r = abs(G[u][v]["weight"])
     alpha = 0.15 + r * 0.3
-    lw = 0.5 + r * 1.5
+    lw = 0.3 + r * 0.8
     x = [pos[u][0], pos[v][0]]
     y = [pos[u][1], pos[v][1]]
     ax.plot(x, y, color="#aaaaaa", linewidth=lw, alpha=alpha, zorder=1)
@@ -211,13 +211,13 @@ for u, v in G.edges:
 ax.scatter([pos[n][0] for n in G.nodes],
            [pos[n][1] for n in G.nodes],
            s=node_sizes, c=node_colors,
-           edgecolors="white", linewidths=1.0, zorder=2)
+           edgecolors="white", linewidths=0.4, zorder=2)
 
 # Node labels — offset below each node to avoid overlap
 for n in G.nodes:
     r = np.sqrt(node_sizes[list(G.nodes).index(n)]) / 180  # offset proportional to size
     ax.annotate(n, (pos[n][0], pos[n][1] - r * 0.12),
-                fontsize=8, fontweight="bold",
+                fontsize=4, fontweight="bold",
                 ha="center", va="top", zorder=3)
 
 # Cluster labels — place at outermost node, pushed outward from graph center
@@ -237,7 +237,7 @@ for cl in EOS_CLUSTERS:
     lx = cx + dx / dist * offset
     ly = cy + dy / dist * offset
     ax.text(lx, ly, CLUSTER_LABELS[cl],
-            fontsize=13, fontweight="bold",
+            fontsize=6, fontweight="bold",
             color=CLUSTER_COLORS[cl], ha="center", va="center",
             zorder=4)
 
@@ -246,24 +246,24 @@ ax_xlim = ax.get_xlim()
 ax_ylim = ax.get_ylim()
 leg_x = ax_xlim[1] - 0.3
 leg_y = ax_ylim[0] + 0.2
-ax.text(leg_x, leg_y + 0.35, "Node size", fontsize=9,
+ax.text(leg_x, leg_y + 0.35, "Node size", fontsize=5,
         fontweight="bold", va="bottom", ha="center")
-for auc_val, label in [(0, "AUC =0"), (0.5, "AUC =0.5"), (1.0, "AUC =1")]:
-    size = 150 + auc_val * 1200
+for auc_val, label in [(0, "AUC=0"), (0.5, "0.5"), (1.0, "1.0")]:
+    size = 40 + auc_val * 350
     ax.scatter([leg_x], [leg_y], s=size, c="#aaaaaa",
-               edgecolors="white", linewidths=0.8, zorder=2)
-    ax.text(leg_x + 0.25, leg_y, label, fontsize=8,
+               edgecolors="white", linewidths=0.3, zorder=2)
+    ax.text(leg_x + 0.2, leg_y, label, fontsize=4,
             va="center", ha="left", zorder=3)
-    leg_y -= 0.25
+    leg_y -= 0.2
 
 ax.set_title("B        Eosinophil Gene Regulatory Network",
-             fontsize=14, fontweight="bold", pad=15, loc="left")
+             fontsize=7, fontweight="bold", pad=5, loc="left")
 ax.axis("off")
 
 # Expand limits for labels
 xlim = ax.get_xlim()
 ylim = ax.get_ylim()
-margin = 0.5
+margin = 0.3
 ax.set_xlim(xlim[0] - margin, xlim[1] + margin)
 ax.set_ylim(ylim[0] - margin, ylim[1] + margin)
 
