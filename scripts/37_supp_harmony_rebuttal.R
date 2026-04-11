@@ -134,7 +134,7 @@ for (hc in sort(names(harmony_to_original))) {
   cat(sprintf("    Harmony %s -> %s (%d cells, %.1f%%)\n", hc, orig, n, pct))
 }
 
-eos$cluster_harmony <- harmony_to_original[as.character(eos$cluster_harmony_raw)]
+eos$cluster_harmony <- unname(harmony_to_original[as.character(eos$cluster_harmony_raw)])
 eos$cluster_harmony <- factor(eos$cluster_harmony,
                               levels = paste0("C", 0:5))
 
