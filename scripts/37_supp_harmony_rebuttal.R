@@ -255,19 +255,23 @@ p_b <- DimPlot(eos, reduction = "umap_harmony", group.by = "cluster_harmony",
   theme(legend.title = element_blank(),
         plot.title = element_text(hjust = 0.5))
 
-# Panel C: UMAP no Harmony, colored by GEM
-p_c <- DimPlot(eos, reduction = "umap", group.by = "gem_reaction",
-               cols = gem_colors, pt.size = 0.3) +
-  ggtitle("Standard — GEM Reaction") +
+# Panel C: UMAP no Harmony, colored by sample
+p_c <- DimPlot(eos, reduction = "umap", group.by = "orig.ident",
+               pt.size = 0.2, shuffle = TRUE) +
+  ggtitle("Standard — by Sample") +
   theme_umap() +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.text = element_text(size = 6),
+        legend.key.size = unit(0.3, "cm"))
 
-# Panel D: UMAP with Harmony, colored by GEM
-p_d <- DimPlot(eos, reduction = "umap_harmony", group.by = "gem_reaction",
-               cols = gem_colors, pt.size = 0.3) +
-  ggtitle("Harmony — GEM Reaction") +
+# Panel D: UMAP with Harmony, colored by sample
+p_d <- DimPlot(eos, reduction = "umap_harmony", group.by = "orig.ident",
+               pt.size = 0.2, shuffle = TRUE) +
+  ggtitle("Harmony — by Sample") +
   theme_umap() +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.text = element_text(size = 6),
+        legend.key.size = unit(0.3, "cm"))
 
 # Panel E: Concordance heatmap (proportion of original cluster in each Harmony cluster)
 ct_prop <- prop.table(ct, margin = 1)  # row-normalize (Harmony cluster -> distribution over original)
