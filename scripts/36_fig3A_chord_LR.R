@@ -8,7 +8,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # (Reviewer Comment 9: "label Fig 3A with specific ligand/receptor pairs")
 #
 # Sectors = individual CCL ligands & receptors (gene names on circumference)
-# Sector colors = predominant cell type group (Eos vs Mac subtypes)
+# Sector arcs = proportional cell type group coloring (shows all Mac subtypes)
 # Links = L-R pair interactions, width proportional to communication probability
 # Link colors = direction (warm = Eos->Mac, cool = Mac->Eos)
 #
@@ -50,15 +50,9 @@ group_colors <- c("Eosinophils"    = "#777B7E",
                   "M2 Functional"  = "#8FC50E",
                   "M2 Surface"     = "#5633AA")
 
-# Link colors by mac subtype and direction
-link_palette <- c(
-  "Eos_to_M1"          = adjustcolor("#cb416b", alpha.f = 0.5),
-  "Eos_to_M2_Func"     = adjustcolor("#8FC50E", alpha.f = 0.5),
-  "Eos_to_M2_Surf"     = adjustcolor("#5633AA", alpha.f = 0.5),
-  "M1_to_Eos"          = adjustcolor("#cb416b", alpha.f = 0.3),
-  "M2_Func_to_Eos"     = adjustcolor("#8FC50E", alpha.f = 0.3),
-  "M2_Surf_to_Eos"     = adjustcolor("#5633AA", alpha.f = 0.3)
-)
+# Direction colors for links (2-color: warm/cool)
+dir_colors <- c("Eos_to_Mac" = "#E31A1C",   # warm red
+                "Mac_to_Eos" = "#2171B5")    # cool blue
 
 # =============================================================================
 # 1. Extract CCL L-R pair interactions from all conditions
@@ -147,35 +141,12 @@ cap_name <- function(x) {
 comm_df$ligand_cap <- cap_name(comm_df$ligand)
 comm_df$receptor_cap <- cap_name(comm_df$receptor)
 
-# Direction label with specific mac subtype
-get_mac_dir <- function(src_grp, tgt_grp) {
-  if (src_grp == "Eosinophils") {
-    return(paste0("Eos_to_",
-      ifelse(tgt_grp == "M1 Mac", "M1",
-      ifelse(tgt_grp == "M2 Functional", "M2_Func", "M2_Surf"))))
-  } else {
-    return(paste0(
-      ifelse(src_grp == "M1 Mac", "M1",
-      ifelse(src_grp == "M2 Functional", "M2_Func", "M2_Surf")),
-      "_to_Eos"))
-  }
-}
-comm_df$direction <- mapply(get_mac_dir, comm_df$source_group, comm_df$target_group)
+# Direction label (2-direction: Eos_to_Mac / Mac_to_Eos)
+comm_df$direction <- ifelse(comm_df$source_group == "Eosinophils",
+                            "Eos_to_Mac", "Mac_to_Eos")
 
 cat("Ligands:", paste(sort(unique(comm_df$ligand_cap)), collapse = ", "), "\n")
 cat("Receptors:", paste(sort(unique(comm_df$receptor_cap)), collapse = ", "), "\n")
-
-# Diagnostic: interactions per mac subtype
-cat("\nInteractions per direction:\n")
-print(table(comm_df$direction))
-cat("\nM2 Functional interactions:\n")
-m2f <- comm_df[grepl("M2_Func", comm_df$direction), ]
-if (nrow(m2f) > 0) {
-  cat(sprintf("  %d interactions found\n", nrow(m2f)))
-  print(unique(m2f[, c("ligand_cap", "receptor_cap", "direction")]))
-} else {
-  cat("  NONE — M2 Functional has no CCL signaling with Eos in any condition\n")
-}
 
 # =============================================================================
 # 3. Aggregate: average across conditions, then sum by direction per L-R pair
@@ -201,45 +172,57 @@ cat("\nTotal L-R pair strengths:\n")
 print(lr_total)
 
 # =============================================================================
-# 4. Determine sector colors (molecule -> dominant cell type group)
+# 4. Proportional cell-type composition per molecule sector
 # =============================================================================
 
-# Ligands: dominant sender group
-lig_grp <- aggregate(prob ~ ligand_cap + source_group, data = agg_cond, FUN = sum)
-lig_dominant <- do.call(rbind, lapply(split(lig_grp, lig_grp$ligand_cap), function(x) {
-  x[which.max(x$prob), ]
-}))
-
-# Receptors: dominant receiver group
-rec_grp <- aggregate(prob ~ receptor_cap + target_group, data = agg_cond, FUN = sum)
-rec_dominant <- do.call(rbind, lapply(split(rec_grp, rec_grp$receptor_cap), function(x) {
-  x[which.max(x$prob), ]
-}))
-
-cat("\nLigand dominant sender groups:\n")
-print(lig_dominant[, c("ligand_cap", "source_group")])
-cat("\nReceptor dominant receiver groups:\n")
-print(rec_dominant[, c("receptor_cap", "target_group")])
-
-# Build sector color map
 ligands  <- sort(unique(agg_lr$ligand_cap))
 receptors <- sort(unique(agg_lr$receptor_cap))
 all_molecules <- c(ligands, receptors)
 
-sector_colors <- character(length(all_molecules))
-names(sector_colors) <- all_molecules
+# Ligands: fraction of total signal sent by each cell type group
+lig_grp <- aggregate(prob ~ ligand_cap + source_group, data = agg_cond, FUN = sum)
+mol_props <- list()
 
 for (mol in ligands) {
-  grp <- lig_dominant$source_group[lig_dominant$ligand_cap == mol]
-  sector_colors[mol] <- group_colors[grp]
-}
-for (mol in receptors) {
-  grp <- rec_dominant$target_group[rec_dominant$receptor_cap == mol]
-  sector_colors[mol] <- group_colors[grp]
+  sub <- lig_grp[lig_grp$ligand_cap == mol, ]
+  total <- sum(sub$prob)
+  all_g <- data.frame(group = names(group_colors), stringsAsFactors = FALSE)
+  sub <- merge(all_g, sub, by.x = "group", by.y = "source_group", all.x = TRUE)
+  sub$prob[is.na(sub$prob)] <- 0
+  sub$frac <- if (total > 0) sub$prob / total else 0
+  sub <- sub[order(match(sub$group, names(group_colors))), ]
+  mol_props[[mol]] <- sub
 }
 
-cat("\nSector colors:\n")
-for (m in all_molecules) cat(sprintf("  %s: %s\n", m, sector_colors[m]))
+# Receptors: fraction of total signal received by each cell type group
+rec_grp <- aggregate(prob ~ receptor_cap + target_group, data = agg_cond, FUN = sum)
+
+for (mol in receptors) {
+  sub <- rec_grp[rec_grp$receptor_cap == mol, ]
+  total <- sum(sub$prob)
+  all_g <- data.frame(group = names(group_colors), stringsAsFactors = FALSE)
+  sub <- merge(all_g, sub, by.x = "group", by.y = "target_group", all.x = TRUE)
+  sub$prob[is.na(sub$prob)] <- 0
+  sub$frac <- if (total > 0) sub$prob / total else 0
+  sub <- sub[order(match(sub$group, names(group_colors))), ]
+  mol_props[[mol]] <- sub
+}
+
+cat("\nProportional cell-type composition per molecule:\n")
+for (mol in all_molecules) {
+  props <- mol_props[[mol]]
+  nz <- props[props$frac > 0, ]
+  props_str <- paste(sprintf("%s=%.0f%%", nz$group, nz$frac * 100), collapse = ", ")
+  cat(sprintf("  %s: %s\n", mol, props_str))
+}
+
+# Dominant group color (fallback for grid.col)
+sector_colors <- character(length(all_molecules))
+names(sector_colors) <- all_molecules
+for (mol in all_molecules) {
+  props <- mol_props[[mol]]
+  sector_colors[mol] <- group_colors[props$group[which.max(props$frac)]]
+}
 
 # =============================================================================
 # 5. Build chord diagram data frame with directional coloring
@@ -253,8 +236,10 @@ chord_df <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Link colors by mac subtype
-link_cols <- link_palette[chord_df$direction]
+# Link colors by direction (2-color: red/blue)
+link_cols <- ifelse(chord_df$direction == "Eos_to_Mac",
+                    adjustcolor(dir_colors["Eos_to_Mac"], alpha.f = 0.55),
+                    adjustcolor(dir_colors["Mac_to_Eos"], alpha.f = 0.55))
 
 # Sector order: ligands on left, receptors on right, big gap between groups
 sector_order <- c(ligands, receptors)
@@ -269,7 +254,7 @@ if (n_rec > 0) gap_sizes[n_lig + n_rec] <- 20
 cat(sprintf("\n%d ligand sectors, %d receptor sectors\n", n_lig, n_rec))
 
 # =============================================================================
-# 6. Plot chord diagram
+# 6. Plot chord diagram with proportional sector arcs
 # =============================================================================
 cat("\nGenerating chord diagram...\n")
 
@@ -293,10 +278,31 @@ chordDiagram(chord_df[, c("from", "to", "value")],
              link.lwd = 1.5,
              link.sort = TRUE,
              link.decreasing = TRUE,
-             annotationTrack = "grid",
-             preAllocateTracks = list(track.height = 0.18))
+             annotationTrack = NULL,
+             preAllocateTracks = list(
+               list(track.height = 0.18),
+               list(track.height = 0.06)
+             ))
 
-# Sector labels: gene names in italic
+# Track 2 (inner): proportional cell-type colors for each sector arc
+circos.track(track.index = 2, panel.fun = function(x, y) {
+  sector <- CELL_META$sector.index
+  xlim <- CELL_META$xlim
+  ylim <- CELL_META$ylim
+
+  props <- mol_props[[sector]]
+  x_start <- xlim[1]
+  x_range <- xlim[2] - xlim[1]
+  for (i in seq_len(nrow(props))) {
+    if (props$frac[i] == 0) next
+    x_end <- x_start + x_range * props$frac[i]
+    circos.rect(x_start, ylim[1], x_end, ylim[2],
+                col = group_colors[props$group[i]], border = NA)
+    x_start <- x_end
+  }
+}, bg.border = "grey60")
+
+# Track 1 (outer): gene name labels in italic
 circos.track(track.index = 1, panel.fun = function(x, y) {
   circos.text(CELL_META$xcenter, CELL_META$ylim[1], CELL_META$sector.index,
               facing = "clockwise", niceFacing = TRUE, adj = c(0, 0.5),
@@ -321,18 +327,15 @@ if (n_rec > 1) {
 
 circos.clear()
 
-# Legend: mac subtype interactions
+# Legend: direction + cell type group
 legend("bottomleft",
-       legend = c("Eos \u2192 M1 Mac", "Eos \u2192 M2 Functional",
-                  "Eos \u2192 M2 Surface", "",
-                  "M1 Mac \u2192 Eos", "M2 Functional \u2192 Eos",
-                  "M2 Surface \u2192 Eos"),
-       fill = c(link_palette["Eos_to_M1"], link_palette["Eos_to_M2_Func"],
-                link_palette["Eos_to_M2_Surf"], NA,
-                link_palette["M1_to_Eos"], link_palette["M2_Func_to_Eos"],
-                link_palette["M2_Surf_to_Eos"]),
-       border = c(rep("black", 3), NA, rep("black", 3)),
-       bty = "n", cex = 0.75,
+       legend = c("Eos \u2192 Mac signaling",
+                  "Mac \u2192 Eos signaling",
+                  "", names(group_colors)),
+       fill = c(dir_colors["Eos_to_Mac"], dir_colors["Mac_to_Eos"],
+                NA, group_colors),
+       border = c("black", "black", NA, rep("black", length(group_colors))),
+       bty = "n", cex = 0.85,
        title = "CCL Signaling", title.adj = 0)
 
 dev.off()
