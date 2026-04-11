@@ -81,16 +81,19 @@ eos$cluster_noHarmony <- eos$eos_cluster
 # 2. Run Harmony and re-cluster at same resolution
 # =============================================================================
 cat("\nRunning Harmony (group.by = orig.ident)...\n")
+set.seed(42)
 eos <- RunHarmony(eos, group.by.vars = "orig.ident",
                   reduction.use = "pca", reduction.save = "harmony",
                   verbose = FALSE)
 cat("  Harmony complete.\n")
 
 cat("Computing UMAP on Harmony embeddings...\n")
+set.seed(42)
 eos <- RunUMAP(eos, reduction = "harmony", dims = 1:20,
                reduction.name = "umap_harmony", verbose = FALSE)
 
 cat("Clustering on Harmony embeddings (res = 0.4)...\n")
+set.seed(42)
 eos <- FindNeighbors(eos, reduction = "harmony", dims = 1:20, verbose = FALSE)
 eos <- FindClusters(eos, resolution = 0.4, verbose = FALSE)
 eos$cluster_harmony_raw <- eos$seurat_clusters
