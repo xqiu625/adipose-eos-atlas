@@ -63,32 +63,11 @@ cat(sprintf("  %d genes x %d cells, clusters: %s\n",
             paste(sort(unique(eos$eos_cluster)), collapse = ", ")))
 
 # Derive GEM reaction from sample ID
-eos$gem_reaction <- unname(gem_reaction_map[as.character(
-  as.integer(sub(".*_(\\d+)$", "\\1", eos$orig.ident))
-)])
-# Fix: orig.ident might use a different naming convention; use the map from 00_theme.R
-# Actually, the gem_reaction_map uses probe-barcode indices 1-16. Let's parse properly.
-if (all(is.na(eos$gem_reaction))) {
-  # Fallback: derive from condition + replicate
-  eos$condition <- sub("_\\d+$", "", eos$orig.ident)
-  sample_meta <- data.frame(
-    orig.ident = unique(eos$orig.ident),
-    stringsAsFactors = FALSE
-  ) %>% mutate(
-    replicate_num = as.integer(sub(".*_(\\d+)$", "\\1", orig.ident)),
-    is_infected   = grepl("Infected", orig.ident),
-    genotype      = sub("^(WT|KO)_.*", "\\1", orig.ident),
-    gem_reaction  = case_when(
-      is_infected                                            ~ "GEM2",
-      !is_infected & replicate_num == 1                      ~ "GEM1",
-      !is_infected & genotype == "WT" & replicate_num %in% 2:3 ~ "GEM3",
-      !is_infected & genotype == "KO" & replicate_num %in% 2:3 ~ "GEM4",
-      TRUE                                                   ~ "Unknown"
-    )
-  )
-  gem_map <- setNames(sample_meta$gem_reaction, sample_meta$orig.ident)
-  eos$gem_reaction <- unname(gem_map[eos$orig.ident])
-}
+# orig.ident contains condition names like "WT_Male_HFD_1" (matching sample_to_condition values)
+# Invert sample_to_condition to get condition_name -> sample_number -> GEM
+condition_to_sample <- setNames(names(sample_to_condition), sample_to_condition)
+sample_nums <- condition_to_sample[eos$orig.ident]
+eos$gem_reaction <- unname(gem_reaction_map[sample_nums])
 
 cat("  GEM distribution:\n")
 print(table(eos$gem_reaction))
@@ -101,8 +80,8 @@ eos$cluster_noHarmony <- eos$eos_cluster
 # =============================================================================
 cat("\nRunning Harmony (group.by = orig.ident)...\n")
 eos <- RunHarmony(eos, group.by.vars = "orig.ident",
-                  reduction = "pca", dims.use = 1:20,
-                  assay.use = "RNA", verbose = FALSE)
+                  reduction.use = "pca", reduction.save = "harmony",
+                  verbose = FALSE)
 cat("  Harmony complete.\n")
 
 cat("Computing UMAP on Harmony embeddings...\n")
