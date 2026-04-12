@@ -120,17 +120,35 @@ p_scatter <- ggplot(meta, aes(x = nCount_RNA, y = nFeature_RNA, color = percent.
         axis.text = element_text(size = 5),
         legend.position = "right")
 
-# ── Figure 5: DecontX contamination histogram per sample ─────────────────────
-cat("Plotting DecontX contamination histograms...\n")
-decontx_scores$condition <- factor(decontx_scores$condition,
-                                   levels = sample_order)
+# ── Figure 5: DecontX contamination histogram — retained cells only ──────────
+cat("Plotting DecontX contamination histograms (retained cells only)...\n")
 
-p_decontx <- ggplot(decontx_scores, aes(x = contamination)) +
-  geom_histogram(bins = 50, fill = "steelblue", color = "grey30", linewidth = 0.2) +
+# Filter DecontX scores to only cells in the final eos dataset (C0-C5)
+retained_barcodes <- rownames(meta)
+# Match barcodes: decontx may have raw barcodes, meta may have prefixed ones
+decontx_scores$match_bc <- decontx_scores$barcode
+if (sum(decontx_scores$match_bc %in% retained_barcodes) < 100) {
+  # Try stripping sample prefix from meta barcodes
+  stripped_retained <- sub("^.*_([ACGT]+-\\d+)$", "\\1", retained_barcodes)
+  stripped_decontx  <- sub("^.*_([ACGT]+-\\d+)$", "\\1", decontx_scores$barcode)
+  # Match by condition + barcode suffix
+  meta_key <- paste0(meta$orig.ident, "_", stripped_retained)
+  decontx_key <- paste0(decontx_scores$condition, "_", stripped_decontx)
+  decontx_retained <- decontx_scores[decontx_key %in% meta_key, ]
+} else {
+  decontx_retained <- decontx_scores[decontx_scores$match_bc %in% retained_barcodes, ]
+}
+cat(sprintf("  Retained cells matched in DecontX: %d / %d\n",
+            nrow(decontx_retained), length(retained_barcodes)))
+
+decontx_retained$condition <- factor(decontx_retained$condition, levels = sample_order)
+
+p_decontx <- ggplot(decontx_retained, aes(x = contamination)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "grey30", linewidth = 0.2) +
   geom_vline(xintercept = 0.2, linetype = "dashed", color = "red", linewidth = 0.5) +
   facet_wrap(~ condition, ncol = 4, scales = "free_y") +
   labs(x = "DecontX Contamination Score", y = "Count",
-       title = "DecontX Contamination Distribution per Sample (threshold = 0.2)") +
+       title = "DecontX Scores of Retained Eosinophils (C0-C5, threshold = 0.2)") +
   theme_pub() +
   theme(strip.text = element_text(size = 6),
         axis.text = element_text(size = 6))
