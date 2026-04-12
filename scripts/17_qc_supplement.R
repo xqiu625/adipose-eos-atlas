@@ -46,9 +46,18 @@ sample_info <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# ── Load post-QC Seurat object ──────────────────────────────────────────────
-cat("Loading seurat_qc_filtered.rds...\n")
-sobj <- readRDS(file.path(BASE, "seurat_qc_filtered.rds"))
+# ── Load eos subclustered object (C0-C5, C6 removed) ──────────────────────
+cat("Loading eos_subclustered.rds (C0-C5, C6 removed)...\n")
+sobj <- readRDS(file.path(BASE, "eos_subclustered.rds"))
+if (inherits(sobj[["RNA"]], "Assay5")) sobj[["RNA"]] <- JoinLayers(sobj[["RNA"]])
+# Remove C6 if still present
+if ("eos_cluster" %in% colnames(sobj@meta.data) && "C6" %in% sobj$eos_cluster) {
+  sobj <- subset(sobj, eos_cluster != "C6")
+  cat("  Removed C6\n")
+} else if ("C6" %in% levels(Idents(sobj))) {
+  sobj <- subset(sobj, idents = "C6", invert = TRUE)
+  cat("  Removed C6\n")
+}
 cat(sprintf("  %d genes x %d cells\n", nrow(sobj), ncol(sobj)))
 
 # ── Load DecontX contamination scores ────────────────────────────────────────
@@ -118,10 +127,10 @@ decontx_scores$condition <- factor(decontx_scores$condition,
 
 p_decontx <- ggplot(decontx_scores, aes(x = contamination)) +
   geom_histogram(bins = 50, fill = "steelblue", color = "grey30", linewidth = 0.2) +
-  geom_vline(xintercept = 0.3, linetype = "dashed", color = "red", linewidth = 0.5) +
+  geom_vline(xintercept = 0.2, linetype = "dashed", color = "red", linewidth = 0.5) +
   facet_wrap(~ condition, ncol = 4, scales = "free_y") +
   labs(x = "DecontX Contamination Score", y = "Count",
-       title = "DecontX Contamination Distribution per Sample (threshold = 0.3)") +
+       title = "DecontX Contamination Distribution per Sample (threshold = 0.2)") +
   theme_pub() +
   theme(strip.text = element_text(size = 6),
         axis.text = element_text(size = 6))
@@ -134,9 +143,9 @@ raw_counts <- decontx_scores %>%
   group_by(condition) %>%
   summarise(n_raw = n(), .groups = "drop")
 
-# After DecontX filtering (contamination <= 0.3)
+# After DecontX filtering (contamination <= 0.2)
 after_decontx <- decontx_scores %>%
-  filter(contamination <= 0.3) %>%
+  filter(contamination <= 0.2) %>%
   group_by(condition) %>%
   summarise(n_after_decontx = n(), .groups = "drop")
 
