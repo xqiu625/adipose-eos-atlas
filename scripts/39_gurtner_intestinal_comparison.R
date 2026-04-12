@@ -140,48 +140,32 @@ p_a <- DimPlot(combined, group.by = "source_broad", pt.size = 0.3,
 save_pdf(p_a, file.path(out_dir, "supp_gurtner_intestinal_A_umap.pdf"), 9, 7)
 
 # =============================================================================
-# 5. Panel B: Marker dotplot
+# 5. Panel B: Feature plots of canonical eos markers on integrated UMAP
 # =============================================================================
-cat("Panel B: Marker dotplot...\n")
+cat("Panel B: Feature plots of eos markers...\n")
 
-marker_genes <- c(
-  # Pan-eos
-  "Siglecf", "Epx", "Prg2", "Ccr3", "Il5ra",
-  # Maturation
-  "Cd63", "Cd9", "Itgam", "Itgb2",
-  # Cytokines / effectors
-  "Il4", "Il13", "Ccl6", "Retnla",
-  # MHC-II (C0)
-  "H2-Ab1", "H2-Aa", "Cd74",
-  # Migration (C1)
-  "Sell", "Cxcr4",
-  # Stress (C2)
-  "Atf6", "Ddit3",
-  # Tissue resident / intestinal
-  "Cd44", "Cd22", "Clec4a4",
-  # Progenitor
-  "Kit", "Cd34",
-  # Intestinal markers (from Hu et al.)
-  "Alox15", "Retnlg", "Mmp9"
-)
-marker_genes <- marker_genes[marker_genes %in% rownames(sub)]
-cat(sprintf("  %d markers found\n", length(marker_genes)))
+eos_markers <- c("Siglecf", "Ccr3", "Il5ra", "Prg2", "Epx")
+eos_markers <- eos_markers[eos_markers %in% rownames(combined)]
+cat(sprintf("  %d eos markers found: %s\n", length(eos_markers),
+            paste(eos_markers, collapse = ", ")))
 
-p_b <- DotPlot(sub, features = marker_genes, scale = TRUE,
-               col.min = -1.5, col.max = 2.5) +
-  scale_color_gradientn(
-    colors = c("#3B4CC0", "#7092D5", "#AAC7FD", "#DDDDDD",
-               "#F7B799", "#E8744A", "#B40426"),
-    name = "Scaled\nExpression") +
-  scale_size_continuous(range = c(0.5, 6), name = "Percent\nExpressed") +
-  labs(x = "", y = "",
-       title = "Eosinophil Markers: Adipose vs BM/Blood/Intestinal") +
-  theme_pub() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8, face = "italic"),
-        axis.text.y = element_text(size = 9))
+p_feat_list <- FeaturePlot(combined, features = eos_markers, pt.size = 0.2,
+                            order = TRUE, min.cutoff = "q5",
+                            combine = FALSE)
 
-save_pdf(p_b, file.path(out_dir, "supp_gurtner_intestinal_B_dotplot.pdf"),
-         max(14, length(marker_genes) * 0.4), 7)
+# Apply consistent color scale and theme
+for (i in seq_along(p_feat_list)) {
+  p_feat_list[[i]] <- p_feat_list[[i]] +
+    scale_color_gradientn(
+      colors = c("grey90", "#fee0d2", "#fc9272", "#de2d26", "#a50f15"),
+      name = eos_markers[i]) +
+    theme_umap() +
+    theme(plot.title = element_text(face = "bold.italic", size = 12))
+}
+
+p_b <- wrap_plots(p_feat_list, ncol = 3)
+
+save_pdf(p_b, file.path(out_dir, "supp_gurtner_intestinal_B_featureplots.pdf"), 15, 10)
 
 # =============================================================================
 # 6. Panel C: Spearman correlation heatmap (Harmony embeddings)
