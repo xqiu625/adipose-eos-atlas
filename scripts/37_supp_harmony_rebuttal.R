@@ -302,24 +302,32 @@ for (cond in unique(conditions_with_reps$condition)) {
 }
 
 # Plot: grouped bar chart — cluster % per replicate, faceted by condition
-# Only show conditions with replicates in different GEMs
-cross_gem_conds <- conditions_with_reps %>%
-  group_by(condition) %>%
-  summarise(n_gems = n_distinct(gem), .groups = "drop") %>%
-  filter(n_gems >= 2) %>%
-  pull(condition)
+# Show ALL conditions with >= 2 replicates (including infected within-GEM)
+show_conds <- conditions_with_reps %>%
+  pull(condition) %>% unique()
 
-if (length(cross_gem_conds) == 0) {
-  # Fallback: show all conditions with >= 2 replicates
-  cross_gem_conds <- conditions_with_reps %>%
-    group_by(condition) %>%
-    filter(n() >= 2) %>%
-    pull(condition) %>% unique()
-}
+# Ensure all cluster x replicate combinations exist (fill missing with 0)
+all_clusters <- paste0("C", 0:5)
+all_samples <- sample_cluster_df %>%
+  filter(condition %in% show_conds) %>%
+  pull(orig.ident) %>% unique()
 
-rep_plot_df <- sample_cluster_df %>%
-  filter(condition %in% cross_gem_conds) %>%
+complete_grid <- expand.grid(
+  orig.ident = all_samples,
+  cluster_noHarmony = factor(all_clusters, levels = all_clusters),
+  stringsAsFactors = FALSE
+)
+
+rep_plot_df <- complete_grid %>%
+  left_join(sample_cluster_df %>%
+              select(orig.ident, cluster_noHarmony, frac, gem, condition),
+            by = c("orig.ident", "cluster_noHarmony")) %>%
   mutate(
+    frac = ifelse(is.na(frac), 0, frac),
+    condition = ifelse(is.na(condition),
+                       sub("_\\d+$", "", orig.ident), condition),
+    gem = ifelse(is.na(gem),
+                 unname(gem_reaction_map[condition_to_sample[orig.ident]]), gem),
     sample_label = paste0(sub(".*_(\\d+)$", "Rep\\1", orig.ident),
                           " (", gem, ")"),
     condition_short = sub("_HFD$", "", sub("_HFDInfected$", "_Inf", condition))
@@ -330,7 +338,7 @@ p_c <- ggplot(rep_plot_df,
                   fill = sample_label)) +
   geom_bar(stat = "identity", position = position_dodge(width = 0.8),
            width = 0.7) +
-  facet_wrap(~condition_short, scales = "free_y", ncol = 2) +
+  facet_wrap(~condition_short, scales = "free_y", ncol = 3) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   scale_fill_brewer(palette = "Set2", name = "Replicate") +
   labs(x = "Cluster", y = "Fraction of cells",
