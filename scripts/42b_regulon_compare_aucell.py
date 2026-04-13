@@ -31,7 +31,7 @@ plt.rcParams.update({"font.family": "sans-serif", "pdf.fonttype": 42,
 
 BASE       = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
 SCENIC_DIR = os.path.join(BASE, "scenic_per_cluster")
-HU_AUC     = os.path.join(BASE, "scenic", "hu_scenic", "auc_matrix.csv")
+HU_SCENIC  = os.path.join(BASE, "scenic", "hu_scenic")
 HU_META    = os.path.join(BASE, "scenic", "hu_depot_metadata.csv")
 FIG_DIR    = os.path.join(BASE, "scenic", "figures")
 os.makedirs(FIG_DIR, exist_ok=True)
@@ -87,26 +87,31 @@ qiu_group = pd.concat(eos_group_parts)
 print(f"  Total Qiu: {len(qiu_auc)} cells, {qiu_auc.shape[1]} regulons")
 
 # =============================================================================
-# 2. Load Hu AUCell
+# 2. Load per-depot Hu AUCell
 # =============================================================================
-print("\nStep 2: Loading Hu AUCell data...")
+print("\nStep 2: Loading per-depot Hu AUCell data...")
 
-if not os.path.exists(HU_AUC):
-    print(f"  ERROR: {HU_AUC} not found. Run 42_scenic_hu.sh first.")
+hu_auc_parts = []
+hu_group_parts = []
+for depot in ["eWAT", "scWAT", "BAT"]:
+    auc_path = os.path.join(HU_SCENIC, depot, "auc_matrix.csv")
+    if not os.path.exists(auc_path):
+        print(f"  ERROR: {auc_path} not found. Run 42_scenic_hu.sh first.")
+        continue
+    df = pd.read_csv(auc_path, index_col=0)
+    df.columns = [extract_tf(c) for c in df.columns]
+    df = df.T.groupby(level=0).max().T
+    hu_auc_parts.append(df)
+    hu_group_parts.append(pd.Series(f"Hu_{depot}", index=df.index))
+    print(f"  Hu_{depot}: {df.shape[0]} cells x {df.shape[1]} regulons")
+
+if not hu_auc_parts:
+    print("  ERROR: No Hu AUCell data found. Run 42_scenic_hu.sh first.")
     exit(1)
 
-hu_auc = pd.read_csv(HU_AUC, index_col=0)
-hu_auc.columns = [extract_tf(c) for c in hu_auc.columns]
-hu_auc = hu_auc.T.groupby(level=0).max().T
-print(f"  Hu: {hu_auc.shape[0]} cells x {hu_auc.shape[1]} regulons")
-
-hu_meta = pd.read_csv(HU_META).set_index("barcode")
-hu_group = hu_meta["depot"].map(lambda x: f"Hu_{x}")
-# Align
-common_hu = hu_auc.index.intersection(hu_group.index)
-hu_auc = hu_auc.loc[common_hu]
-hu_group = hu_group.loc[common_hu]
-print(f"  Hu aligned: {len(hu_auc)} cells")
+hu_auc = pd.concat(hu_auc_parts, join="outer").fillna(0)
+hu_group = pd.concat(hu_group_parts)
+print(f"  Total Hu: {len(hu_auc)} cells, {hu_auc.shape[1]} regulons")
 print(f"  Depots: {hu_group.value_counts().to_dict()}")
 
 # =============================================================================
