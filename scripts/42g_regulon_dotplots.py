@@ -207,7 +207,7 @@ def dotplot(regulons, groups, mean_scores, pct_active, title_str, outpath,
     ax.set_xlim(-0.5, n_grp - 0.5)
     ax.set_ylim(-0.5, n_reg - 0.5)
     ax.set_axisbelow(True)
-    ax.grid(True, axis="both", linewidth=0.3, color="grey85", zorder=0)
+    ax.grid(True, axis="both", linewidth=0.3, color="#d9d9d9", zorder=0)
 
     ax.set_title(title_str, fontsize=13, fontweight="bold", pad=12)
 
@@ -235,7 +235,7 @@ def dotplot(regulons, groups, mean_scores, pct_active, title_str, outpath,
     for p in legend_pcts:
         size = min_dot_size + (p / pct_max) * (max_dot_size - min_dot_size)
         legend_elements.append(
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='grey',
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#808080',
                    markersize=np.sqrt(size) * 0.7, label=f'{p:.0f}%',
                    markeredgecolor='#808080', markeredgewidth=0.5)
         )
