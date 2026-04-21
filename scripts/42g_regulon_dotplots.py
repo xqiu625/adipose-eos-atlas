@@ -183,7 +183,7 @@ def dotplot(regulons, groups, mean_scores, pct_active, title_str, outpath,
             size = min_dot_size + (p / pct_max) * (max_dot_size - min_dot_size)
             color = cmap(norm(m))
             ax.scatter(j, n_reg - 1 - i, s=size, c=[color],
-                       edgecolors="grey50", linewidths=0.5, zorder=3)
+                       edgecolors="#808080", linewidths=0.5, zorder=3)
 
     # Axes
     ax.set_xticks(range(n_grp))
@@ -237,7 +237,7 @@ def dotplot(regulons, groups, mean_scores, pct_active, title_str, outpath,
         legend_elements.append(
             Line2D([0], [0], marker='o', color='w', markerfacecolor='grey',
                    markersize=np.sqrt(size) * 0.7, label=f'{p:.0f}%',
-                   markeredgecolor='grey50', markeredgewidth=0.5)
+                   markeredgecolor='#808080', markeredgewidth=0.5)
         )
 
     leg = ax.legend(handles=legend_elements, title="% Active",
