@@ -340,7 +340,7 @@ for p in legend_pcts:
 leg = ax.legend(title="Percent\nExpressed",
                 loc="upper left", bbox_to_anchor=(1.06, 0.40),
                 frameon=False, fontsize=3.5, title_fontsize=4,
-                handletextpad=0.2, labelspacing=1.0,
+                handletextpad=0.5, labelspacing=2.0,
                 scatterpoints=1)
 
 fig.subplots_adjust(right=0.88, top=0.86, bottom=0.22, left=0.10)
