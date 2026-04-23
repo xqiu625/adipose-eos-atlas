@@ -330,21 +330,18 @@ cbar.set_label("Average\nExpression", fontsize=4, labelpad=4)
 cbar.set_ticks([-2, -1, 0, 1, 2])
 cbar.ax.tick_params(labelsize=3.5, length=1, width=0.3)
 
-# Size legend for % active
+# Size legend for % active — use scatter so sizes match exactly
 legend_pcts = [25, 50, 75, 100]
-legend_elements = []
 for p in legend_pcts:
     size = min_dot + (p / pct_max) * (max_dot - min_dot)
-    legend_elements.append(
-        Line2D([0], [0], marker='o', color='w', markerfacecolor='#404040',
-               markersize=np.sqrt(size), label=f'{p}',
-               markeredgecolor='#404040', markeredgewidth=0.3)
-    )
+    ax.scatter([], [], s=size, c="#404040", edgecolors="#404040",
+               linewidths=0.2, label=f'{p}')
 
-leg = ax.legend(handles=legend_elements, title="Percent\nExpressed",
+leg = ax.legend(title="Percent\nExpressed",
                 loc="upper left", bbox_to_anchor=(1.06, 0.40),
                 frameon=False, fontsize=3.5, title_fontsize=4,
-                handletextpad=0.2, labelspacing=0.8)
+                handletextpad=0.2, labelspacing=1.0,
+                scatterpoints=1)
 
 fig.subplots_adjust(right=0.88, top=0.86, bottom=0.22, left=0.10)
 fig.savefig(os.path.join(FIG_DIR, "42h_merged_regulon_dotplot.pdf"),
