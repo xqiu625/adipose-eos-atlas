@@ -337,7 +337,7 @@ for p in legend_pcts:
     size = min_dot + (p / pct_max) * (max_dot - min_dot)
     legend_elements.append(
         Line2D([0], [0], marker='o', color='w', markerfacecolor='#404040',
-               markersize=np.sqrt(size) * 0.55, label=f'{p}',
+               markersize=np.sqrt(size), label=f'{p}',
                markeredgecolor='#404040', markeredgewidth=0.3)
     )
 
