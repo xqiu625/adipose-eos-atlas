@@ -244,13 +244,14 @@ cmap = LinearSegmentedColormap.from_list(
     "bwr", ["#2166ac", "#f7f7f7", "#b2182b"])
 norm = TwoSlopeNorm(vmin=-ZSCORE_CAP, vcenter=0, vmax=ZSCORE_CAP)
 
-# Dot sizing
-max_dot = 280
-min_dot = 8
+# Dot sizing — scaled for 6.6cm x 12.67cm figure
+max_dot = 80
+min_dot = 3
 pct_max = max(1, np.max(pct_mat))
 
-figwidth = max(10, n_reg * 0.55 + 3)
-figheight = max(4, n_grp * 0.65 + 2.5)
+# 6.6 cm height x 12.67 cm width
+figwidth = 12.67 / 2.54   # 4.99 inches
+figheight = 6.6 / 2.54    # 2.60 inches
 
 fig, ax = plt.subplots(figsize=(figwidth, figheight))
 
@@ -261,72 +262,73 @@ for i in range(n_grp):
         size = min_dot + (p / pct_max) * (max_dot - min_dot)
         color = cmap(norm(z))
         ax.scatter(j, n_grp - 1 - i, s=size, c=[color],
-                   edgecolors="#404040", linewidths=0.4, zorder=3)
+                   edgecolors="#404040", linewidths=0.2, zorder=3)
 
 # Axes
 ax.set_xticks(range(n_reg))
-ax.set_xticklabels(regulon_order, fontsize=8, fontstyle="italic",
+ax.set_xticklabels(regulon_order, fontsize=4, fontstyle="italic",
                    rotation=45, ha="right")
 ax.set_yticks(range(n_grp))
 ylabels = list(reversed(ALL_GROUPS))
-# Format Hu labels
 ylabels_fmt = []
 for g in ylabels:
     if g.startswith("Hu_"):
         ylabels_fmt.append(g.replace("_", " "))
     else:
         ylabels_fmt.append(g)
-ax.set_yticklabels(ylabels_fmt, fontsize=10, fontweight="bold")
+ax.set_yticklabels(ylabels_fmt, fontsize=5, fontweight="bold")
 
 # Horizontal separator between Qiu and Hu
 n_hu = 3
-ax.axhline(y=n_hu - 0.5, color="black", linewidth=1.2, linestyle="-")
+ax.axhline(y=n_hu - 0.5, color="black", linewidth=0.8, linestyle="-")
 
 # Vertical separators between categories
 sep1 = n_cat_a - 0.5
 sep2 = n_cat_a + n_cat_b - 0.5
-ax.axvline(x=sep1, color="#404040", linewidth=0.8, linestyle="--", alpha=0.6)
-ax.axvline(x=sep2, color="#404040", linewidth=0.8, linestyle="--", alpha=0.6)
+ax.axvline(x=sep1, color="#404040", linewidth=0.5, linestyle="--", alpha=0.6)
+ax.axvline(x=sep2, color="#404040", linewidth=0.5, linestyle="--", alpha=0.6)
 
 # Category labels at top
 cat_a_center = (n_cat_a - 1) / 2
 cat_b_center = n_cat_a + n_cat_b / 2 - 0.5
 cat_c_center = n_cat_a + n_cat_b + len(cat_c) / 2 - 0.5
 
-ax.text(cat_a_center, n_grp + 0.3, "Cluster-Specific\n(Shared)",
-        ha="center", fontsize=8, fontweight="bold", color="#333333")
-ax.text(cat_b_center, n_grp + 0.3, "HFD-Only",
-        ha="center", fontsize=8, fontweight="bold", color="#E63946")
-ax.text(cat_c_center, n_grp + 0.3, "Shared\n(HFD-Enriched)",
-        ha="center", fontsize=8, fontweight="bold", color="#984ea3")
+ax.text(cat_a_center, n_grp + 0.2, "Cluster-Specific\n(Shared)",
+        ha="center", fontsize=4, fontweight="bold", color="#333333")
+ax.text(cat_b_center, n_grp + 0.2, "HFD-Only",
+        ha="center", fontsize=4, fontweight="bold", color="#E63946")
+ax.text(cat_c_center, n_grp + 0.2, "Shared\n(HFD-Enriched)",
+        ha="center", fontsize=4, fontweight="bold", color="#984ea3")
 
 # Dataset labels on left
-ax.text(-1.8, (n_grp - 1 + n_hu) / 2, "Qiu\n(HFD)",
-        ha="center", va="center", fontsize=10, fontweight="bold",
+ax.text(-1.5, (n_grp - 1 + n_hu) / 2, "Qiu\n(HFD)",
+        ha="center", va="center", fontsize=5, fontweight="bold",
         color="#E63946", rotation=90)
-ax.text(-1.8, (n_hu - 1) / 2, "Hu\n(Healthy)",
-        ha="center", va="center", fontsize=10, fontweight="bold",
+ax.text(-1.5, (n_hu - 1) / 2, "Hu\n(Healthy)",
+        ha="center", va="center", fontsize=5, fontweight="bold",
         color="#2A9D8F", rotation=90)
 
 # Grid
 ax.set_xlim(-0.5, n_reg - 0.5)
-ax.set_ylim(-0.5, n_grp + 0.8)
+ax.set_ylim(-0.5, n_grp + 0.6)
 ax.set_axisbelow(True)
 for i in range(n_grp):
-    ax.axhline(y=i, color="#e0e0e0", linewidth=0.3, zorder=0)
+    ax.axhline(y=i, color="#e0e0e0", linewidth=0.2, zorder=0)
 for j in range(n_reg):
-    ax.axvline(x=j, color="#e0e0e0", linewidth=0.3, zorder=0)
+    ax.axvline(x=j, color="#e0e0e0", linewidth=0.2, zorder=0)
 
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
+ax.tick_params(axis="both", length=1.5, width=0.3, pad=1)
 
 # Colorbar for Z-score
 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])
-cax = fig.add_axes([0.92, 0.45, 0.015, 0.35])
+cax = fig.add_axes([0.92, 0.42, 0.012, 0.30])
 cbar = fig.colorbar(sm, cax=cax)
-cbar.set_label("Average\nExpression", fontsize=9, labelpad=8)
+cbar.set_label("Average\nExpression", fontsize=4, labelpad=4)
 cbar.set_ticks([-2, -1, 0, 1, 2])
+cbar.ax.tick_params(labelsize=3.5, length=1, width=0.3)
 
 # Size legend for % active
 legend_pcts = [25, 50, 75, 100]
@@ -335,16 +337,16 @@ for p in legend_pcts:
     size = min_dot + (p / pct_max) * (max_dot - min_dot)
     legend_elements.append(
         Line2D([0], [0], marker='o', color='w', markerfacecolor='#404040',
-               markersize=np.sqrt(size) * 0.65, label=f'{p}',
-               markeredgecolor='#404040', markeredgewidth=0.4)
+               markersize=np.sqrt(size) * 0.55, label=f'{p}',
+               markeredgecolor='#404040', markeredgewidth=0.3)
     )
 
 leg = ax.legend(handles=legend_elements, title="Percent\nExpressed",
-                loc="upper left", bbox_to_anchor=(1.08, 0.42),
-                frameon=False, fontsize=8, title_fontsize=8,
-                handletextpad=0.3, labelspacing=1.2)
+                loc="upper left", bbox_to_anchor=(1.06, 0.40),
+                frameon=False, fontsize=3.5, title_fontsize=4,
+                handletextpad=0.2, labelspacing=0.8)
 
-fig.subplots_adjust(right=0.88, top=0.88, bottom=0.18, left=0.12)
+fig.subplots_adjust(right=0.88, top=0.86, bottom=0.22, left=0.10)
 fig.savefig(os.path.join(FIG_DIR, "42h_merged_regulon_dotplot.pdf"),
             dpi=300, bbox_inches="tight")
 plt.close(fig)
