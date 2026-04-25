@@ -40,8 +40,8 @@ PVAL_THRESH = 0.05
 ZSCORE_CAP  = 2.5
 
 # Set to None for data-driven selection, or specify TFs to lock in reference figure TFs
-FIXED_FEMALE = ["Fli1", "Tef", "Rara"]   # None to use data-driven
-FIXED_MALE   = ["Rel", "Irf4"]            # None to use data-driven
+FIXED_FEMALE = None   # data-driven with naive-only cells
+FIXED_MALE   = None   # data-driven with naive-only cells
 
 EXCLUDE = {
     "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Bclaf1",
@@ -93,7 +93,7 @@ auc.columns = [strip_suffix(c) for c in auc.columns]
 auc = auc.T.groupby(level=0).max().T
 
 # =============================================================================
-# Group by sex x genotype
+# Group by sex x genotype — EXCLUDE infected samples for clean sex comparison
 # =============================================================================
 GROUPS = [
     ("Female", "WT"),
@@ -103,11 +103,34 @@ GROUPS = [
 ]
 GROUP_LABELS = ["WT ♀", "WT ♂", "KO ♀", "KO ♂"]
 
+# Determine infection column name
+if "infection" in meta.columns:
+    inf_col = "infection"
+elif "condition" in meta.columns:
+    inf_col = "condition"
+else:
+    inf_col = None
+
+if inf_col == "infection":
+    naive_mask = meta[inf_col] == "HFD"
+    print(f"  Filtering to naive (HFD-only) samples using '{inf_col}' column")
+    print(f"  Infection values: {meta[inf_col].unique().tolist()}")
+    print(f"  Naive cells: {naive_mask.sum()} / {len(meta)}")
+elif inf_col == "condition":
+    # Exclude conditions containing "Infected"
+    naive_mask = ~meta[inf_col].str.contains("Infected", case=False, na=False)
+    print(f"  Filtering to naive samples using '{inf_col}' column")
+    print(f"  Condition values: {meta[inf_col].unique().tolist()}")
+    print(f"  Naive cells: {naive_mask.sum()} / {len(meta)}")
+else:
+    naive_mask = pd.Series(True, index=meta.index)
+    print("  WARNING: No infection/condition column found, using all cells")
+
 group_cells = {}
 for sex, geno in GROUPS:
-    mask = (meta["sex"] == sex) & (meta["genotype"] == geno)
+    mask = (meta["sex"] == sex) & (meta["genotype"] == geno) & naive_mask
     group_cells[(sex, geno)] = meta.index[mask].tolist()
-    print(f"  {sex} {geno}: {mask.sum()} cells")
+    print(f"  {sex} {geno} (naive only): {mask.sum()} cells")
 
 # =============================================================================
 # Statistical test: WT Female vs WT Male
