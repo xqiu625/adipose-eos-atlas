@@ -253,21 +253,35 @@ for (i in seq_len(nrow(pw_cross))) {
 # Aggregate duplicate links
 bipartite_agg <- aggregate(value ~ from + to, data = bipartite_links, FUN = sum)
 
-# Sector order: cell types on left, pathways on right
-bp_sector_order <- c("Eos", "M1 Mac", "M2 Func", "M2 Surf",
-                     "APP", "CCL", "FN1", "CD45", "THBS")
+# Determine which sectors actually appear in the data
+all_sectors_in_data <- unique(c(bipartite_agg$from, bipartite_agg$to))
 
-# Colors: cell type colors + pathway colors
+# Full desired order: cell types on left, pathways on right
+bp_sector_full <- c("Eos", "M1 Mac", "M2 Func", "M2 Surf",
+                    "APP", "CCL", "FN1", "CD45", "THBS")
+bp_sector_order <- bp_sector_full[bp_sector_full %in% all_sectors_in_data]
+
+# Colors: cell type colors + pathway colors (only present ones)
 bp_colors <- c(cell_colors, pathway_colors)
+bp_colors <- bp_colors[names(bp_colors) %in% bp_sector_order]
 
-# Gap sizes: bigger gaps between cell types and pathways
-bp_gaps <- c(4, 4, 4, 15, 4, 4, 4, 4, 15)
+# Gap sizes: bigger gap at cell-type/pathway boundary
+n_sectors <- length(bp_sector_order)
+bp_gaps <- rep(4, n_sectors)
+# Find boundary between cell types and pathways
+cell_idx <- which(bp_sector_order %in% names(cell_colors))
+pw_idx   <- which(bp_sector_order %in% FOCUS_PATHWAYS)
+if (length(cell_idx) > 0 && length(pw_idx) > 0) {
+  bp_gaps[max(cell_idx)] <- 15
+  bp_gaps[max(pw_idx)]   <- 15
+}
+
+cat(sprintf("  Bipartite sectors present: %s\n", paste(bp_sector_order, collapse = ", ")))
 
 # Link colors: by pathway (determine from "from" or "to")
 bp_link_cols <- sapply(seq_len(nrow(bipartite_agg)), function(i) {
   fr <- bipartite_agg$from[i]
   to <- bipartite_agg$to[i]
-  # If from is a pathway, use that color; if to is a pathway, use that color
   if (fr %in% FOCUS_PATHWAYS) return(adjustcolor(pathway_colors[fr], alpha.f = 0.45))
   if (to %in% FOCUS_PATHWAYS) return(adjustcolor(pathway_colors[to], alpha.f = 0.45))
   return(adjustcolor("grey", alpha.f = 0.3))
@@ -363,14 +377,25 @@ for (pw in FOCUS_PATHWAYS) {
 
   pw_link_col <- rep(adjustcolor(pathway_colors[pw], alpha.f = 0.5), nrow(pw_chord))
 
+  # Only include sectors that appear in this pathway's data
+  pw_sectors_present <- unique(c(pw_chord$from, pw_chord$to))
+  pw_sector_order <- sector_order[sector_order %in% pw_sectors_present]
+  n_pw_sectors <- length(pw_sector_order)
+  # Gaps: larger gap between Eos and last Mac
+  pw_gaps <- rep(5, n_pw_sectors)
+  if (n_pw_sectors > 1) {
+    pw_gaps[1] <- 10
+    pw_gaps[n_pw_sectors] <- 10
+  }
+
   circos.clear()
-  circos.par(start.degree = 90, gap.after = c(10, 5, 5, 10),
+  circos.par(start.degree = 90, gap.after = pw_gaps,
              track.margin = c(0.01, 0.01),
              canvas.xlim = c(-1.2, 1.2), canvas.ylim = c(-1.2, 1.2))
 
   chordDiagram(pw_chord,
-               order = sector_order,
-               grid.col = cell_colors,
+               order = pw_sector_order,
+               grid.col = cell_colors[pw_sector_order],
                col = pw_link_col,
                transparency = 0,
                directional = 1,
