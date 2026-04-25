@@ -34,16 +34,17 @@ FIG_DIR   = os.path.join(BASE, "scenic", "figures")
 os.makedirs(FIG_DIR, exist_ok=True)
 EOS_CLUSTERS = ["C0", "C1", "C2", "C3", "C4", "C5"]
 
-TOP_FEMALE  = 5      # top female-enriched regulons
-TOP_MALE    = 5      # top male-enriched regulons
+TOP_FEMALE  = 2      # top female-enriched regulons
+TOP_MALE    = 3      # top male-enriched regulons
 PVAL_THRESH = 0.05
 ZSCORE_CAP  = 2.5
 
-# Well-known immune/eosinophil TFs with significant sex differences (naive-only)
-# Female: Stat5a (IL-5 signaling), Epas1/HIF-2a, Runx1, Cebpa, Tbx21
-# Male: Cebpe (eos master regulator), Hif1a, Gata2, Xbp1, Stat3
-FIXED_FEMALE = ["Tbx21", "Epas1", "Runx1", "Cebpa", "Stat5a"]
-FIXED_MALE   = ["Cebpe", "Hif1a", "Gata2", "Xbp1", "Stat3"]
+# Validated TFs: consistent direction in both SCENIC regulon activity AND
+# SCENIC target gene expression (module score, naive-only, Wilcoxon p<0.05)
+# Female: Tbx21 (T-bet, type-1 immunity), Stat5a (IL-5 signaling)
+# Male: Gata2 (progenitor identity), Xbp1 (UPR/secretory), Stat3 (IL-6/JAK-STAT)
+FIXED_FEMALE = ["Tbx21", "Stat5a"]
+FIXED_MALE   = ["Gata2", "Xbp1", "Stat3"]
 
 EXCLUDE = {
     "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Bclaf1",
@@ -291,7 +292,7 @@ ax.legend(handles=[female_patch, male_patch], fontsize=8,
           loc="lower right", bbox_to_anchor=(1.0, -0.22),
           frameon=False)
 
-suffix  = "_known_TFs" if (FIXED_FEMALE is not None) else "_datadriven"
+suffix  = "_validated" if (FIXED_FEMALE is not None) else "_datadriven"
 out_pdf = os.path.join(FIG_DIR, f"Fig5_sex_diff_regulons{suffix}.pdf")
 fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
 plt.close(fig)
