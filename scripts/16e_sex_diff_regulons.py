@@ -34,14 +34,16 @@ FIG_DIR   = os.path.join(BASE, "scenic", "figures")
 os.makedirs(FIG_DIR, exist_ok=True)
 EOS_CLUSTERS = ["C0", "C1", "C2", "C3", "C4", "C5"]
 
-TOP_FEMALE  = 3      # top female-enriched regulons
-TOP_MALE    = 2      # top male-enriched regulons
+TOP_FEMALE  = 5      # top female-enriched regulons
+TOP_MALE    = 5      # top male-enriched regulons
 PVAL_THRESH = 0.05
 ZSCORE_CAP  = 2.5
 
-# Set to None for data-driven selection, or specify TFs to lock in reference figure TFs
-FIXED_FEMALE = None   # data-driven with naive-only cells
-FIXED_MALE   = None   # data-driven with naive-only cells
+# Well-known immune/eosinophil TFs with significant sex differences (naive-only)
+# Female: Stat5a (IL-5 signaling), Epas1/HIF-2a, Runx1, Cebpa, Tbx21
+# Male: Cebpe (eos master regulator), Hif1a, Gata2, Xbp1, Stat3
+FIXED_FEMALE = ["Tbx21", "Epas1", "Runx1", "Cebpa", "Stat5a"]
+FIXED_MALE   = ["Cebpe", "Hif1a", "Gata2", "Xbp1", "Stat3"]
 
 EXCLUDE = {
     "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Bclaf1",
@@ -289,7 +291,7 @@ ax.legend(handles=[female_patch, male_patch], fontsize=8,
           loc="lower right", bbox_to_anchor=(1.0, -0.22),
           frameon=False)
 
-suffix  = "_reference" if (FIXED_FEMALE is not None) else "_datadriven"
+suffix  = "_known_TFs" if (FIXED_FEMALE is not None) else "_datadriven"
 out_pdf = os.path.join(FIG_DIR, f"Fig5_sex_diff_regulons{suffix}.pdf")
 fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
 plt.close(fig)
