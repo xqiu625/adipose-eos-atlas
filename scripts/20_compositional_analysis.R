@@ -134,11 +134,33 @@ if (use_sccomp) {
     NULL
   })
 
-  if (!is.null(res_sex)) {
-    res_sex_df <- as.data.frame(res_sex)
-    write.csv(res_sex_df, file.path(comp_dir, "sccomp_sex.csv"), row.names = FALSE)
-    cat("  Saved: sccomp_sex.csv\n")
+  # Helper to run sccomp_test and save results as flat CSV
+  save_sccomp <- function(res, test_name) {
+    if (is.null(res)) return()
+    # Run hypothesis testing
+    res_tested <- tryCatch({
+      sccomp_test(res)
+    }, error = function(e) {
+      cat(sprintf("  sccomp_test error: %s\n", e$message))
+      res  # fall back to untested result
+    })
+    # Convert to data frame, dropping list columns
+    res_df <- as.data.frame(res_tested)
+    list_cols <- sapply(res_df, is.list)
+    if (any(list_cols)) {
+      cat(sprintf("  Dropping list columns: %s\n", paste(names(res_df)[list_cols], collapse=", ")))
+      res_df <- res_df[, !list_cols, drop = FALSE]
+    }
+    out_path <- file.path(comp_dir, paste0("sccomp_", test_name, ".csv"))
+    write.csv(res_df, out_path, row.names = FALSE)
+    cat(sprintf("  Saved: sccomp_%s.csv\n", test_name))
+    # Print results
+    cat(sprintf("  Results for %s:\n", test_name))
+    print(res_df)
+    invisible(res_df)
   }
+
+  save_sccomp(res_sex, "sex")
 
   # --- Test 2: Genotype effect (within females, HFD) --------------------------
   cat("\n--- Test 2: Genotype effect (Females, HFD) ---\n")
@@ -153,11 +175,7 @@ if (use_sccomp) {
     NULL
   })
 
-  if (!is.null(res_geno)) {
-    res_geno_df <- as.data.frame(res_geno)
-    write.csv(res_geno_df, file.path(comp_dir, "sccomp_genotype.csv"), row.names = FALSE)
-    cat("  Saved: sccomp_genotype.csv\n")
-  }
+  save_sccomp(res_geno, "genotype")
 
   # --- Test 3: Infection effect (within females) ------------------------------
   cat("\n--- Test 3: Infection effect (Females) ---\n")
@@ -172,11 +190,7 @@ if (use_sccomp) {
     NULL
   })
 
-  if (!is.null(res_inf)) {
-    res_inf_df <- as.data.frame(res_inf)
-    write.csv(res_inf_df, file.path(comp_dir, "sccomp_infection.csv"), row.names = FALSE)
-    cat("  Saved: sccomp_infection.csv\n")
-  }
+  save_sccomp(res_inf, "infection")
 
 } else {
   cat("\nsccomp not available. Falling back to logistic mixed-effects model (glmer)...\n")
