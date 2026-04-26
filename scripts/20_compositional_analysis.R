@@ -82,9 +82,44 @@ cat(sprintf("  Conditions: %s\n", paste(unique(comp_data$condition), collapse = 
 # --- Try sccomp; fall back to glmer if unavailable ----------------------------
 use_sccomp <- requireNamespace("sccomp", quietly = TRUE)
 
+# Detect which sccomp API is available (v1: sccomp_glm, v2: sccomp_estimate)
+sccomp_func <- NULL
 if (use_sccomp) {
-  cat("\nUsing sccomp (Bayesian compositional analysis)...\n")
   library(sccomp)
+  if (exists("sccomp_estimate", mode = "function")) {
+    sccomp_func <- "sccomp_estimate"
+    cat("\nUsing sccomp (v2 API: sccomp_estimate)...\n")
+  } else if (exists("sccomp_glm", mode = "function")) {
+    sccomp_func <- "sccomp_glm"
+    cat("\nUsing sccomp (v1 API: sccomp_glm)...\n")
+  } else {
+    cat("\nsccomp loaded but no known function found. Falling back to glmer.\n")
+    use_sccomp <- FALSE
+  }
+}
+
+# Helper to call the right sccomp function
+run_sccomp <- function(data, formula_comp, formula_var = ~ 1) {
+  if (sccomp_func == "sccomp_estimate") {
+    data %>% sccomp_estimate(
+      formula_composition = formula_comp,
+      formula_variability = formula_var,
+      .sample = orig.ident,
+      .cell_group = eos_cluster,
+      .count = count
+    )
+  } else {
+    data %>% sccomp_glm(
+      formula_composition = formula_comp,
+      formula_variability = formula_var,
+      .sample = orig.ident,
+      .cell_group = eos_cluster,
+      .count = count
+    )
+  }
+}
+
+if (use_sccomp) {
 
   # --- Test 1: Sex effect (within non-infected samples) -----------------------
   cat("\n--- Test 1: Sex effect (HFD only) ---\n")
@@ -93,14 +128,7 @@ if (use_sccomp) {
               length(unique(data_sex$orig.ident)), sum(data_sex$count)))
 
   res_sex <- tryCatch({
-    data_sex %>%
-      sccomp_glm(
-        formula_composition = ~ sex,
-        formula_variability = ~ 1,
-        .sample = orig.ident,
-        .cell_group = eos_cluster,
-        .count = count
-      )
+    run_sccomp(data_sex, ~ sex)
   }, error = function(e) {
     cat(sprintf("  sccomp error: %s\n", e$message))
     NULL
@@ -119,14 +147,7 @@ if (use_sccomp) {
               length(unique(data_geno$orig.ident)), sum(data_geno$count)))
 
   res_geno <- tryCatch({
-    data_geno %>%
-      sccomp_glm(
-        formula_composition = ~ genotype,
-        formula_variability = ~ 1,
-        .sample = orig.ident,
-        .cell_group = eos_cluster,
-        .count = count
-      )
+    run_sccomp(data_geno, ~ genotype)
   }, error = function(e) {
     cat(sprintf("  sccomp error: %s\n", e$message))
     NULL
@@ -145,14 +166,7 @@ if (use_sccomp) {
               length(unique(data_inf$orig.ident)), sum(data_inf$count)))
 
   res_inf <- tryCatch({
-    data_inf %>%
-      sccomp_glm(
-        formula_composition = ~ infection,
-        formula_variability = ~ 1,
-        .sample = orig.ident,
-        .cell_group = eos_cluster,
-        .count = count
-      )
+    run_sccomp(data_inf, ~ infection)
   }, error = function(e) {
     cat(sprintf("  sccomp error: %s\n", e$message))
     NULL
