@@ -1,51 +1,78 @@
-# Methods — Adipose Eosinophil Subtype Atlas (DecontX Revision)
+# Methods — Adipose Eosinophil Cluster Atlas
+
+This file mirrors the methods text in the manuscript. Numbers in brackets refer to scripts under `scripts/`.
 
 ## Ambient RNA Removal (DecontX)
-Ambient RNA contamination was removed per sample using DecontX (celda R package). For each of the 16 samples, raw (unfiltered) CellRanger counts were used as the background profile and filtered counts as the cell matrix. Cells with contamination scores exceeding 0.3 were excluded. Decontaminated counts replaced the original counts matrix for all downstream analyses.
+Ambient RNA contamination was removed per sample using DecontX (celda R package). For each of 16 samples, raw (unfiltered) Cell Ranger counts served as the background profile and filtered counts as the cell matrix. Cells with contamination scores > 0.2 were excluded; decontaminated counts replaced raw counts for all downstream analyses. [`00_decontx_per_sample.R`, `21_ambient_rna_evidence.R`]
 
 ## Quality Control and Doublet Removal
-Doublets were identified using Scrublet (Python, via reticulate). QC filtering removed cells with contamination scores > 0.2. The 16 samples were merged into a single Seurat (v5) object for downstream processing.
+Cells were retained with 200–5,000 detected features and ≤10% mitochondrial content. Doublets were identified using Scrublet (Python, via reticulate) with an expected doublet rate of 6%. The 16 samples were merged into a single Seurat v5 object (97,934 → 7,461 high-quality eosinophils across 16 samples). [`01_qc_doublet_filter.R`, `17_qc_supplement.R`]
 
 ## Normalization, Dimensionality Reduction, and Clustering
-Gene expression was normalized using LogNormalize (scale factor 10,000). The top 2,000 highly variable genes were identified via variance-stabilizing transformation (vst). Principal component analysis (PCA) was performed on scaled data (30 PCs). A shared nearest neighbor (SNN) graph was constructed (dims = 1:20, k = 30), and UMAP was computed (n.neighbors = 50, min.dist = 0.1, spread = 1). Cells were clustered at multiple resolutions (0.5, 0.8, 1.0) using the Louvain algorithm; resolution 0.8 was used as the default.
+Gene expression was LogNormalized (scale factor 10,000); 2,000 highly variable features were selected (vst). PCA was performed on scaled data (30 PCs). SNN graphs were built on dims 1:20, and UMAP was computed (n.neighbors = 50, min.dist = 0.1). Cells were clustered using the Louvain algorithm.
 
 ## Cell Type Annotation
-Cell types were assigned by label transfer from a previously annotated reference object (13 cell types, 97,061 cells) using Seurat's anchoring framework. Seven immune cell types were identified: eosinophils, macrophages, dendritic cells, B cells, NK cells, neutrophils, and mast cells.
+Cell types were assigned by marker-based annotation and label transfer using Seurat's anchoring framework. Seven immune cell types were identified (eosinophils, macrophages, dendritic cells, B cells, NK cells, neutrophils, mast cells). [`02_all_cells_umap.R`, `03_annotate_celltypes.R`]
 
-## Eosinophil Subclustering and Resolution Justification
-Eosinophils were subset and re-processed (normalization, 2,000 HVGs, PCA with 30 PCs, UMAP with dims 1:20). Clustering was performed across 12 resolutions (0.1-1.5). Resolution 0.4 was selected (7 clusters, C0-C6) based on four convergent lines of evidence:
-1. **Clustree analysis**: 7 clusters were stable across resolutions 0.4-0.6
-2. **Silhouette analysis**: local peak in mean silhouette score at resolution 0.4
-3. **Subsampling stability**: adjusted Rand index (ARI) computed over 100 iterations of 80% subsampling showed high reproducibility
-4. **sc-SHC significance testing** (Grabski et al., *Nat Methods* 2023): all clusters passed post-hoc significance testing
+## Eosinophil Subclustering — Re-processing and Resolution Justification
+Eosinophils were subset and re-processed *de novo* (NormalizeData, FindVariableFeatures n = 2,000, ScaleData, RunPCA npcs = 30, RunUMAP dims = 1:20, FindNeighbors, FindClusters) to capture eosinophil-intrinsic variation. Resolution selection was assessed across 12 resolutions (0.1–1.5). **Resolution 0.4 was selected** based on four convergent lines of evidence:
+1. **Clustree** stability — 7 clusters stable across resolutions 0.3–0.6.
+2. **Silhouette** — mean silhouette plateaued at resolutions 0.3–0.5.
+3. **Subsampling stability** — ARI over 100 iterations of 80% subsampling.
+4. **sc-SHC** significance testing (Grabski et al., *Nat Methods* 2023).
 
-Cluster C6 was identified as too few cells and excluded from all downstream analyses, yielding 6 final eosinophil subtypes (C0-C5). Cluster markers were identified using FindAllMarkers (min.pct = 0.25, logfc.threshold = 0.25, Wilcoxon rank-sum test).
+One small cluster (n = 14 cells, too few cells marker profile) was excluded, yielding **six final eosinophil clusters (C0–C5)**. Cluster markers were identified using FindAllMarkers (min.pct = 0.25, logfc.threshold = 0.25, Wilcoxon). [`04_eos_subcluster.R`, `04b_rename_clusters.R`, `18_clustree_resolution.R`]
+
+## Batch Effect Assessment and Harmony Sensitivity
+Samples were multiplexed using the 10x Genomics Flex probe-based assay (4 samples per GEM reaction), which eliminates the primary technical batch sources at the experimental level (PMIDs 38612639, 35927335). Within-study Harmony integration was tested as a sensitivity analysis (Supplementary Fig. S7) but disrupted cluster structure (ARI = 0.28, mean Jaccard index = 0.54) because GEM reaction is partially confounded with biological condition; integration cannot distinguish these and removes biological signal along with technical noise (PMIDs 34949812, 31948481). Three independent analyses confirmed clusters are not batch-driven: (i) every cluster contains cells from all six experimental conditions, (ii) replicates of the same condition processed in different GEM reactions show concordant cluster proportions, (iii) per-cluster condition composition tracks biological variables rather than technical covariates. [`19_batch_effect_evidence.R`]
+
+## Compositional Analysis (sccomp)
+Cluster-proportion shifts across conditions were tested using Bayesian compositional analysis with `sccomp` v1.7 (Beta-Binomial framework, accounting for the sum-to-one constraint and sample-level pseudoreplication; PMID 37549298). Three contrasts: sex effect (WT Female vs WT Male HFD, n = 3 vs 3), genotype effect (KO vs WT females HFD, n = 3 vs 3), and infection effect (Infected vs Naive females, n = 4 vs 6). FDR-corrected posterior probabilities < 0.1 were considered significant. [`20_compositional_analysis.R`, `43_composition_biorep.R`]
 
 ## Macrophage Subtype Classification
-Macrophages were classified into M1, M2 surface, and M2 functional subtypes using Seurat's AddModuleScore (ctrl = 50 control genes). Module gene sets: M1 (*Itgax, Cd80, Tnf, Il6, Ccl2*), M2 surface (*Mrc1, Lyve1, Cd301b, Cd163*), M2 functional (*Chil3, Il10, Arg1, Tgfb1, Clec10a*). Each cell was assigned to the subtype with the highest module score.
+Macrophages within the SiglecF⁺ fraction were classified using Seurat AddModuleScore (ctrl = 50) with curated gene sets: M1-like (*Itgax, Cd80, Tnf, Il6, Ccl2*), M2 Surface (*Mrc1, Lyve1, Cd301b, Cd163*), M2 Functional (*Chil3, Il10, Arg1, Tgfb1, Clec10a*). Each cell was assigned to the subtype with the highest module score. We refer to these as M1-like / M2-like states defined by module score. [`06_mac_subtype.R`]
 
-## Differential Expression Analysis
-### Single-cell level (MAST)
-DEGs were identified using MAST with a hurdle model including a random intercept for sample: `zlm(~ group + cngeneson + (1|sample), method = "glmer")`. Genes expressed in <10% of cells were excluded. Significance thresholds: adjusted p-value < 0.05 (Benjamini-Hochberg), |log2FC| > 0.25. Four comparisons were performed: sex effect (WT Female vs Male HFD), genotype effect in females (KO vs WT Female HFD), genotype effect in males (KO vs WT Male HFD), and infection effect (HFD Infected vs Naive).
+## Differential Expression — Pseudobulk DESeq2
+Condition-level differential expression was performed using a pseudobulk approach (Squair et al., *Nat Commun* 2021; PMID 34584091). Single-cell counts were aggregated per sample using `AggregateExpression()`, then tested with DESeq2. Multifactor designs (~genotype + infection) were used for the genotype-in-females and infection-in-females comparisons to control for confounding. Significance: adjusted p < 0.05 and |log₂FC| > 0.25.
 
-### Pseudobulk (DESeq2)
-Raw counts were aggregated per sample per condition using pseudobulk summation. DESeq2 was applied with the same four comparisons. Concordance between MAST and DESeq2 results was assessed.
+Four comparisons:
+- **Panel D** WT Female vs WT Male (n = 3 vs 3)
+- **Panel E** KO Male vs WT Male (n = 3 vs 3)
+- **Panel F** KO vs WT, all females, multifactor (n = 5 vs 5)
+- **Panel G** Infected vs Naive, all females, multifactor (n = 4 vs 4)
+
+Single-cell-level `FindMarkers` (Wilcoxon) was used only for identifying cluster-defining markers, not for condition-level inference. [`05_eos_pseudobulk.R`, `05b_pseudobulk_methods.R`, `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R`, `27_deg_excel_export.R`]
 
 ## Pathway Enrichment Analysis
-Gene Ontology (GO) Biological Process and KEGG pathway enrichment was performed on cluster-specific markers using clusterProfiler (org.Mm.eg.db). Markers were filtered at adjusted p-value < 0.05 and avg_log2FC > 0.25, with a minimum of 5 genes per cluster.
+GSEA was performed on DESeq2-ranked gene lists using `clusterProfiler::gseGO()` (Gene Ontology Biological Process; mouse `org.Mm.eg.db`). Genes were ranked by DESeq2 test statistic; enrichment was assessed with Benjamini–Hochberg correction. [`08_pathway_eos_clusters.R`, `26_gsea_custom_butterfly.R`]
 
-## Cell-Cell Communication (CellChat)
-Eosinophil-macrophage communication was analyzed using CellChat (v1.6.1) with the CellChatDB.mouse database. Communication probabilities were computed using the triMean method with a minimum of 10 cells per interaction. Analysis was performed separately for each of 6 experimental conditions (WT/KO x Male/Female x HFD/Infected). Per-condition CellChat objects were merged for comparative analysis of signaling pathway changes.
+## Cell–Cell Communication (CellChat)
+Eosinophil–macrophage communication was inferred using CellChat v1.6.1 with the mouse CellChatDB. Communication probabilities were computed using the triMean method with a minimum of 10 cells per interaction. CellChat objects were built separately per condition (WT/KO × Male/Female × HFD/Infected) and merged for comparative analysis. Five focal pathways were highlighted: CCL, FN1, APP, CD45, THBS. Network centrality (`netAnalysis_signalingRole_network()`, PMID 33597522) identified senders, receivers, mediators (betweenness centrality), and influencers (information centrality). [`10_cellchat.R`, `10b_cellchat_manuscript_figures.R`, `10c_cellchat_fig3d.R`, `33_fig3EF_cellchat_ccl_heatmap.R`, `44_fig3A_chord_revised.R`]
 
-## Harmony Integration with Reference Datasets
-### Two-way integrations
-Qiu HFD adipose eosinophils (C0-C5) were independently integrated with (1) Hu et al. 2026 healthy adipose eosinophils and (2) Gurtner et al. 2022 blood/bone marrow eosinophils (GSE182001) using Harmony batch correction. For each integration: 2,000 variable features were selected, PCA was computed (30 PCs), Harmony was run with `group.by.vars = "dataset"`, and UMAP was generated on Harmony embeddings (dims 1:30). Integrated clustering used resolution 0.5.
+CellChat interaction probabilities represent computational predictions based on ligand–receptor co-expression, not experimentally validated signaling events.
 
-### Three-way integration
-All three datasets were merged and integrated using Harmony (group.by = dataset). The Hu dataset retained depot-level metadata (BAT, eWAT, scWAT). Gurtner clusters were mapped to their published nomenclature (Gurtner et al., *Nature* 2023) based on tissue distribution and validation against six canonical markers from their Figure 1d:
+## Spatial Analysis (RNAscope)
+Crown-like structures from RNAscope confocal z-stacks (CCL6, CCR3, CCR2) were reconstructed in 3D using Imaris 11.0. Puncta and nuclei coordinates were exported for quantification. A modified G-cross function (PMID 29409671) was applied, taking the mean AUC at r' = 25 μm for each reference nucleus and normalizing via permutation. Two-way ANOVA with Tukey's HSD was applied (n = 4 biological replicates per group, two independent cohorts).
 
-| Cluster | Tissue | Cd80 | Cd274 (PD-L1) | Retnla | Mki67 | Tgfb1 | Label |
-|---------|--------|------|---------------|--------|-------|-------|-------|
+## Trajectory Analysis (Monocle 3)
+The eosinophil dataset was integrated with reference bone-marrow and blood eosinophils from Gurtner et al. (PMID 36509106) using Harmony, and trajectory inference was performed using Monocle 3 v1.2.9. Trajectory alignment used `align_cds()`. The root was anchored to the Gurtner bone marrow reference population.
+
+For the pseudotime gene-expression heatmap, pseudotime-dependent genes were identified via Monocle 3's `graph_test()` (Moran's I, q-value < 0.05) on the top 1,000 highly variable genes across pseudotime-ordered cells. Genes were grouped into six co-expression modules by hierarchical clustering of pseudotime dynamics; the top three by variance within each module were labeled as representative markers per maturation stage.
+
+While pseudotime orders cells along a continuum, it does not constitute definitive evidence of a differentiation trajectory; this would require lineage tracing or temporal fate-mapping. [`11_monocle3.R`, `11b_monocle3_integrated.R`, `24_integrate_qiu_hu_gurtner.R`, `24b_cellrank_eos_maturation.py`, `24c_pseudotime_violin.py`]
+
+## Cross-Dataset Integration and Similarity
+Two cross-study integrations were performed using Harmony v1.2.1 (default parameters, top 30 PCs):
+1. Our HFD adipose eosinophils with Hu et al. 2026 healthy adipose eosinophils (eWAT, scWAT, BAT) to assess cluster conservation across dietary states.
+2. A three-study integration with Hu et al. 2026 (healthy adipose) and Gurtner et al. 2023 (GSE182001; bone marrow and blood) to map eosinophil maturation from bone marrow precursors through circulation to tissue-resident states.
+
+Cross-dataset transcriptional similarity was assessed using Spearman correlation on Harmony embeddings (30 dims) per group; hierarchical clustering (average linkage on 1 − Spearman distance) generated the dendrogram. [`12_integrate_hu.R`, `13_integrate_gurtner.R`, `23_hu_mast_marker_validation.R`]
+
+## Gurtner Cluster Labeling
+Gurtner et al. clusters were mapped to their published nomenclature based on tissue distribution and canonical markers from their Fig 1d:
+
+| Cluster | Tissue | Cd80 | Cd274 | Retnla | Mki67 | Tgfb1 | Label |
+|---------|--------|------|-------|--------|-------|-------|-------|
 | 4 | BM (94%) | 1.3% | 7.1% | 35.4% | **84.1%** | 18.0% | Eos Precursors |
 | 16 | BM (91%) | 6.4% | 5.4% | 25.0% | **89.3%** | 25.7% | Cycling Precursors |
 | 3 | BM (69%) | 2.8% | 7.5% | 17.7% | 8.0% | 5.0% | Immature Eos |
@@ -53,22 +80,14 @@ All three datasets were merged and integrated using Harmony (group.by = dataset)
 | 1 | GI (64%) | **49.1%** | **47.2%** | 22.4% | 0.6% | 3.0% | A-Eos (active) |
 | 5 | GI (68%) | 24.3% | 33.7% | 21.6% | 11.2% | **19.5%** | B-Eos (basal) |
 
-Cluster 4 was identified as eosinophil precursors based on dominant Mki67 expression (84.1%), consistent with cycling progenitors. Cluster 2 was assigned as circulating eosinophils based on the highest Retnla expression (35.8%) and blood-dominant tissue distribution. Cluster 1 was confirmed as A-Eos (active) based on the highest Cd80 (49.1%) and Cd274/PD-L1 (47.2%) expression. Cluster 5 was assigned as B-Eos (basal) based on the highest Tgfb1 expression (19.5%) and GI-dominant tissue localization, though it showed intermediate Cd80/Cd274 levels suggesting a possible transitional phenotype. Cluster 3 was identified as immature eosinophils based on low expression of all subset-specific markers and BM-dominant localization. Cluster 16 (cycling precursors, Mki67 = 89.3%) was excluded from the main dendrogram analysis due to low cell count (n = 280). Data were exported for downstream trajectory analysis in Python (counts matrix, Harmony embeddings, UMAP coordinates, metadata).
-
-## Trajectory Analysis
-### CytoTRACE / CellRank
-CytoTRACE scores were computed using the CytoTRACEKernel in CellRank (v2) on the three-way integrated data. Log-normalized expression (layer "X") was used directly. The transition matrix was computed with soft thresholding. Diffusion pseudotime (DPT) was calculated with 5 diffusion components, rooted at the Gurtner bone marrow cell with the highest CytoTRACE score. GPCCA macrostate analysis was performed with 20 Schur components and 5 macrostates.
-
-### Monocle3
-The three-way integrated Seurat object was converted to a Monocle3 cell_data_set. UMAP coordinates from the Harmony integration were transferred. The trajectory graph was learned using `learn_graph()` after preprocessing (30 dimensions). The root was set to the Gurtner bone marrow cell with the highest CytoTRACE score. Two figure sets were generated: (1) main figure with BM + Blood + Qiu C0-C5 only, (2) supplementary with Hu adipose depots included.
-
-## Cross-Dataset Cluster Similarity
-Spearman correlation was computed on average Harmony embeddings (30 dimensions) per group to assess cross-dataset similarity while controlling for batch effects. Groups included: Qiu C0-C5, Hu eWAT/scWAT/BAT, and Gurtner Precursors/Immature/Circulating/A-Eos/B-Eos. Hierarchical clustering (average linkage) on the distance matrix (1 - Spearman correlation) was used to generate a dendrogram. Harmony embeddings were used instead of raw expression to remove technical batch effects between datasets, enabling biologically meaningful cross-dataset comparisons.
+Cluster 16 was excluded from the dendrogram due to low cell count (n = 280).
 
 ## SCENIC Gene Regulatory Network Analysis
-Single-cell regulatory network inference and clustering (pySCENIC) was used to identify transcription factor regulons. GRN inference was performed using GRNBoost2 (arboreto) on the DecontX-cleaned eosinophil expression matrix. Regulon pruning was performed using cisTarget with two ranking databases (mm10 refseq-r80, 10kb and 500bp windows) and motif annotations (motifs-v9-nr.mgi). AUCell was used to score regulon activity per cell. Regulon specificity scores (RSS) were computed per cluster using Jensen-Shannon divergence. Macrophage cells were scored with eosinophil-derived regulons for comparative analysis (Fig 5A). Condition-specific regulon activity was assessed using Kruskal-Wallis tests and pairwise comparisons across the 6 experimental conditions.
+pySCENIC was applied to infer transcription factor regulons and quantify regulatory activity at single-cell resolution. Co-expression networks were inferred with GRNBoost2 *independently per eosinophil cluster* (C0–C5) to amplify cluster-specific regulatory signal. Modules were refined using cisTarget (NES ≥ 3.0; mm10 motif database v9, 10kb and 500bp windows; motifs-v9-nr.mgi). Regulon activity was scored using AUCell (top 5% of expressed genes per cell).
+
+Differential regulon activity between conditions was assessed using a random-subsampling strategy (200 cells per group; adapted from Xie et al. 2020, PMID 32719519). Regulons were flagged as "eosinophil-enriched" if maximum AUC across C0–C5 ≥ 0.05 and fold-change vs mean macrophage AUC ≥ 1.2. Sex-differential regulons were identified by comparing WT Female vs WT Male HFD-only samples (Wilcoxon p < 0.05); only TFs whose SCENIC-identified target gene expression confirmed the same sex-biased direction were retained. [`14_scenic_export.R`, `15_scenic_run.sh`, `15c_scenic_per_cluster.sh`, `16_scenic_visualize.py`, `16b–16e_*.py`, `22_scenic_by_condition.py`, `38_scenic_auc_violin.py`, `41–42*_hu_regulon_*`]
 
 ## Software Versions
-- R 4.5.0, Seurat v5.4.0, Harmony v1.2.1, MAST, DESeq2, CellChat v1.6.1, monocle3 v1.4.26, clusterProfiler, celda (DecontX)
-- Python 3.12, scanpy v1.10.3, cellrank v2, pySCENIC, Scrublet
-- All analyses were performed on the UCR HPCC cluster using SLURM job scheduling
+- **R** 4.5.0 — Seurat 5.1.0, DESeq2, Harmony 1.2.1, CellChat 1.6.1, Monocle 3 1.2.9, clusterProfiler, celda (DecontX), sccomp 1.7
+- **Python** 3.12 — scanpy 1.10.3, pyscenic, cellrank 2.0.7, scrublet
+- Analyses run on the UCR HPCC cluster (SLURM); see `scripts/SLURM_COMMANDS.sh` for submission patterns.

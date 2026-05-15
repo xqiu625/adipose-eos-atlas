@@ -1,12 +1,12 @@
 # Adipose Eosinophil and Macrophage Single-Cell Atlas
 
-Single-cell RNA sequencing analysis of eosinophils and macrophages in adipose tissue under metabolic stress conditions, with focus on RELMα function in obesity.
+Single-cell RNA sequencing analysis of eosinophils and macrophages in adipose tissue under metabolic stress, with focus on RELMα function in obesity.
 
-**Publication:** Ruggiero-Ruff and Qiu et al. 2025. "An intra-adipose network of eosinophil subtypes is regulated by sex and RELMα and drives macrophage polarization in obesity-induced inflammation"
+**Publication:** Ruggiero-Ruff and Qiu et al. *Single-cell heterogeneity of adipose tissue eosinophils is shaped by sex and RELMα and is linked to the macrophage communication network in obesity.* (under revision, PNAS Nexus)
 
 ## Overview
 
-This project investigates immune cell heterogeneity and cell-cell communication in adipose tissue using scRNA-seq. We characterize eosinophil and macrophage subpopulations across different metabolic conditions and genotypes, identifying seven eosinophil subtypes (C0-C6) that dynamically shift based on sex, RELMα expression, and helminth infection.
+scRNA-seq characterization of eosinophil and macrophage heterogeneity in murine visceral adipose tissue across sex, RELMα genotype, and helminth infection. We identify **six transcriptionally distinct eosinophil clusters (C0–C5)** whose relative abundance shifts with these perturbations.
 
 ### Study Design
 
@@ -15,188 +15,103 @@ This project investigates immune cell heterogeneity and cell-cell communication 
 | Genotype | Wild-Type (WT), RELMα knockout (KO) |
 | Sex | Male, Female |
 | Diet | High-Fat Diet (HFD) |
-| Challenge | HFD + Helminth Infection |
+| Challenge (females only) | HFD + *N. brasiliensis* infection |
+
+16 samples total (4 conditions × 2–3 biological replicates), multiplexed using 10x Genomics Flex (4 samples per GEM reaction).
 
 ## Repository Structure
 
-This repository uses **Snakemake** for reproducible workflow management.
-
 ```
-├── config/
-│   └── config.yaml                 # Pipeline configuration
-├── workflow/
-│   ├── Snakefile                   # Main workflow definition
-│   ├── rules/
-│   │   ├── preprocessing.smk       # Data loading, QC, Seurat
-│   │   ├── cell_annotation.smk     # UCE cell type identification
-│   │   ├── eosinophil_analysis.smk # Subclustering, DEG, M1/M2
-│   │   ├── trajectory_analysis.smk # scVelo, CellRank, pseudotime
-│   │   ├── cell_communication.smk  # CellChat, CellPhoneDB
-│   │   ├── scenic_grn.smk          # SCENIC, GRN analysis
-│   │   ├── integration.smk         # Harmony integration
-│   │   └── figure_generation.smk   # Publication figures
-│   └── scripts/
-│       ├── 01_preprocessing/
-│       ├── 02_cell_annotation/
-│       ├── 03_eosinophil_analysis/
-│       ├── 04_trajectory_analysis/
-│       ├── 05_cell_communication/
-│       ├── 06_scenic_grn/
-│       ├── 07_integration/
-│       └── 08_figure_generation/
-└── README.md
+.
+├── config/config.yaml          # Pipeline parameters
+├── scripts/                    # Numbered analysis scripts (00–45) — primary pipeline
+│   ├── paths.R / paths.py      # Centralized path configuration (sourced by all scripts)
+│   ├── 00_theme.R              # Shared plotting theme
+│   ├── 00_decontx_per_sample.R → 45b_hif_scenic_targets.R
+│   └── exploratory/            # One-off / ad-hoc analyses (not part of published pipeline)
+├── FIGURES.md                  # Maps each published figure to its producing script
+├── methods.md                  # Methods text mirroring the manuscript
+└── data/                       # Reference data (e.g. Hu et al. 2026)
 ```
-
-## Quick Start
-
-### Prerequisites
-
-```bash
-# Install Snakemake
-conda install -c bioconda snakemake
-
-# Or using mamba (recommended)
-mamba install -c bioconda snakemake
-```
-
-### Running the Pipeline
-
-```bash
-# Run complete pipeline
-snakemake --cores 8
-
-# Run specific modules
-snakemake preprocessing --cores 8
-snakemake eosinophil --cores 8
-snakemake trajectory --cores 8
-snakemake communication --cores 8
-snakemake scenic --cores 8
-snakemake figures --cores 8
-
-# Dry run to see planned jobs
-snakemake -n
-
-# Generate workflow DAG
-snakemake --dag | dot -Tpdf > workflow_dag.pdf
-```
-
-## Workflow Modules
-
-### 1. Preprocessing (`preprocessing.smk`)
-- **01_local_data_seurat_preprocess.R** - Load 10x FLEX data, QC filtering
-- **03_UMAP.R** - PCA and UMAP dimensionality reduction
-- **04_FindAllMarkers_cluster.R** - Cluster marker identification
-
-### 2. Cell Annotation (`cell_annotation.smk`)
-- **05_UCE_annotate_by_mouse_kidney_norn.py** - Universal Cell Embedding
-- **06_label_UCE_identity.R** - Final cell type assignments
-
-### 3. Eosinophil Analysis (`eosinophil_analysis.smk`)
-- **07_EOS_subcluster_0.8.R** - Eosinophil subclustering (C0-C6)
-- **03_EOS_DEG.R** - Differential expression (sex, genotype, infection)
-- **04_EOS_ClusterProfiler.R** - GO/KEGG pathway enrichment
-- **08_GSVA.R** - Gene Set Variation Analysis
-- **01_define_M1_M2_signatures.R** / **02_score_cells_M1_M2.R** - Macrophage polarization
-
-### 4. Trajectory Analysis (`trajectory_analysis.smk`)
-- **02_EOS_scVelo_preparation.py** - Prepare velocity data
-- **03_EOS_scVelo_dynamics.py** - RNA velocity (dynamical model)
-- **02_CellRank2.py** - CellRank trajectory inference
-- **04_peudotime_heatmap_1024.py** - Pseudotime visualization
-
-### 5. Cell Communication (`cell_communication.smk`)
-- **02_cellchat_score_eos-mac_condition_1021.R** - CellChat by condition
-- **03_cellchat_score_eos-mac_eos-sub_1021.R** - CellChat with eos subtypes
-- **04.1_CCL_pathway_heatmaps.R** - CCL signaling analysis
-- **04_run_cellphonedb_analysis.py** - CellPhoneDB alternative
-
-### 6. SCENIC GRN (`scenic_grn.smk`)
-- **1201_Subcluster_Regulon_Analysis.py** - Regulon activity
-- **1203_Eos_GRN_Network.py** / **1203_Mac_GRN_Network.py** - GRN visualization
-- **SCENIC_RELMa_Firework_GRN.py** - RELMα-dependent networks
-
-### 7. Integration (`integration.smk`)
-- **01_process_Gurtner.R** - Process Gurtner et al. reference
-- **04_harmony_integration.R** - Harmony batch correction
-- **05_combined_UMAP.R** - Integrated visualization
-
-### 8. Figure Generation (`figure_generation.smk`)
-- Publication-ready figures for manuscript
-
-## Configuration
-
-Edit `config/config.yaml` to customize:
-
-```yaml
-# Key parameters
-preprocessing:
-  min_features: 200
-  max_mt_percent: 10
-
-eosinophil:
-  resolution: 0.8
-
-deg:
-  test: "MAST"
-  logfc_threshold: 0.25
-
-# Cluster colors
-colors:
-  eosinophil_clusters:
-    C0: "#6CA6CD"
-    C1: "#E84A5F"
-    ...
-```
-
-## Key Tools & Dependencies
-
-### R
-- Seurat (v5.1.0)
-- clusterProfiler
-- CellChat (v1.6.1)
-- harmony (v1.2.1)
-- monocle3 (v1.2.9)
-- GSVA
-
-### Python
-- scanpy (v1.10.3)
-- scvelo (v0.2.5)
-- cellrank (v2.0.7)
-- pyscenic
-- cellphonedb
 
 ## Cluster Definitions
 
-### Eosinophil Subclusters
-| Cluster | Color | Key Features |
-|---------|-------|--------------|
-| C0 | #6CA6CD | MHC-II presenting, male-enriched |
-| C1 | #E84A5F | Migratory (Il4, Itgb2), female-enriched |
-| C2 | #FF6F1F | Stress response (Atf6), male-enriched |
-| C3 | #CBAACB | Tissue-resident, CCL6 signaling hub |
-| C4 | #B03A48 | Infection response, female-enriched |
-| C5 | #5BA4A4 | Metabolically adapted |
-| C6 | #2F3C7E | Self-renewing |
+### Eosinophil Clusters (C0–C5)
+| Cluster | Enriched program | Condition enrichment |
+|---------|------------------|----------------------|
+| C0 | MHC-II / antigen presentation | Male, KO female |
+| C1 | Migratory (Il4, Itgb2) | Female |
+| C2 | Stress response (Atf6, AP-1) | Male |
+| C3 | Tissue-resident, CCL6 signaling hub | All conditions |
+| C4 | Infection response | Helminth-infected females |
+| C5 | Metabolically adapted | Helminth-infected females |
 
-### Macrophage Subtypes
-- M1 (Pro-inflammatory): Cd80, Il6, Ccl2
-- M2 Surface: Mrc1, Lyve1, Cd301b
-- M2 Functional: Arg1, Il10, Chil3
+Note: an additional small cluster (14 cells, identified as too few cells) was excluded from downstream analysis.
+
+### Macrophage Subtypes (module score classification)
+- **M1-like** — *Itgax, Cd80, Tnf, Il6, Ccl2*
+- **M2 Surface** — *Mrc1, Lyve1, Cd301b, Cd163*
+- **M2 Functional** — *Chil3, Il10, Arg1, Tgfb1, Clec10a*
+
+## Pipeline Summary
+
+Scripts are numbered roughly in execution order. See [FIGURES.md](FIGURES.md) for figure-to-script mapping.
+
+| Stage | Scripts | Purpose |
+|-------|---------|---------|
+| QC | `00_decontx_*`, `01_qc_doublet_filter`, `17_qc_supplement`, `21_ambient_rna_evidence` | DecontX, Scrublet, mitochondrial/feature filtering |
+| All-cell annotation | `02_all_cells_umap`, `03_annotate_celltypes` | UMAP, marker-based annotation |
+| Eosinophil subclustering | `04_eos_subcluster`, `04b_rename_clusters`, `18_clustree_resolution`, `19_batch_effect_evidence` | Resolution 0.4 selected via clustree, silhouette, Harmony sensitivity |
+| Compositional analysis | `20_compositional_analysis`, `43_composition_biorep` | Bayesian (sccomp) compositional testing |
+| Differential expression | `05_eos_pseudobulk`, `07c_deg_pseudobulk`, `25_fig1_revision_v3`, `27_deg_excel_export` | Pseudobulk DESeq2 with multifactor designs |
+| Pathway enrichment | `08_pathway_eos_clusters`, `26_gsea_custom_butterfly` | GO BP via clusterProfiler / gseGO |
+| Macrophage subtyping | `06_mac_subtype` | Module scoring (M1, M2 Surface, M2 Functional) |
+| Trajectory | `11_monocle3`, `11b_monocle3_integrated`, `24_integrate_qiu_hu_gurtner`, `24b_cellrank_eos_maturation` | Monocle 3 pseudotime rooted in Gurtner bone marrow |
+| Cell–cell communication | `10_cellchat`, `10b_cellchat_manuscript_figures`, `10c_cellchat_fig3d`, `33_fig3EF_cellchat_ccl_heatmap`, `44_fig3A_chord_revised` | CellChat |
+| SCENIC | `14_scenic_export` → `16e_sex_diff_regulons`, `22_scenic_by_condition`, `38_scenic_auc_violin`, `41–42*_hu_regulon_*` | Per-cluster pySCENIC + cross-dataset regulon comparison |
+| Cross-dataset | `12_integrate_hu`, `13_integrate_gurtner`, `23_hu_mast_marker_validation` | Harmony integration with Hu 2026 and Gurtner 2023 |
+
+## Key Methodological Choices
+
+- **Differential expression**: Pseudobulk DESeq2 (sample-level aggregation) for condition-level comparisons; FindAllMarkers (Wilcoxon) only for cluster-marker identification.
+- **Compositional analysis**: `sccomp` (Bayesian Beta-Binomial) for cluster-proportion shifts with biological replicate variance.
+- **Clustering resolution**: 0.4, selected by clustree stability + silhouette plateau + sc-SHC significance testing (see `18_clustree_resolution.R`).
+- **Within-study integration**: un-integrated as primary representation (multiplexed Flex design partially confounds GEM batch with biological condition); Harmony tested as sensitivity analysis (`19_batch_effect_evidence.R`).
+- **Cross-study integration**: Harmony used for cross-dataset comparison with Hu 2026 (healthy adipose depots) and Gurtner 2023 (bone marrow, blood, intestinal).
+
+## Dependencies
+
+### R (≥ 4.4.2)
+Seurat 5.1.0 · DESeq2 · clusterProfiler · CellChat 1.6.1 · Harmony 1.2.1 · Monocle 3 1.2.9 · sccomp 1.7 · celda (DecontX) · clustree
+
+### Python (≥ 3.10)
+scanpy 1.10.3 · pyscenic · cellrank 2.0.7 · scrublet · anndata · matplotlib
+
+## Configuration
+
+All input/output paths are centralized in `config/config.yaml` and accessed via `scripts/paths.R` (R) or `scripts/paths.py` (Python). Defaults match the UCR HPCC layout used for the published analysis; override via environment variables:
+
+```bash
+export EOS_BASE=/your/path/to/analysis_root
+export EOS_R_LIBS=/your/R/library/path        # optional, R only
+```
 
 ## Data Availability
 
-- **Raw Data:** GEO accession GSE311941
-- **Reference Data:** Gurtner et al. (GSE182001) - blood and bone marrow eosinophils
+- **Raw scRNA-seq:** GEO GSE311941
+- **External references:**
+  - Hu et al. 2026 (healthy adipose eosinophils, eWAT/scWAT/BAT) — see `data/hu_2026/`
+  - Gurtner et al. 2023 (GSE182001; bone marrow, blood, intestinal eosinophils)
 
 ## Citation
 
-Ruggiero-Ruff RE*, Qiu X*, He Y, Vance L, Coss D, Godzik A+, Nair MG+. An intra-adipose network of eosinophil subtypes is regulated by sex and RELMα and drives macrophage polarization in obesity-induced inflammation. 2025.
+Ruggiero-Ruff RE\*, Qiu X\*, Vance L, He Y, Coss D, Godzik A⁺, Nair MG⁺. *Single-cell heterogeneity of adipose tissue eosinophils is shaped by sex and RELMα and is linked to the macrophage communication network in obesity.* 2026.
 
-*Equal contribution; +Co-corresponding authors
+\*Equal contribution · ⁺Co-corresponding
 
 ## Contact
 
-- Meera G Nair: meera.nair@medsch.ucr.edu
-- Adam Godzik: adam.godzik@medsch.ucr.edu
+- Meera G Nair — meera.nair@medsch.ucr.edu
+- Adam Godzik — adam.godzik@medsch.ucr.edu
 
 Division of Biomedical Sciences, School of Medicine, University of California, Riverside
