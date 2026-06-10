@@ -5,7 +5,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 # 39_gurtner_intestinal_comparison.R
 # Expand cross-dataset comparison to include Gurtner intestinal eosinophils
-# (Reviewer 2 point 7: "compare intestinal eosinophils from Gurtner")
+# Comparison with Gurtner intestinal eosinophils
 #
 # Panels:
 #   A: Integrated UMAP colored by tissue source (BM, Blood, Colon, SI, Adipose)

@@ -12,7 +12,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 # 19_batch_effect_evidence.R
 # Demonstrate that Harmony batch correction is NOT needed for this dataset
-# Addresses Reviewer 1 point 3e
+# Batch-effect evidence (GEM reaction vs biological condition)
 #
 # Key message: 10x Flex multiplexed all 16 samples on one chip across 4 GEM
 # reactions. Within-condition replicates from different GEM reactions mix well,
@@ -445,7 +445,7 @@ cat(sprintf("  ARI between no-Harmony and Harmony clusters: %.4f\n", ari_value))
 cat(sprintf("  Clusters without Harmony: %d\n", length(unique(eos$cluster_no_harmony))))
 cat(sprintf("  Clusters with Harmony:    %d\n", length(unique(eos$cluster_harmony))))
 
-cat("\n--- Rebuttal statement ---\n")
+cat("\n--- Summary ---\n")
 cat(sprintf(paste0(
   "10x Flex multiplexed all 16 samples on one chip across 4 GEM reactions. ",
   "Within-condition replicates from different GEM reactions mix well ",

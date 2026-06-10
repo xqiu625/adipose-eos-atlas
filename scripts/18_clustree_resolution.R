@@ -12,7 +12,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 # 18_clustree_resolution.R
 # Justify clustering resolution choice via clustree, silhouette, and UMAP
-# Addresses Reviewer 1 point 3d
+# Clustering resolution selection (clustree + silhouette + sc-SHC)
 # ==============================================================================
 
 suppressPackageStartupMessages({

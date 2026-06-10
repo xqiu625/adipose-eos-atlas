@@ -14,7 +14,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # Validate Hdc and mast cell marker expression in an independent FACS-sorted
 # eosinophil dataset (Hu et al. 2026, Nature Immunology)
 #
-# Rationale: Reviewer questioned Hdc expression in our eosinophils, suggesting
+# Rationale: Hdc expression in our eosinophils could suggest
 # mast cell contamination. Hu et al. FACS-sorted CD11b+SiglecF+ eosinophils
 # from healthy C57BL/6 mice — if their FACS-purified eos also express Hdc,
 # it is a genuine eosinophil transcript, not contamination.
@@ -45,7 +45,7 @@ cat("Hdc / mast cell marker validation\n")
 cat("========================================\n\n")
 
 # --- Define markers -----------------------------------------------------------
-# Mast cell markers (reviewer concern)
+# Mast cell markers
 mast_markers <- c("Hdc", "Kit", "Cpa3", "Mcpt4", "Fcer1a", "Ms4a2", "Cma1")
 # Canonical eosinophil markers (positive controls)
 eos_markers  <- c("Siglecf", "Epx", "Prg2", "Ccr3", "Il5ra", "Ear2")
@@ -397,7 +397,7 @@ write.csv(summary_df, file.path(BASE, "figures", "supplement",
           row.names = FALSE)
 
 cat("\n========================================\n")
-cat("Key finding for reviewer rebuttal:\n")
+cat("Key finding:\n")
 if ("Hdc" %in% shared_markers) {
   hu_hdc_pct <- round(100 * mean(GetAssayData(hu, layer = "data")["Hdc", ] > 0), 1)
   qiu_hdc_pct <- round(100 * mean(GetAssayData(eos, layer = "data")["Hdc", ] > 0), 1)

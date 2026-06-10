@@ -2,7 +2,7 @@
 # ==============================================================================
 # 22_scenic_by_condition.py
 # Compare regulon activity across conditions, not just clusters
-# (addresses Reviewer 1 points 20 and 22)
+# (condition-resolved SCENIC regulon analysis)
 # ==============================================================================
 #
 # SLURM: --partition=batch --mem=64G --cpus-per-task=8 --time=2:00:00

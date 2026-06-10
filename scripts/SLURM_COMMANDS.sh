@@ -94,10 +94,10 @@ sbatch --job-name=05_pseudo --partition=batch \
   --output=${LOGS}/05_pseudo_%j.out --error=${LOGS}/05_pseudo_%j.err \
   --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/05_eos_pseudobulk.R"
 
-sbatch --job-name=07_deg --partition=batch \
+sbatch --job-name=07c_deg --partition=batch \
   --mem=64G --cpus-per-task=4 --time=8:00:00 \
-  --output=${LOGS}/07_deg_%j.out --error=${LOGS}/07_deg_%j.err \
-  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/07_deg_eos.R"
+  --output=${LOGS}/07c_deg_%j.out --error=${LOGS}/07c_deg_%j.err \
+  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/07c_deg_pseudobulk.R"
 
 sbatch --job-name=09_combined --partition=batch \
   --mem=64G --cpus-per-task=4 --time=2:00:00 \
@@ -124,7 +124,7 @@ sbatch --job-name=14_scenic_exp --partition=batch \
   --output=${LOGS}/14_scenic_exp_%j.out --error=${LOGS}/14_scenic_exp_%j.err \
   --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/14_scenic_export.R"
 
-# Reviewer supplement scripts (all depend on 04)
+# Supplementary scripts (all depend on 04)
 sbatch --job-name=17_qc_supp --partition=batch \
   --mem=64G --cpus-per-task=4 --time=2:00:00 \
   --output=${LOGS}/17_qc_supp_%j.out --error=${LOGS}/17_qc_supp_%j.err \
@@ -274,18 +274,18 @@ sbatch --job-name=33_fig3EF --partition=batch --mem=32G --cpus-per-task=4 --time
 # Fig 4A/B: CCL dot plots (Mac->Eos, Eos->Mac top 10 per condition)
 sbatch --job-name=34_fig4AB --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/34_fig4AB_%j.out --error=${LOGS}/34_fig4AB_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/34_fig4AB_ccl_dotplot.R"
 
-# --- Block 16: Supplementary figures (Harmony rebuttal) -----------------------
+# --- Block 16: Supplementary figures (Harmony comparison) -----------------------
 # Depends on: Block 4 (04b → eos_subclustered.rds)
 
-# Supp: Harmony rebuttal (no Harmony needed for eos subclustering)
-sbatch --job-name=37_harmony --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/37_harmony_%j.out --error=${LOGS}/37_harmony_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/37_supp_harmony_rebuttal.R"
+# Supp: Harmony comparison (un-integrated is primary for eos subclustering)
+sbatch --job-name=37_harmony --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/37_harmony_%j.out --error=${LOGS}/37_harmony_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/37_supp_harmony_comparison.R"
 
-# --- Block 17: Reviewer rebuttal supplementary figures -----------------------
+# --- Block 17: Supplementary figures -----------------------
 
-# SCENIC AUC violin plots by condition (R1 pts 20, 22)
+# SCENIC AUC violin plots by condition
 sbatch --job-name=38_violin --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/38_violin_%j.out --error=${LOGS}/38_violin_%j.err --wrap="source activate ${CONDA} && python ${SCRIPTS}/38_scenic_auc_violin.py"
 
-# Gurtner intestinal eos comparison (R2 pt 7)
+# Gurtner intestinal eos comparison
 sbatch --job-name=39_intestinal --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/39_intestinal_%j.out --error=${LOGS}/39_intestinal_%j.err --wrap="export LD_LIBRARY_PATH=/bigdata/godziklab/shared/Xinru/cellrank_env/lib:/opt/linux/rocky/8.x/x86_64/pkgs/gcc/12.2.0/lib64:\$LD_LIBRARY_PATH; module load R/4.5.0; Rscript ${SCRIPTS}/39_gurtner_intestinal_comparison.R"
 
 # ==============================================================================

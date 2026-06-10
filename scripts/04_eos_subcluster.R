@@ -4,7 +4,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 
 ## Eosinophil subclustering with comprehensive resolution justification
 ## (clustree + silhouette + subsampling stability + sc-SHC significance testing)
-## Addresses Reviewer 1 point 3d
+## Eosinophil subclustering and resolution selection
 ## References: Grabski et al. Nat Methods 2023 (sc-SHC); Junttila et al. BIB 2022
 ## SLURM: --mem=128G --cpus-per-task=8 --time=6:00:00 -p batch
 
@@ -801,7 +801,7 @@ cat("Saving eos_cluster_markers.csv...\n")
 write.csv(markers, file.path(BASE, "eos_cluster_markers.csv"), row.names = FALSE)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Final summary for rebuttal
+# Final summary
 # ══════════════════════════════════════════════════════════════════════════════
 cat("\n")
 cat("================================================================\n")

@@ -12,7 +12,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 # 17_qc_supplement.R
 # Supplemental QC figures showing data quality
-# Addresses Reviewer 1 point 3a
+# Per-sample QC supplement (quality metrics)
 # ==============================================================================
 
 suppressPackageStartupMessages({

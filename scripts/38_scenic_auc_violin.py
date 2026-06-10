@@ -3,7 +3,7 @@
 38_scenic_auc_violin.py
 SCENIC regulon AUC violin plots by condition and replicate.
 
-Addresses Reviewer 1 points 20 and 22:
+Condition-resolved SCENIC regulon AUC analysis:
   - "How eosinophil regulons differ between conditions"
   - "violin plots showing distributions of AUCs across cells in each condition/replicate"
 

@@ -13,7 +13,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # 21_ambient_rna_evidence.R
 # Evidence that DecontX effectively removed ambient RNA and that residual
 # Cd14/macrophage marker expression is not contamination
-# (addresses Reviewer 1 points 3a and 4a)
+# (ambient-RNA evidence and QC)
 # ==============================================================================
 
 suppressPackageStartupMessages({

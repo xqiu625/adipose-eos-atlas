@@ -156,7 +156,7 @@ gurtner_cl <- cl[gurtner_idx]
 tw$sim_group[gurtner_idx] <- gurtner_label_map[gurtner_cl]
 cat(sprintf("  Gurtner assigned: %d\n", sum(!is.na(tw$sim_group[gurtner_idx]))))
 
-# Keep only relevant groups (per Rebecca: BM + Blood + intestinal + Hu depots + C0-C5)
+# Keep only relevant groups (BM + Blood + intestinal + Hu depots + C0-C5)
 keep_groups <- c(paste0("C", 0:5),
                  "Hu.eWAT", "Hu.scWAT", "Hu.BAT",
                  "Gurtner.Precursors", "Gurtner.Immature",

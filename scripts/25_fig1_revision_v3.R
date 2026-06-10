@@ -4,7 +4,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 
 # ==============================================================================
 # 25_fig1_revision_v3.R
-# Revised Figure 1 panels addressing Rebecca's 2026-04-03 email:
+# Revised Figure 1 panels:
 #   1. Fig 1C: Updated UMAP with C6 (CEos) removed
 #   2. Fig 1D: Updated dotplot with C6 removed
 #   3. GSEA for all DEG comparisons (fig1E-H + multifactor + infection splits)
@@ -43,8 +43,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 # =============================================================================
 # Fig 1C: Updated UMAPs — C6 (CEos) removed
-# Rebecca: "could you provide the following new figures (the umap ... since
-#           now we omitted CEos)"
+# New figures: all-cells UMAP with CEos cluster omitted
 # =============================================================================
 cat("=== Fig 1C: UMAPs (C6 removed) ===\n")
 
@@ -98,8 +97,7 @@ save_pdf(p_all, file.path(out_dir, "fig1C_umap_all_cells_immune_highlight.pdf"),
 
 # =============================================================================
 # Fig 1D: Dot plot of canonical immune cell markers — C6 removed
-# Rebecca: "and also the dot plot of immune cell marker genes, since now
-#           we omitted CEos"
+# Dot plot of immune cell marker genes (CEos omitted)
 # =============================================================================
 cat("\n=== Fig 1D: Immune cell marker dot plot (C6 removed) ===\n")
 
@@ -256,7 +254,7 @@ run_gsea <- function(deg_csv, prefix, title, label_left, label_right,
 
 
 # =============================================================================
-# Re-generate ORA GO butterfly plots at 5.5cm x 7.5cm (Rebecca's size request)
+# Re-generate ORA GO butterfly plots at 5.5cm x 7.5cm
 # Reads existing GO CSV results and re-plots at new size
 # =============================================================================
 cat("\n=== Re-generating GO butterfly plots at 5.5cm x 7.5cm ===\n")
@@ -349,7 +347,7 @@ for (g in go_panels) {
 
 # =============================================================================
 # Fig 1E-H GSEA: re-run on all 4 pseudobulk DESeq2 comparisons
-# Rebecca: "And also maybe GSEA analysis as well?"
+# GSEA analysis
 # =============================================================================
 cat("\n=== GSEA: Fig 1E-H (pseudobulk DESeq2 comparisons) ===\n")
 
@@ -387,7 +385,7 @@ for (job in gsea_jobs) {
 
 # =============================================================================
 # Multifactor GSEA: genotype + infection as covariates (all 10 female samples)
-# Rebecca agreed with this approach in her 2026-04-03 email
+# Multifactor model controlling for genotype + infection
 # =============================================================================
 cat("\n=== GSEA: Multifactor (all 10 females, ~ genotype + infection) ===\n")
 

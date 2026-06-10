@@ -4,7 +4,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 
 # ==============================================================================
 # 44_fig3A_chord_revised.R
-# Revised Fig 3A: cleaner chord diagram addressing Adam + Rebecca + R2 feedback
+# Revised Fig 3A: cleaner chord diagram
 #
 # Design:
 #   Sectors = cell states (Eos, M1 Mac, M2 Func, M2 Surf)
@@ -222,7 +222,7 @@ cat(sprintf("  Saved: %s\n", pdf_out))
 
 # =============================================================================
 # 3. Version B: Bipartite chord — pathways as sectors alongside cell types
-#    This is what Rebecca described: cell states + pathways as sectors
+#    Layout: cell states + pathways as sectors
 # =============================================================================
 cat("\nGenerating Version B: Bipartite chord (cell types + pathways as sectors)...\n")
 

@@ -10,10 +10,10 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 #SBATCH --output=mac_subtype_%j.out
 
 # ==============================================================================
-# 06_mac_subtype.R  (v2 — addresses reviewer comments on macrophages)
+# 06_mac_subtype.R  (v2 — macrophage subtype analysis)
 #
 # Original: M1/M2 module scores + subtype assignment
-# Added (reviewer responses):
+# Added:
 #   - Retnla (RELMa) expression across mac subtypes + conditions
 #   - Mac DEG: WT vs KO (RELMa KO impact on macrophages)
 #   - Mac subtype composition stats by condition
@@ -143,7 +143,7 @@ saveRDS(mac, file.path(BASE, "mac_subtyped.rds"))
 
 
 # =============================================================================
-# REVIEWER RESPONSE ANALYSES
+# SUPPLEMENTARY ANALYSES
 # =============================================================================
 
 # Ensure metadata fields exist
@@ -159,9 +159,7 @@ if (!"infection_status" %in% colnames(mac@meta.data)) {
 
 # =============================================================================
 # R1: Retnla (RELMa) expression in macrophage subtypes + conditions
-# Addresses: Comment 4e — "RELMa was shown to be a major macrophage marker ...
-#   The authors do not discuss the contribution that the absence of RELMa has
-#   on the macrophage population"
+# RELMa expression across macrophage subtypes
 # =============================================================================
 cat("\n=== R1: Retnla (RELMa) expression in macrophages ===\n")
 
@@ -197,7 +195,7 @@ write.csv(retnla_stats, file.path(fig_dir, "06_mac_retnla_stats.csv"), row.names
 
 # =============================================================================
 # R2: Mac subtype composition changes: WT vs KO (RELMa KO impact)
-# Addresses: Comment 4e — absence of RELMa altering macrophage populations
+# Effect of RELMa absence on macrophage populations
 # =============================================================================
 cat("\n=== R2: Mac subtype composition — WT vs KO ===\n")
 
@@ -261,7 +259,7 @@ save_pdf(p_comp_geno, file.path(fig_dir, "06_mac_composition_genotype.pdf"), 8, 
 
 # =============================================================================
 # R3: Pseudobulk DEG — WT vs KO macrophages (RELMa KO impact)
-# Addresses: Comment 4e — RELMa KO effect on macrophages
+# RELMa KO effect on macrophages
 # =============================================================================
 cat("\n=== R3: Pseudobulk DESeq2 — WT vs KO macrophages ===\n")
 
@@ -389,9 +387,8 @@ rm(mac_fem_hfd, mac_male_hfd); gc()
 
 # =============================================================================
 # R4: Cross-cell-type marker comparison — Eos vs Mac
-# Addresses: Comment 4c — "MHC2, LFA-1, and CD124 are classical macrophage
-#   markers and do not raise confidence that the populations are pure eosinophils"
-# Also Comment 4a — "Cd14 is not on eosinophils, this signals ... ambient RNA"
+# MHC2, LFA-1, CD124 as classical macrophage markers
+# Cd14 as an ambient-RNA / macrophage signal (not eosinophil)
 # =============================================================================
 cat("\n=== R4: Eos vs Mac marker comparison ===\n")
 
@@ -399,7 +396,7 @@ cat("\n=== R4: Eos vs Mac marker comparison ===\n")
 eos_obj <- subset(obj, celltype == "Eosinophils")
 cat(sprintf("  Eosinophils: %d,  Macrophages: %d\n", ncol(eos_obj), ncol(mac)))
 
-# Markers of interest (reviewer-flagged)
+# Markers of interest
 shared_markers <- c(
   "H2-Ab1", "H2-Eb1", "H2-Aa", "Cd74",    # MHC-II
   "Itgb2",                                   # LFA-1 (CD18)
@@ -484,8 +481,7 @@ rm(eos_sub); gc()
 
 # =============================================================================
 # R5: Mac subtypes on the all-cells UMAP
-# Addresses: Comment 4 — "do the macrophage subtypes in Figs 3 and 4 map
-#   differentially within this broad population?"
+# Macrophage subtypes used in Figs 3 and 4
 # =============================================================================
 cat("\n=== R5: Mac subtypes on all-cells UMAP ===\n")
 

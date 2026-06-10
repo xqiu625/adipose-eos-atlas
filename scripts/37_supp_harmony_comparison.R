@@ -3,7 +3,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 .libPaths(c(lib_path, .libPaths()))
 
 # ==============================================================================
-# 37_supp_harmony_rebuttal.R
+# 37_supp_harmony_comparison.R
 # Supplementary Figure: Harmony batch correction is not required for eosinophil
 # subclustering — clusters, markers, and batch mixing are robust without it.
 #
@@ -15,7 +15,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # Panel F: Top marker gene overlap (Jaccard index per cluster)
 #
 # Input:  $BASE/eos_subclustered.rds (C0-C5, no Harmony)
-# Output: revision/figures/supplement/supp_harmony_rebuttal.pdf (combined)
+# Output: revision/figures/supplement/supp_harmony_comparison.pdf (combined)
 #         revision/figures/supplement/supp_harmony_metrics.csv
 # SLURM:  batch, 64G, 4 CPUs, 2h
 # ==============================================================================
@@ -426,7 +426,7 @@ combined <- (p_a | p_b) /
   plot_annotation(tag_levels = "A") +
   plot_layout(heights = c(1, 1.3, 1))
 
-pdf_out <- file.path(out_dir, "supp_harmony_rebuttal.pdf")
+pdf_out <- file.path(out_dir, "supp_harmony_comparison.pdf")
 cairo_pdf(pdf_out, width = 14, height = 16)
 print(combined)
 dev.off()
@@ -472,7 +472,7 @@ cat(sprintf("Mean marker Jaccard overlap: %.3f\n", mean_jaccard))
 cat(sprintf("Per-cluster Jaccard: %s\n",
             paste(sprintf("%s=%.3f", names(jaccard_vec), jaccard_vec), collapse = ", ")))
 
-cat("\n--- Rebuttal statement ---\n")
+cat("\n--- Summary ---\n")
 cat(sprintf(paste0(
   "Eosinophil subclustering was performed using standard Seurat workflow ",
   "without Harmony batch correction. To confirm this is appropriate, we ",

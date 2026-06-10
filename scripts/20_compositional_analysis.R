@@ -12,7 +12,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 # ==============================================================================
 # 20_compositional_analysis.R
 # Bayesian compositional analysis of cluster proportions across conditions
-# using sccomp (addresses Reviewer 1 point 14 and Reviewer 2)
+# using sccomp (Bayesian compositional analysis)
 # ==============================================================================
 
 suppressPackageStartupMessages({
