@@ -29,12 +29,10 @@ End-to-end pipeline from raw 10x FLEX reads to figures, annotated with the key f
 
 ```
 .
-├── config/config.yaml          # Pipeline parameters (present but not yet wired into scripts)
-├── scripts/                    # Numbered analysis scripts (00–45) — primary pipeline
+├── scripts/                    # Numbered analysis scripts — primary pipeline
 │   ├── upstream_cellranger/    # Stage 0: raw reads → count matrices (Cell Ranger FLEX)
 │   ├── 00_theme.R              # Shared plotting theme
-│   ├── 00_decontx_per_sample.R → 45b_hif_scenic_targets.R
-│   └── adhoc_*.R               # One-off / ad-hoc analyses at scripts/ root (not part of published pipeline)
+│   └── 00_decontx_per_sample.R → 44_fig3A_chord_revised.R
 ├── FIGURES.md                  # Maps each published figure to its producing script
 ├── methods.md                  # Methods text mirroring the manuscript
 ├── docs/eos_atlas_workflow.svg # Pipeline schematic (rendered in README)
@@ -72,7 +70,7 @@ The pipeline runs end-to-end from raw sequencing reads. Stage 0 (raw-data proces
 | Eosinophil subclustering | `04_eos_subcluster`, `04b_rename_clusters`, `18_clustree_resolution`, `19_batch_effect_evidence` | Resolution 0.4 selected via clustree, silhouette, Harmony sensitivity |
 | Compositional analysis | `20_compositional_analysis`, `43_composition_biorep` | Bayesian (sccomp) compositional testing |
 | Differential expression | `05_eos_pseudobulk`, `07c_deg_pseudobulk`, `25_fig1_revision_v3`, `27_deg_excel_export` | Pseudobulk DESeq2 with multifactor designs |
-| Pathway enrichment | `08_pathway_eos_clusters`, `26_gsea_custom_butterfly` | GO BP via clusterProfiler / gseGO |
+| Pathway enrichment | `08_pathway_eos_clusters` (cluster-marker ORA), `25_fig1_revision_v3` (ranked GSEA GO BP) | clusterProfiler `enrichGO` / `gseGO` |
 | Macrophage subtyping | `06_mac_subtype` | Module scoring (M1, M2 Surface, M2 Functional) |
 | Trajectory | `11_monocle3`, `11b_monocle3_integrated`, `24_integrate_qiu_hu_gurtner`, `24b_cellrank_eos_maturation` | Monocle 3 pseudotime rooted in Gurtner bone marrow |
 | Cell–cell communication | `10_cellchat`, `10b_cellchat_manuscript_figures`, `10c_cellchat_fig3d`, `33_fig3EF_cellchat_ccl_heatmap`, `44_fig3A_chord_revised` | CellChat |
@@ -99,7 +97,7 @@ scanpy 1.10.3 · pyscenic · cellrank 2.0.7 · scrublet · anndata · matplotlib
 
 Input/output paths are currently **hard-coded at the top of each script** to the UCR HPCC layout used for the published analysis (e.g. `BASE <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"`, and an R library path via `.libPaths()`). To reproduce the pipeline elsewhere, edit these path assignments by hand at the head of each script you run. There is no environment-variable override.
 
-A `config/config.yaml` is included, but it is **not yet read by any script** — it documents intended parameters only. Centralizing paths (either into `config.yaml` or a sourced `paths.R` / `paths.py`) is a known limitation and a planned cleanup.
+Centralizing paths (e.g. into a single sourced config) rather than hard-coding them per script is a known limitation and a planned cleanup.
 
 ## Data Availability
 

@@ -44,7 +44,7 @@ Four comparisons:
 Single-cell-level `FindMarkers` (Wilcoxon) was used only for identifying cluster-defining markers, not for condition-level inference. [`05_eos_pseudobulk.R`, `05b_pseudobulk_methods.R`, `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R`, `27_deg_excel_export.R`]
 
 ## Pathway Enrichment Analysis
-GSEA was performed on DESeq2-ranked gene lists using `clusterProfiler::gseGO()` (Gene Ontology Biological Process; mouse `org.Mm.eg.db`). Genes were ranked by DESeq2 test statistic; enrichment was assessed with Benjamini–Hochberg correction. [`08_pathway_eos_clusters.R`, `26_gsea_custom_butterfly.R`]
+GSEA was performed on DESeq2-ranked gene lists using `clusterProfiler::gseGO()` (Gene Ontology Biological Process; mouse `org.Mm.eg.db`). Genes were ranked by DESeq2 test statistic; enrichment was assessed with Benjamini–Hochberg correction. [`25_fig1_revision_v3.R`; cluster-marker over-representation in `08_pathway_eos_clusters.R`]
 
 ## Cell–Cell Communication (CellChat)
 Eosinophil–macrophage communication was inferred using CellChat v1.6.1 with the mouse CellChatDB. Communication probabilities were computed using the triMean method with a minimum of 10 cells per interaction. CellChat objects were built separately per condition (WT/KO × Male/Female × HFD/Infected) and merged for comparative analysis. Five focal pathways were highlighted: CCL, FN1, APP, CD45, THBS. Network centrality (`netAnalysis_signalingRole_network()`, PMID 33597522) identified senders, receivers, mediators (betweenness centrality), and influencers (information centrality). [`10_cellchat.R`, `10b_cellchat_manuscript_figures.R`, `10c_cellchat_fig3d.R`, `33_fig3EF_cellchat_ccl_heatmap.R`, `44_fig3A_chord_revised.R`]

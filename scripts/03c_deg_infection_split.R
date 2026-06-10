@@ -4,13 +4,10 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 
 # ==============================================================================
 # 03c_deg_infection_split.R
-# Infection DEG comparisons split by genotype (Rev 1 Comment 11)
+# Infection DEG comparisons split by genotype
 #
-# Rebecca: "Can you try to do WT Inf vs KO Inf, and WT Naive vs WT Inf
-#           and KO Naive vs KO Inf comparisons using pseudo bulking?"
-#
-# Uses pseudobulk DESeq2 (not MAST) — more appropriate for n=2-3 samples
-# Also runs MAST mixed-effects for comparison where sample n allows
+# Comparisons: WT Inf vs KO Inf, WT Naive vs WT Inf, KO Naive vs KO Inf
+# Method: pseudobulk DESeq2 (appropriate for n=2-3 samples per group)
 #
 # Input:  harmony_tier1_clustered.rds
 # Output: DEG CSVs + volcano + heatmap + GO enrichment
@@ -20,8 +17,6 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 suppressPackageStartupMessages({
   library(Seurat)
   library(DESeq2)
-  library(MAST)
-  library(lme4)
   library(ggplot2)
   library(ggrepel)
   library(dplyr)
@@ -99,48 +94,6 @@ run_pb_deseq2 <- function(seu_sub, group_col, test_level, ref_level,
   res <- as.data.frame(results(dds, contrast = c("group", test_level, ref_level)))
   res$gene <- rownames(res)
   res <- res %>% rename(log2FC = log2FoldChange, pval = pvalue) %>% arrange(padj)
-  return(res)
-}
-
-# --- MAST mixed-effects ---
-run_mast_me <- function(seu_sub, cells1, cells2, sample_col = "orig.ident") {
-  all_cells <- c(cells1, cells2)
-  sub <- subset(seu_sub, cells = all_cells)
-  mat <- GetAssayData(sub, layer = "data")
-
-  pct1 <- rowMeans(mat[, cells1, drop = FALSE] > 0)
-  pct2 <- rowMeans(mat[, cells2, drop = FALSE] > 0)
-  keep <- (pct1 >= 0.1) | (pct2 >= 0.1)
-  mat <- mat[keep, ]
-
-  mean1 <- log(rowMeans(expm1(mat[, cells1, drop = FALSE])) + 1)
-  mean2 <- log(rowMeans(expm1(mat[, cells2, drop = FALSE])) + 1)
-  avg_log2FC <- (mean1 - mean2) / log(2)
-
-  cdata <- data.frame(
-    wellKey = colnames(mat),
-    group = factor(ifelse(colnames(mat) %in% cells1, "test", "ref"),
-                   levels = c("ref", "test")),
-    sample = sub@meta.data[colnames(mat), sample_col],
-    row.names = colnames(mat)
-  )
-  fdata <- data.frame(primerid = rownames(mat), row.names = rownames(mat))
-  sca <- FromMatrix(exprsArray = as.matrix(mat), cData = cdata, fData = fdata)
-  colData(sca)$cngeneson <- scale(colSums(assay(sca) > 0))
-
-  zlm_fit <- zlm(~ group + cngeneson + (1 | sample), sca,
-                  method = "glmer", ebayes = FALSE, silent = TRUE)
-  lrt <- lrTest(zlm_fit, "group")
-  pval <- lrt[, "hurdle", "Pr(>Chisq)"]
-
-  genes <- names(pval)
-  res <- data.frame(
-    p_val = pval[genes], avg_log2FC = avg_log2FC[genes],
-    pct.1 = pct1[genes], pct.2 = pct2[genes],
-    row.names = genes
-  )
-  res$p_val_adj <- p.adjust(res$p_val, method = "BH")
-  res <- res[order(res$p_val), ]
   return(res)
 }
 
@@ -332,26 +285,6 @@ for (comp in comparisons) {
     cat(sprintf("  ERROR pseudobulk: %s\n", e$message))
   })
 
-  # --- MAST mixed-effects ---
-  cat("\n  --- MAST mixed-effects ---\n")
-  n_test_samples <- length(unique(seu$orig.ident[seu$condition == comp$test_cond]))
-  n_ref_samples  <- length(unique(seu$orig.ident[seu$condition == comp$ref_cond]))
-  cat(sprintf("  Samples: %d test, %d ref\n", n_test_samples, n_ref_samples))
-
-  if (n_test_samples < 2 || n_ref_samples < 2) {
-    cat("  SKIP MAST: need >= 2 samples per group for random intercept\n")
-    next
-  }
-
-  tryCatch({
-    mast_res <- run_mast_me(seu, test_cells, ref_cells)
-    n_sig <- sum(mast_res$p_val_adj < 0.05 & abs(mast_res$avg_log2FC) > 0.5, na.rm = TRUE)
-    cat(sprintf("  MAST DEGs (padj<0.05, |log2FC|>0.5): %d\n", n_sig))
-
-    write.csv(mast_res, file.path(out_dir, sprintf("deg_mast_%s.csv", comp$name)))
-  }, error = function(e) {
-    cat(sprintf("  ERROR MAST: %s\n", e$message))
-  })
 }
 
 # =============================================================================

@@ -11,11 +11,11 @@ This file maps each published figure panel to the script(s) that produce it. Scr
 | 1A | Experimental schematic | Experimental / not computational |
 | 1B | All-cells UMAP, 7 immune cell types | `02_all_cells_umap.R`, `03_annotate_celltypes.R` |
 | 1C | Dot plot of canonical markers across immune cell types | `25_fig1_revision_v3.R` (`DotPlot`, 7 immune cell types × canonical markers, C6 removed → `fig1D_dotplot_markers.pdf`; the script's internal "Fig 1D" label is manuscript **1C**) |
-| 1D | Pseudobulk DEG volcano — WT male vs WT female eos | `05_eos_pseudobulk.R` / `07c_deg_pseudobulk.R` (DESeq2), `07_replot_volcanoes.R`, `25_fig1_revision_v3.R` |
-| 1E | Pseudobulk DEG volcano — WT vs KO male eos | `05_eos_pseudobulk.R` / `07c_deg_pseudobulk.R`, `07_replot_volcanoes.R`, `25_fig1_revision_v3.R` |
-| 1F | Pseudobulk DEG volcano — WT vs KO female eos | `05_eos_pseudobulk.R` / `07c_deg_pseudobulk.R`, `07_replot_volcanoes.R`, `25_fig1_revision_v3.R` |
-| 1G | Pseudobulk DEG volcano — naïve vs helminth-infected female eos (covariate-controlled) | `03c_deg_infection_split.R`, `07c_deg_pseudobulk.R`, `07_replot_volcanoes.R`, `25_fig1_revision_v3.R` |
-| 1D–G bottom | GSEA GO BP per comparison (butterfly plots) | `25_fig1_revision_v3.R` (computes GSEA), `26_gsea_custom_butterfly.R` (plots) |
+| 1D | Pseudobulk DEG volcano — WT male vs WT female eos | `07c_deg_pseudobulk.R` (DESeq2), `25_fig1_revision_v3.R` |
+| 1E | Pseudobulk DEG volcano — WT vs KO male eos | `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R` |
+| 1F | Pseudobulk DEG volcano — WT vs KO female eos | `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R` |
+| 1G | Pseudobulk DEG volcano — naïve vs helminth-infected female eos (covariate-controlled) | `03c_deg_infection_split.R`, `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R` |
+| 1D–G bottom | GSEA GO BP per comparison (butterfly plots) | `25_fig1_revision_v3.R` (ranked `gseGO` on the DESeq2 statistic) |
 
 ## Figure 2 — Eosinophil heterogeneity and trajectory
 
@@ -43,13 +43,7 @@ This file maps each published figure panel to the script(s) that produce it. Scr
 | 3E | CCL signaling Eos → Mac heatmap | `33_fig3EF_cellchat_ccl_heatmap.R` |
 | 3F | CCL signaling Mac → Eos heatmap | `33_fig3EF_cellchat_ccl_heatmap.R` |
 
-**Fig 3A chord — canonical vs superseded (resolved).** Five scripts render a Fig 3A chord diagram. `44_fig3A_chord_revised.R` is canonical: it is the latest committed version (2026-04-25, newest of all five), it is cited for Fig 3A in the README pipeline table, and it produces an **all-pathways, cell-type-sector** chord — consistent with the final repo decision (commit `9fcb506` "Fig3A: all pathways aggregated, not just CCL") and with the manuscript legend, which describes four cell-type sectors colored gray/pink/green/purple. The rendered manuscript-style panel (4 sectors Eosinophils=gray, M1_Mac=pink, M2_Functional=green, M2_Surface=purple) was confirmed by inspection. The candidate that labels **individual L-R pairs as sectors** (`36`) does **not** match the panel and is superseded. Provenance of the alternates:
-
-- `10b_cellchat_manuscript_figures.R` — original Fig 3A chord; `9fcb506` updated it from CCL-only to all-pathways aggregated (the CCL-only render survives in `adipose-eos-atlas-results/figure3_revision/fig3A_ccl_chord_diagram.pdf`, an older version of this panel).
-- `35_fig3A_chord_revised.R` — all-pathways chord with enhanced arrow visibility (R1 comment 18).
-- `36_fig3A_chord_LR.R` — chord with individual CCL ligand–receptor pairs as sectors. **Confirmed NOT the published panel** (the manuscript uses cell-type sectors, not per-L-R sectors).
-- `40_fig3A_pathway_chord.R` — pathway-level chord (precursor to 44).
-- `44b_fig3A_chord_cellchat_style.R` — CellChat/MDPI-style chord with cell-type arcs subdivided by pathway (alternate styling of 44).
+**Fig 3A chord.** `44_fig3A_chord_revised.R` is the canonical script: it produces an **all-pathways, cell-type-sector** chord matching the manuscript legend's four cell-type sectors colored gray/pink/green/purple (Eosinophils=gray, M1_Mac=pink, M2_Functional=green, M2_Surface=purple), confirmed by inspection of the rendered panel. (Earlier alternate chord renderings — per-L-R-pair and CCL-only variants — were exploratory and have been removed from the repo.)
 
 ## Figure 4 — CCL signaling dot plots and spatial validation
 

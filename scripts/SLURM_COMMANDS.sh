@@ -274,12 +274,6 @@ sbatch --job-name=33_fig3EF --partition=batch --mem=32G --cpus-per-task=4 --time
 # Fig 4A/B: CCL dot plots (Mac->Eos, Eos->Mac top 10 per condition)
 sbatch --job-name=34_fig4AB --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/34_fig4AB_%j.out --error=${LOGS}/34_fig4AB_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/34_fig4AB_ccl_dotplot.R"
 
-# Fig 3A revised: chord diagram with enhanced arrows (Comment 18)
-sbatch --job-name=35_chord --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/35_chord_%j.out --error=${LOGS}/35_chord_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/35_fig3A_chord_revised.R"
-
-# Fig 3A L-R pairs: chord diagram with individual ligand/receptor labels (Comment 9)
-sbatch --job-name=36_chord_lr --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/36_chord_lr_%j.out --error=${LOGS}/36_chord_lr_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/36_fig3A_chord_LR.R"
-
 # --- Block 16: Supplementary figures (Harmony rebuttal) -----------------------
 # Depends on: Block 4 (04b → eos_subclustered.rds)
 
