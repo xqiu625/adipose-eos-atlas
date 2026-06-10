@@ -23,12 +23,12 @@ scRNA-seq characterization of eosinophil and macrophage heterogeneity in murine 
 
 ```
 .
-├── config/config.yaml          # Pipeline parameters
+├── config/config.yaml          # Pipeline parameters (present but not yet wired into scripts)
 ├── scripts/                    # Numbered analysis scripts (00–45) — primary pipeline
-│   ├── paths.R / paths.py      # Centralized path configuration (sourced by all scripts)
+│   ├── upstream_cellranger/    # Stage 0: raw reads → count matrices (Cell Ranger FLEX)
 │   ├── 00_theme.R              # Shared plotting theme
 │   ├── 00_decontx_per_sample.R → 45b_hif_scenic_targets.R
-│   └── exploratory/            # One-off / ad-hoc analyses (not part of published pipeline)
+│   └── adhoc_*.R               # One-off / ad-hoc analyses at scripts/ root (not part of published pipeline)
 ├── FIGURES.md                  # Maps each published figure to its producing script
 ├── methods.md                  # Methods text mirroring the manuscript
 └── data/                       # Reference data (e.g. Hu et al. 2026)
@@ -55,10 +55,11 @@ Note: an additional small cluster (14 cells, identified as too few cells) was ex
 
 ## Pipeline Summary
 
-Scripts are numbered roughly in execution order. See [FIGURES.md](FIGURES.md) for figure-to-script mapping.
+The pipeline runs end-to-end from raw sequencing reads. Stage 0 (raw-data processing) lives in [`scripts/upstream_cellranger/`](scripts/upstream_cellranger/); the numbered analysis scripts (`00`–`45`) begin once per-sample count matrices exist. Scripts are numbered roughly in execution order. See [FIGURES.md](FIGURES.md) for figure-to-script mapping.
 
 | Stage | Scripts | Purpose |
 |-------|---------|---------|
+| Raw data processing | `upstream_cellranger/01–04` | Combine FASTQs, FastQC, `cellranger multi` (Cell Ranger 8.0.1, mm10-2020-A, FLEX Mouse Probe Set v1.0.1) demultiplexing the 4×4-multiplexed pools into per-sample count matrices |
 | QC | `00_decontx_*`, `01_qc_doublet_filter`, `17_qc_supplement`, `21_ambient_rna_evidence` | DecontX, Scrublet, mitochondrial/feature filtering |
 | All-cell annotation | `02_all_cells_umap`, `03_annotate_celltypes` | UMAP, marker-based annotation |
 | Eosinophil subclustering | `04_eos_subcluster`, `04b_rename_clusters`, `18_clustree_resolution`, `19_batch_effect_evidence` | Resolution 0.4 selected via clustree, silhouette, Harmony sensitivity |
@@ -89,12 +90,9 @@ scanpy 1.10.3 · pyscenic · cellrank 2.0.7 · scrublet · anndata · matplotlib
 
 ## Configuration
 
-All input/output paths are centralized in `config/config.yaml` and accessed via `scripts/paths.R` (R) or `scripts/paths.py` (Python). Defaults match the UCR HPCC layout used for the published analysis; override via environment variables:
+Input/output paths are currently **hard-coded at the top of each script** to the UCR HPCC layout used for the published analysis (e.g. `BASE <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"`, and an R library path via `.libPaths()`). To reproduce the pipeline elsewhere, edit these path assignments by hand at the head of each script you run. There is no environment-variable override.
 
-```bash
-export EOS_BASE=/your/path/to/analysis_root
-export EOS_R_LIBS=/your/R/library/path        # optional, R only
-```
+A `config/config.yaml` is included, but it is **not yet read by any script** — it documents intended parameters only. Centralizing paths (either into `config.yaml` or a sourced `paths.R` / `paths.py`) is a known limitation and a planned cleanup.
 
 ## Data Availability
 
