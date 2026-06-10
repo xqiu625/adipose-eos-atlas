@@ -158,7 +158,7 @@ sbatch --job-name=21_ambient --partition=batch \
 sbatch --job-name=08_pathway --partition=batch \
   --mem=64G --cpus-per-task=4 --time=2:00:00 \
   --output=${LOGS}/08_pathway_%j.out --error=${LOGS}/08_pathway_%j.err \
-  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/08_pathway_eos.R"
+  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/08_pathway_eos_clusters.R"
 
 # >>> Wait for 13 to complete, then: <<<
 
