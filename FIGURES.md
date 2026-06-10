@@ -14,7 +14,7 @@ This file maps each published figure panel to the script(s) that produce it. Scr
 | 1D | Pseudobulk DEG volcano — WT male vs WT female eos | `07c_deg_pseudobulk.R` (DESeq2), `25_fig1_revision_v3.R` |
 | 1E | Pseudobulk DEG volcano — WT vs KO male eos | `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R` |
 | 1F | Pseudobulk DEG volcano — WT vs KO female eos | `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R` |
-| 1G | Pseudobulk DEG volcano — naïve vs helminth-infected female eos (covariate-controlled) | `03c_deg_infection_split.R`, `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R` |
+| 1G | Pseudobulk DEG volcano — naïve vs helminth-infected female eos (covariate-controlled) | `07c_deg_pseudobulk.R` (multifactor `~ genotype + infection_status`), `25_fig1_revision_v3.R` |
 | 1D–G bottom | GSEA GO BP per comparison (butterfly plots) | `25_fig1_revision_v3.R` (ranked `gseGO` on the DESeq2 statistic) |
 
 ## Figure 2 — Eosinophil heterogeneity and trajectory

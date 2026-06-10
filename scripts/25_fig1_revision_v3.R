@@ -37,7 +37,6 @@ source(file.path(SCRIPTS, "00_theme.R"))
 PNAS    <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision"
 BASE    <- file.path(PNAS, "atlas")
 deg_dir <- file.path(BASE, "deg")
-inf_dir <- file.path(PNAS, "revision/deg_infection_split")
 out_dir <- file.path(PNAS, "revision/figures/fig1")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -155,54 +154,25 @@ run_gsea <- function(deg_csv, prefix, title, label_left, label_right,
   gene_list <- sort(gene_list[!is.na(gene_list)], decreasing = TRUE)
   cat(sprintf("  GSEA ranked list: %d genes from %s\n", length(gene_list), basename(deg_csv)))
 
-  # Try strict first (padj < 0.05), then relax to 0.25 if no results
-  gsea_res <- NULL
-  for (pcut in c(0.05, 0.25)) {
-    gsea_res <- tryCatch({
-      gseGO(geneList     = gene_list,
-            OrgDb        = org.Mm.eg.db,
-            keyType      = "SYMBOL",
-            ont          = "BP",
-            minGSSize    = 10,
-            maxGSSize    = 500,
-            pvalueCutoff = pcut,
-            pAdjustMethod = "BH",
-            seed         = TRUE)
-    }, error = function(e) {
-      cat(sprintf("  GSEA error (pcut=%.2f): %s\n", pcut, e$message))
-      NULL
-    })
-    if (!is.null(gsea_res) && nrow(as.data.frame(gsea_res)) > 0) {
-      cat(sprintf("  GSEA found terms at pvalueCutoff=%.2f\n", pcut))
-      break
-    }
-    cat(sprintf("  GSEA: no terms at pvalueCutoff=%.2f, trying relaxed...\n", pcut))
-  }
-
-  # If stat-based ranking failed, retry with log2FC ranking
-  if ((is.null(gsea_res) || nrow(as.data.frame(gsea_res)) == 0) && "log2FC" %in% colnames(deg)) {
-    cat("  Retrying GSEA with log2FC ranking...\n")
-    gene_list_fc <- setNames(deg$log2FC, deg$gene)
-    gene_list_fc <- sort(gene_list_fc[!is.na(gene_list_fc)], decreasing = TRUE)
-    gsea_res <- tryCatch({
-      gseGO(geneList     = gene_list_fc,
-            OrgDb        = org.Mm.eg.db,
-            keyType      = "SYMBOL",
-            ont          = "BP",
-            minGSSize    = 10,
-            maxGSSize    = 500,
-            pvalueCutoff = 0.25,
-            pAdjustMethod = "BH",
-            seed         = TRUE)
-    }, error = function(e) NULL)
-    if (!is.null(gsea_res) && nrow(as.data.frame(gsea_res)) > 0) {
-      cat(sprintf("  GSEA found %d terms with log2FC ranking\n", nrow(as.data.frame(gsea_res))))
-    }
-  }
+  # Single fixed GSEA: rank by DESeq2 stat, BH-adjusted, report terms at FDR < 0.05
+  gsea_res <- tryCatch({
+    gseGO(geneList      = gene_list,
+          OrgDb         = org.Mm.eg.db,
+          keyType       = "SYMBOL",
+          ont           = "BP",
+          minGSSize     = 10,
+          maxGSSize     = 500,
+          pvalueCutoff  = 0.05,
+          pAdjustMethod = "BH",
+          seed          = TRUE)
+  }, error = function(e) {
+    cat(sprintf("  GSEA error: %s\n", e$message))
+    NULL
+  })
 
   if (is.null(gsea_res) || nrow(as.data.frame(gsea_res)) == 0) {
-    cat(sprintf("  GSEA: no enriched terms for %s (tried all approaches)\n", prefix))
-    write.csv(data.frame(note = "No significant GSEA terms"),
+    cat(sprintf("  GSEA: no terms at FDR < 0.05 for %s\n", prefix))
+    write.csv(data.frame(note = "No significant GSEA terms (FDR < 0.05)"),
               file.path(out_dir, sprintf("%s_GSEA_BP.csv", prefix)),
               row.names = FALSE)
     return(invisible(NULL))
@@ -220,19 +190,19 @@ run_gsea <- function(deg_csv, prefix, title, label_left, label_right,
 
   frames <- list()
   if (nrow(suppressed) > 0) {
-    s <- head(suppressed[order(suppressed$pvalue), ], n_top)
+    s <- head(suppressed[order(suppressed$p.adjust), ], n_top)
     frames[["left"]] <- data.frame(
       Description = as.character(s$Description),
-      NES = s$NES, neg_log10p = -log10(s$pvalue),
-      plot_x = -(-log10(s$pvalue)), side = "left",
+      NES = s$NES, neg_log10p = -log10(s$p.adjust),
+      plot_x = -(-log10(s$p.adjust)), side = "left",
       stringsAsFactors = FALSE)
   }
   if (nrow(activated) > 0) {
-    a <- head(activated[order(activated$pvalue), ], n_top)
+    a <- head(activated[order(activated$p.adjust), ], n_top)
     frames[["right"]] <- data.frame(
       Description = as.character(a$Description),
-      NES = a$NES, neg_log10p = -log10(a$pvalue),
-      plot_x = -log10(a$pvalue), side = "right",
+      NES = a$NES, neg_log10p = -log10(a$p.adjust),
+      plot_x = -log10(a$p.adjust), side = "right",
       stringsAsFactors = FALSE)
   }
   if (length(frames) == 0) return(invisible(gsea_df))
@@ -248,7 +218,7 @@ run_gsea <- function(deg_csv, prefix, title, label_left, label_right,
   x_max <- max(abs(plot_df$plot_x)) * 1.15
   side_colors <- c("left" = "#2166AC", "right" = "#B2182B")
 
-  # 5.5cm x 7.5cm = 2.17in x 2.95in (Rebecca's requested GO plot size)
+  # 5.5cm x 7.5cm = 2.17in x 2.95in
   w_in <- 5.5 / 2.54
   h_in <- 7.5 / 2.54
 
@@ -259,7 +229,7 @@ run_gsea <- function(deg_csv, prefix, title, label_left, label_right,
     scale_fill_manual(values = side_colors, guide = "none") +
     scale_x_continuous(labels = abs, limits = c(-x_max, x_max)) +
     geom_vline(xintercept = 0, color = "black", linewidth = 0.3) +
-    labs(x = expression(-Log[10] ~ "(P-value)"), y = "", title = "GSEA GO BP") +
+    labs(x = expression(-Log[10] ~ "(adjusted P)"), y = "", title = "GSEA GO BP") +
     annotate("text", x = -x_max * 0.5, y = nrow(plot_df) + 0.7,
              label = paste("UP in", label_left), hjust = 0.5,
              size = 2, fontface = "bold", color = "#2166AC") +
@@ -442,35 +412,5 @@ for (job in mf_jobs) {
   }
 }
 
-
-# =============================================================================
-# Infection split GSEA (Rev 1 Comment 11 comparisons)
-# =============================================================================
-cat("\n=== GSEA: Infection split comparisons ===\n")
-
-inf_jobs <- list(
-  list(csv = file.path(inf_dir, "deg_pb_WT_Inf_vs_WT_Naive.csv"),
-       prefix = "inf_WT_Inf_vs_WT_Naive",
-       title = "WT Infected vs WT Naive",
-       left = "WT Naive", right = "WT Infected"),
-  list(csv = file.path(inf_dir, "deg_pb_KO_Inf_vs_KO_Naive.csv"),
-       prefix = "inf_KO_Inf_vs_KO_Naive",
-       title = "KO Infected vs KO Naive",
-       left = "KO Naive", right = "KO Infected"),
-  list(csv = file.path(inf_dir, "deg_pb_WT_Inf_vs_KO_Inf.csv"),
-       prefix = "inf_WT_Inf_vs_KO_Inf",
-       title = "WT Infected vs KO Infected",
-       left = "KO Infected", right = "WT Infected")
-)
-
-for (job in inf_jobs) {
-  cat(sprintf("\n--- GSEA: %s ---\n", job$title))
-  if (file.exists(job$csv)) {
-    run_gsea(job$csv, job$prefix, job$title,
-             job$left, job$right, out_dir)
-  } else {
-    cat(sprintf("  SKIP: %s not found\n", basename(job$csv)))
-  }
-}
 
 cat(sprintf("\nDone! All Fig 1 updates saved to %s\n", out_dir))

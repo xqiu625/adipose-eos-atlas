@@ -112,6 +112,10 @@ Ruggiero-Ruff RE\*, Qiu X\*, Vance L, He Y, Coss D, Godzik A⁺, Nair MG⁺. *Si
 
 \*Equal contribution · ⁺Co-corresponding
 
+## License
+
+Code is released under the [MIT License](LICENSE).
+
 ## Contact
 
 - Meera G Nair — meera.nair@medsch.ucr.edu
