@@ -8,6 +8,12 @@ Single-cell RNA sequencing analysis of eosinophils and macrophages in adipose ti
 
 scRNA-seq characterization of eosinophil and macrophage heterogeneity in murine visceral adipose tissue across sex, RELMα genotype, and helminth infection. We identify **six transcriptionally distinct eosinophil clusters (C0–C5)** whose relative abundance shifts with these perturbations.
 
+### Analysis Workflow
+
+![Bioinformatics workflow: raw processing → QC → annotation → eosinophil subclustering → DEG → macrophage subtyping → cell–cell communication → trajectory → SCENIC → cross-dataset integration, with the key finding generated at each stage](docs/eos_atlas_workflow.svg)
+
+End-to-end pipeline from raw 10x FLEX reads to figures, annotated with the key finding generated at each stage. See [FIGURES.md](FIGURES.md) for the figure-to-script mapping.
+
 ### Study Design
 
 | Factor | Conditions |
@@ -31,6 +37,7 @@ scRNA-seq characterization of eosinophil and macrophage heterogeneity in murine 
 │   └── adhoc_*.R               # One-off / ad-hoc analyses at scripts/ root (not part of published pipeline)
 ├── FIGURES.md                  # Maps each published figure to its producing script
 ├── methods.md                  # Methods text mirroring the manuscript
+├── docs/eos_atlas_workflow.svg # Pipeline schematic (rendered in README)
 └── data/                       # Reference data (e.g. Hu et al. 2026)
 ```
 

@@ -1,0 +1,349 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="3130" viewBox="0 0 1400 3130" font-family="&#39;Helvetica Neue&#39;, Arial, sans-serif">
+<defs>
+  <filter id="soft" x="-4%" y="-12%" width="108%" height="124%">
+    <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1a1a22" flood-opacity="0.08"></feDropShadow>
+  </filter>
+</defs>
+<rect width="1400" height="3130" fill="#f7f5f0"></rect>
+<text x="78" y="54" font-size="12.5" font-weight="600" letter-spacing="2" fill="#9298a2">GRAPHICAL ABSTRACT  ·  SINGLE-CELL ADIPOSE EOSINOPHIL ATLAS</text>
+<text x="78" y="93" font-size="27" font-weight="700" fill="#20242b">Single-cell atlas of adipose eosinophil heterogeneity shaped by</text>
+<text x="78" y="127" font-size="27" font-weight="700" fill="#20242b">sex, RELMα, and helminth infection in diet-induced obesity.</text>
+<text x="78" y="156" font-size="14" font-style="italic" fill="#6a7079">Mouse visceral adipose tissue · scRNA-seq (10x FLEX) · genotype × sex × diet ± infection · n = 16</text>
+<line x1="78" y1="174" x2="1352" y2="174" stroke="#d8d5cb" stroke-width="1"></line>
+<rect x="78" y="190" width="1274" height="86" rx="12" fill="#ffffff" stroke="#e3ddd5" stroke-width="1.2" filter="url(#soft)"></rect>
+<text x="102" y="217" font-size="12" font-weight="700" letter-spacing="1.5" fill="#86655a">STUDY DESIGN  ·  2 × 2 × 2 FACTORIAL</text>
+<rect x="102" y="236" width="178" height="26" rx="13" fill="#f2f4f7" stroke="#dfe2e7" stroke-width="1"></rect>
+<text x="115" y="253.5" font-size="12.5" font-weight="400" fill="#3f6695">Genotype: WT / RELMα-KO</text>
+<rect x="291.79999999999995" y="236" width="92" height="26" rx="13" fill="#f2f4f7" stroke="#dfe2e7" stroke-width="1"></rect>
+<text x="304.79999999999995" y="253.5" font-size="12.5" font-weight="400" fill="#3f6695">Sex: M / F</text>
+<rect x="395.79999999999995" y="236" width="85" height="26" rx="13" fill="#f2f4f7" stroke="#dfe2e7" stroke-width="1"></rect>
+<text x="408.79999999999995" y="253.5" font-size="12.5" font-weight="400" fill="#3f6695">Diet: HFD</text>
+<rect x="493.19999999999993" y="236" width="211" height="26" rx="13" fill="#f2f4f7" stroke="#dfe2e7" stroke-width="1"></rect>
+<text x="506.19999999999993" y="253.5" font-size="12.5" fill="#3f6695">Challenge: ± <tspan font-style="italic">N. brasiliensis</tspan></text>
+<rect x="715.9999999999999" y="236" width="99" height="26" rx="13" fill="#f2f4f7" stroke="#dfe2e7" stroke-width="1"></rect>
+<text x="728.9999999999999" y="253.5" font-size="12.5" font-weight="400" fill="#6a7079">4 GEM pools</text>
+<rect x="826.5999999999999" y="236" width="92" height="26" rx="13" fill="#3f6695"></rect>
+<text x="839.5999999999999" y="253.5" font-size="12.5" font-weight="700" fill="#ffffff">16 samples</text>
+<text x="78" y="300" font-size="12" font-weight="700" letter-spacing="2" fill="#8a8f99">PIPELINE  ·  INPUT → METHOD → OUTPUT</text>
+<text x="892" y="300" font-size="12" font-weight="700" letter-spacing="2" fill="#8a8f99">KEY FINDINGS</text>
+<rect x="78" y="322" width="762" height="176" rx="14" fill="#e7eef7" stroke="#3f6695" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="362" r="21" fill="#3f6695"></circle>
+<text x="114" y="369" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">0</text>
+<text x="150" y="352" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#37557d">STAGE 0</text>
+<text x="150" y="377" font-size="18" font-weight="700" fill="#23262d">Raw data processing</text>
+<line x1="150" y1="390" x2="816" y2="390" stroke="#3f6695" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="426" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#37557d">INPUT</text>
+<text x="108" y="445" font-size="12" fill="#41464e"><tspan x="108">10x FLEX assay</tspan><tspan x="108" dy="16">4×4 multiplex</tspan><tspan x="108" dy="16">16 samples</tspan></text>
+<line x1="318" y1="446" x2="341" y2="446" stroke="#3f6695" stroke-width="2"></line><path d="M341,441.7 L348,446 L341,450.3 Z" fill="#3f6695"></path>
+<rect x="350" y="406" width="296" height="80" rx="9" fill="#ffffff" stroke="#3f6695" stroke-width="1.1"></rect>
+<text x="366" y="424" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#37557d">METHOD / TOOL</text>
+<text x="366" y="442" font-size="11.5" fill="#3c424b"><tspan x="366">Cell Ranger 8.0.1</tspan><tspan x="366" dy="15.5">mm10-2020-A reference</tspan><tspan x="366" dy="15.5">Mouse Probe Set v1.0.1</tspan></text>
+<line x1="650" y1="446" x2="681" y2="446" stroke="#3f6695" stroke-width="2"></line><path d="M681,441.7 L688,446 L681,450.3 Z" fill="#3f6695"></path>
+<text x="690" y="426" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#37557d">OUTPUT</text>
+<text x="690" y="445" font-size="12" fill="#41464e"><tspan x="690">count</tspan><tspan x="690" dy="16">matrices ×16</tspan></text>
+<circle cx="840" cy="410" r="3" fill="#3f6695"></circle>
+<line x1="844" y1="410" x2="883" y2="410" stroke="#3f6695" stroke-width="2"></line><path d="M883,405.7 L890,410 L883,414.3 Z" fill="#3f6695"></path>
+<rect x="892" y="335" width="460" height="150" rx="12" fill="#ffffff" stroke="#3f6695" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="348" width="5" height="124" fill="#3f6695"></rect>
+<text x="916" y="365" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#37557d">FINDING</text>
+<text x="916" y="387" font-size="13.5" fill="#3a3f47"><tspan x="916">Sixteen demultiplexed samples reduced to</tspan><tspan x="916" dy="20">raw gene × cell matrices — deposited as</tspan><tspan x="916" dy="20">GEO GSE311941.</tspan></text>
+<line x1="459" y1="502" x2="459" y2="515" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,515 L464,515 L459,524 Z" fill="#9aa1ab"></path>
+<rect x="78" y="528" width="762" height="176" rx="14" fill="#e7eef7" stroke="#3f6695" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="568" r="21" fill="#3f6695"></circle>
+<text x="114" y="575" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">1</text>
+<text x="150" y="558" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#37557d">STAGE 1</text>
+<text x="150" y="583" font-size="18" font-weight="700" fill="#23262d">Quality control</text>
+<line x1="150" y1="596" x2="816" y2="596" stroke="#3f6695" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="632" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#37557d">INPUT</text>
+<text x="108" y="651" font-size="12" fill="#41464e"><tspan x="108">raw matrices</tspan><tspan x="108" dy="16">SiglecF SVF</tspan></text>
+<line x1="318" y1="652" x2="341" y2="652" stroke="#3f6695" stroke-width="2"></line><path d="M341,647.7 L348,652 L341,656.3 Z" fill="#3f6695"></path>
+<rect x="350" y="612" width="296" height="80" rx="9" fill="#ffffff" stroke="#3f6695" stroke-width="1.1"></rect>
+<text x="366" y="630" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#37557d">METHOD / TOOL</text>
+<text x="366" y="648" font-size="11.5" fill="#3c424b"><tspan x="366">DecontX (ambient, 0.2) → Scrublet (6%)</tspan><tspan x="366" dy="15.5">filter 200–5000 genes, ≤10% mito</tspan><tspan x="366" dy="15.5">log-norm · 2000 HVG · PCA (30 PC)</tspan></text>
+<line x1="650" y1="652" x2="681" y2="652" stroke="#3f6695" stroke-width="2"></line><path d="M681,647.7 L688,652 L681,656.3 Z" fill="#3f6695"></path>
+<text x="690" y="632" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#37557d">OUTPUT</text>
+<text x="690" y="651" font-size="12" fill="#41464e"><tspan x="690">clean SVF</tspan><tspan x="690" dy="16">object</tspan></text>
+<circle cx="840" cy="616" r="3" fill="#3f6695"></circle>
+<line x1="844" y1="616" x2="883" y2="616" stroke="#3f6695" stroke-width="2"></line><path d="M883,611.7 L890,616 L883,620.3 Z" fill="#3f6695"></path>
+<rect x="892" y="541" width="460" height="150" rx="12" fill="#ffffff" stroke="#3f6695" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="554" width="5" height="124" fill="#3f6695"></rect>
+<text x="916" y="571" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#37557d">FINDING</text>
+<text x="916" y="593" font-size="13.5" fill="#3a3f47"><tspan x="916">Ambient-RNA and doublet removal yield a</tspan><tspan x="916" dy="20">clean, <tspan font-style="italic">Siglecf</tspan>-enriched stromal–vascular</tspan><tspan x="916" dy="20">(SVF) object ready for annotation.</tspan></text>
+<line x1="459" y1="708" x2="459" y2="737" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,737 L464,737 L459,746 Z" fill="#9aa1ab"></path>
+<rect x="78" y="750" width="762" height="176" rx="14" fill="#e0efeb" stroke="#2f8174" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="790" r="21" fill="#2f8174"></circle>
+<text x="114" y="797" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">2</text>
+<text x="150" y="780" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#28685d">STAGE 2  ·  FIG 1B–C</text>
+<text x="150" y="805" font-size="18" font-weight="700" fill="#23262d">All-cell annotation</text>
+<line x1="150" y1="818" x2="816" y2="818" stroke="#2f8174" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="854" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">INPUT</text>
+<text x="108" y="873" font-size="12" fill="#41464e"><tspan x="108">clean SVF</tspan><tspan x="108" dy="16">object</tspan></text>
+<line x1="318" y1="874" x2="341" y2="874" stroke="#2f8174" stroke-width="2"></line><path d="M341,869.7 L348,874 L341,878.3 Z" fill="#2f8174"></path>
+<rect x="350" y="834" width="296" height="80" rx="9" fill="#ffffff" stroke="#2f8174" stroke-width="1.1"></rect>
+<text x="366" y="852" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">METHOD / TOOL</text>
+<text x="366" y="870" font-size="11.5" fill="#3c424b"><tspan x="366">UMAP + marker annotation:</tspan><tspan x="366" dy="15.5"><tspan font-style="italic">Siglecf</tspan>/<tspan font-style="italic">Ccr3</tspan>/<tspan font-style="italic">Il5ra</tspan>, <tspan font-style="italic">Mertk</tspan>/<tspan font-style="italic">Mrc1</tspan>,</tspan><tspan x="366" dy="15.5"><tspan font-style="italic">S100a8</tspan> · <tspan font-style="italic">Nkg7</tspan> · <tspan font-style="italic">Cd19</tspan> · <tspan font-style="italic">Itgax</tspan> · <tspan font-style="italic">Tpsb2</tspan></tspan></text>
+<line x1="650" y1="874" x2="681" y2="874" stroke="#2f8174" stroke-width="2"></line><path d="M681,869.7 L688,874 L681,878.3 Z" fill="#2f8174"></path>
+<text x="690" y="854" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">OUTPUT</text>
+<text x="690" y="873" font-size="12" fill="#41464e"><tspan x="690">7 immune</tspan><tspan x="690" dy="16">cell types</tspan></text>
+<circle cx="840" cy="838" r="3" fill="#2f8174"></circle>
+<line x1="844" y1="838" x2="883" y2="838" stroke="#2f8174" stroke-width="2"></line><path d="M883,833.7 L890,838 L883,842.3 Z" fill="#2f8174"></path>
+<rect x="892" y="763" width="460" height="150" rx="12" fill="#ffffff" stroke="#2f8174" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="776" width="5" height="124" fill="#2f8174"></rect>
+<text x="916" y="793" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#28685d">FINDING</text>
+<text x="1332" y="793" text-anchor="end" font-size="10.5" font-weight="600" letter-spacing="0.5" fill="#a6acb5">Fig 1B–C</text>
+<text x="916" y="815" font-size="13.5" fill="#3a3f47"><tspan x="916">Seven immune cell types resolve; <tspan font-style="italic">Siglecf</tspan>⁺</tspan><tspan x="916" dy="20">eosinophils are the dominant enriched</tspan><tspan x="916" dy="20">population in adipose SVF.</tspan></text>
+<line x1="459" y1="930" x2="459" y2="943" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,943 L464,943 L459,952 Z" fill="#9aa1ab"></path>
+<rect x="78" y="956" width="762" height="176" rx="14" fill="#e0efeb" stroke="#2f8174" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="996" r="21" fill="#2f8174"></circle>
+<text x="114" y="1003" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">3</text>
+<text x="150" y="986" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#28685d">STAGE 3  ·  FIG 2A</text>
+<text x="150" y="1011" font-size="18" font-weight="700" fill="#23262d">Eosinophil subclustering</text>
+<line x1="150" y1="1024" x2="816" y2="1024" stroke="#2f8174" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="1060" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">INPUT</text>
+<text x="108" y="1079" font-size="12" fill="#41464e"><tspan x="108">eosinophil</tspan><tspan x="108" dy="16">subset</tspan></text>
+<line x1="318" y1="1080" x2="341" y2="1080" stroke="#2f8174" stroke-width="2"></line><path d="M341,1075.7 L348,1080 L341,1084.3 Z" fill="#2f8174"></path>
+<rect x="350" y="1040" width="296" height="80" rx="9" fill="#ffffff" stroke="#2f8174" stroke-width="1.1"></rect>
+<text x="366" y="1058" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">METHOD / TOOL</text>
+<text x="366" y="1076" font-size="11.5" fill="#3c424b"><tspan x="366">re-cluster de novo (Seurat)</tspan><tspan x="366" dy="15.5">HVG → PCA → UMAP (20 PC)</tspan><tspan x="366" dy="15.5">res 0.4 · clustree + silhouette + sc-SHC</tspan></text>
+<line x1="650" y1="1080" x2="681" y2="1080" stroke="#2f8174" stroke-width="2"></line><path d="M681,1075.7 L688,1080 L681,1084.3 Z" fill="#2f8174"></path>
+<text x="690" y="1060" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">OUTPUT</text>
+<text x="690" y="1079" font-size="12" fill="#41464e"><tspan x="690">6 clusters</tspan><tspan x="690" dy="16">C0–C5</tspan></text>
+<circle cx="840" cy="1044" r="3" fill="#2f8174"></circle>
+<line x1="844" y1="1044" x2="883" y2="1044" stroke="#2f8174" stroke-width="2"></line><path d="M883,1039.7 L890,1044 L883,1048.3 Z" fill="#2f8174"></path>
+<rect x="892" y="960" width="460" height="168" rx="12" fill="#ffffff" stroke="#2f8174" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="973" width="5" height="142" fill="#2f8174"></rect>
+<text x="916" y="990" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#28685d">FINDING</text>
+<text x="1332" y="990" text-anchor="end" font-size="10.5" font-weight="600" letter-spacing="0.5" fill="#a6acb5">Fig 2A</text>
+<rect x="916" y="1004" width="13" height="13" rx="2.5" fill="#C0504D"></rect>
+<text x="934" y="1015" font-size="11.5" font-weight="700" fill="#C0504D">C0</text>
+<rect x="982" y="1004" width="13" height="13" rx="2.5" fill="#D9883C"></rect>
+<text x="1000" y="1015" font-size="11.5" font-weight="700" fill="#D9883C">C1</text>
+<rect x="1048" y="1004" width="13" height="13" rx="2.5" fill="#C0A12B"></rect>
+<text x="1066" y="1015" font-size="11.5" font-weight="700" fill="#C0A12B">C2</text>
+<rect x="1114" y="1004" width="13" height="13" rx="2.5" fill="#3E8E7E"></rect>
+<text x="1132" y="1015" font-size="11.5" font-weight="700" fill="#3E8E7E">C3</text>
+<rect x="1180" y="1004" width="13" height="13" rx="2.5" fill="#3F6F9E"></rect>
+<text x="1198" y="1015" font-size="11.5" font-weight="700" fill="#3F6F9E">C4</text>
+<rect x="1246" y="1004" width="13" height="13" rx="2.5" fill="#8A5DA6"></rect>
+<text x="1264" y="1015" font-size="11.5" font-weight="700" fill="#8A5DA6">C5</text>
+<text x="916" y="1042" font-size="13.5" fill="#3a3f47"><tspan x="916">7,461 eosinophils resolve into six</tspan><tspan x="916" dy="20">transcriptional clusters (a 14-cell</tspan><tspan x="916" dy="20">endothelial contaminant was excluded).</tspan></text>
+<line x1="459" y1="1136" x2="459" y2="1149" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,1149 L464,1149 L459,1158 Z" fill="#9aa1ab"></path>
+<rect x="78" y="1162" width="762" height="176" rx="14" fill="#e0efeb" stroke="#2f8174" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="1202" r="21" fill="#2f8174"></circle>
+<text x="114" y="1209" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">4</text>
+<text x="150" y="1192" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#28685d">STAGE 4  ·  FIG 2B–D</text>
+<text x="150" y="1217" font-size="18" font-weight="700" fill="#23262d">Cluster characterization &amp; composition</text>
+<line x1="150" y1="1230" x2="816" y2="1230" stroke="#2f8174" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="1266" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">INPUT</text>
+<text x="108" y="1285" font-size="12" fill="#41464e"><tspan x="108">six eos</tspan><tspan x="108" dy="16">clusters</tspan></text>
+<line x1="318" y1="1286" x2="341" y2="1286" stroke="#2f8174" stroke-width="2"></line><path d="M341,1281.7 L348,1286 L341,1290.3 Z" fill="#2f8174"></path>
+<rect x="350" y="1246" width="296" height="80" rx="9" fill="#ffffff" stroke="#2f8174" stroke-width="1.1"></rect>
+<text x="366" y="1264" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">METHOD / TOOL</text>
+<text x="366" y="1282" font-size="11.5" fill="#3c424b"><tspan x="366">top-6 marker dot plot</tspan><tspan x="366" dy="15.5">GO-BP heatmap (clusterProfiler)</tspan><tspan x="366" dy="15.5">sccomp Bayesian composition test</tspan></text>
+<line x1="650" y1="1286" x2="681" y2="1286" stroke="#2f8174" stroke-width="2"></line><path d="M681,1281.7 L688,1286 L681,1290.3 Z" fill="#2f8174"></path>
+<text x="690" y="1266" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#28685d">OUTPUT</text>
+<text x="690" y="1285" font-size="12" fill="#41464e"><tspan x="690">signatures +</tspan><tspan x="690" dy="16">composition</tspan></text>
+<circle cx="840" cy="1250" r="3" fill="#2f8174"></circle>
+<line x1="844" y1="1250" x2="883" y2="1250" stroke="#2f8174" stroke-width="2"></line><path d="M883,1245.7 L890,1250 L883,1254.3 Z" fill="#2f8174"></path>
+<rect x="892" y="1175" width="460" height="150" rx="12" fill="#ffffff" stroke="#2f8174" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="1188" width="5" height="124" fill="#2f8174"></rect>
+<text x="916" y="1205" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#28685d">FINDING</text>
+<text x="1332" y="1205" text-anchor="end" font-size="10.5" font-weight="600" letter-spacing="0.5" fill="#a6acb5">Fig 2B–D</text>
+<text x="916" y="1227" font-size="13.5" fill="#3a3f47"><tspan x="916">Abundance shifts with sex, RELMα and</tspan><tspan x="916" dy="20">infection: females &amp; helminth enrich</tspan><tspan x="916" dy="20">type-2 / homeostatic clusters; males &amp;</tspan><tspan x="916" dy="20">RELMα-KO enrich inflammatory / MHC-II.</tspan></text>
+<line x1="459" y1="1342" x2="459" y2="1371" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,1371 L464,1371 L459,1380 Z" fill="#9aa1ab"></path>
+<rect x="78" y="1384" width="762" height="176" rx="14" fill="#f6eed7" stroke="#b0892c" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="1424" r="21" fill="#b0892c"></circle>
+<text x="114" y="1431" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">5</text>
+<text x="150" y="1414" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#85651d">STAGE 5  ·  FIG 1D–G</text>
+<text x="150" y="1439" font-size="18" font-weight="700" fill="#23262d">Differential expression</text>
+<line x1="150" y1="1452" x2="816" y2="1452" stroke="#b0892c" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="1488" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#85651d">INPUT</text>
+<text x="108" y="1507" font-size="12" fill="#41464e"><tspan x="108">sample-level</tspan><tspan x="108" dy="16">pseudobulk</tspan></text>
+<line x1="318" y1="1508" x2="341" y2="1508" stroke="#b0892c" stroke-width="2"></line><path d="M341,1503.7 L348,1508 L341,1512.3 Z" fill="#b0892c"></path>
+<rect x="350" y="1468" width="296" height="80" rx="9" fill="#ffffff" stroke="#b0892c" stroke-width="1.1"></rect>
+<text x="366" y="1486" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#85651d">METHOD / TOOL</text>
+<text x="366" y="1504" font-size="11.5" fill="#3c424b"><tspan x="366">pseudobulk DESeq2, multifactor</tspan><tspan x="366" dy="15.5">+ ranked GSEA (gseGO on stat)</tspan><tspan x="366" dy="15.5">4 contrasts: sex · RELMα · infection</tspan></text>
+<line x1="650" y1="1508" x2="681" y2="1508" stroke="#b0892c" stroke-width="2"></line><path d="M681,1503.7 L688,1508 L681,1512.3 Z" fill="#b0892c"></path>
+<text x="690" y="1488" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#85651d">OUTPUT</text>
+<text x="690" y="1507" font-size="12" fill="#41464e"><tspan x="690">DEGs +</tspan><tspan x="690" dy="16">GO-BP sets</tspan></text>
+<circle cx="840" cy="1472" r="3" fill="#b0892c"></circle>
+<line x1="844" y1="1472" x2="883" y2="1472" stroke="#b0892c" stroke-width="2"></line><path d="M883,1467.7 L890,1472 L883,1476.3 Z" fill="#b0892c"></path>
+<rect x="892" y="1397" width="460" height="150" rx="12" fill="#ffffff" stroke="#b0892c" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="1410" width="5" height="124" fill="#b0892c"></rect>
+<text x="916" y="1427" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#85651d">FINDING</text>
+<text x="1332" y="1427" text-anchor="end" font-size="10.5" font-weight="600" letter-spacing="0.5" fill="#a6acb5">Fig 1D–G</text>
+<text x="916" y="1449" font-size="13.5" fill="#3a3f47"><tspan x="916">Sex-, RELMα- and infection-dependent</tspan><tspan x="916" dy="20">differential-expression programs and</tspan><tspan x="916" dy="20">enriched GO-BP pathways across all</tspan><tspan x="916" dy="20">four contrasts.</tspan></text>
+<line x1="459" y1="1564" x2="459" y2="1577" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,1577 L464,1577 L459,1586 Z" fill="#9aa1ab"></path>
+<rect x="78" y="1590" width="762" height="176" rx="14" fill="#f6eed7" stroke="#b0892c" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="1630" r="21" fill="#b0892c"></circle>
+<text x="114" y="1637" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">6</text>
+<text x="150" y="1620" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#85651d">STAGE 6  ·  SUPPORTS FIG 3–4</text>
+<text x="150" y="1645" font-size="18" font-weight="700" fill="#23262d">Macrophage subtyping</text>
+<line x1="150" y1="1658" x2="816" y2="1658" stroke="#b0892c" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="1694" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#85651d">INPUT</text>
+<text x="108" y="1713" font-size="12" fill="#41464e"><tspan x="108">macrophage</tspan><tspan x="108" dy="16">subset</tspan></text>
+<line x1="318" y1="1714" x2="341" y2="1714" stroke="#b0892c" stroke-width="2"></line><path d="M341,1709.7 L348,1714 L341,1718.3 Z" fill="#b0892c"></path>
+<rect x="350" y="1674" width="296" height="80" rx="9" fill="#ffffff" stroke="#b0892c" stroke-width="1.1"></rect>
+<text x="366" y="1692" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#85651d">METHOD / TOOL</text>
+<text x="366" y="1710" font-size="11.5" fill="#3c424b"><tspan x="366">module scoring →</tspan><tspan x="366" dy="15.5">M1-like · M2-Surface · M2-Functional</tspan><tspan x="366" dy="15.5">(<tspan font-style="italic">Mrc1</tspan>/<tspan font-style="italic">Lyve1</tspan>, <tspan font-style="italic">Chil3</tspan>/<tspan font-style="italic">Arg1</tspan> …)</tspan></text>
+<line x1="650" y1="1714" x2="681" y2="1714" stroke="#b0892c" stroke-width="2"></line><path d="M681,1709.7 L688,1714 L681,1718.3 Z" fill="#b0892c"></path>
+<text x="690" y="1694" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#85651d">OUTPUT</text>
+<text x="690" y="1713" font-size="12" fill="#41464e"><tspan x="690">3 macrophage</tspan><tspan x="690" dy="16">states</tspan></text>
+<circle cx="840" cy="1678" r="3" fill="#b0892c"></circle>
+<line x1="844" y1="1678" x2="883" y2="1678" stroke="#b0892c" stroke-width="2"></line><path d="M883,1673.7 L890,1678 L883,1682.3 Z" fill="#b0892c"></path>
+<rect x="892" y="1603" width="460" height="150" rx="12" fill="#ffffff" stroke="#b0892c" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="1616" width="5" height="124" fill="#b0892c"></rect>
+<text x="916" y="1633" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#85651d">FINDING</text>
+<text x="1332" y="1633" text-anchor="end" font-size="10.5" font-weight="600" letter-spacing="0.5" fill="#a6acb5">supports Fig 3–4</text>
+<text x="916" y="1655" font-size="13.5" fill="#3a3f47"><tspan x="916">Three macrophage states (M1-like,</tspan><tspan x="916" dy="20">M2-Surface, M2-Functional) defined as</tspan><tspan x="916" dy="20">partners for communication analysis.</tspan></text>
+<line x1="459" y1="1770" x2="459" y2="1799" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,1799 L464,1799 L459,1808 Z" fill="#9aa1ab"></path>
+<rect x="78" y="1812" width="762" height="176" rx="14" fill="#f6e3ee" stroke="#a8487f" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="1852" r="21" fill="#a8487f"></circle>
+<text x="114" y="1859" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">7</text>
+<text x="150" y="1842" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#8d3868">STAGE 7  ·  FIG 3A–F · 4A–B</text>
+<text x="150" y="1867" font-size="18" font-weight="700" fill="#23262d">Cell–cell communication</text>
+<line x1="150" y1="1880" x2="816" y2="1880" stroke="#a8487f" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="1916" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#8d3868">INPUT</text>
+<text x="108" y="1935" font-size="12" fill="#41464e"><tspan x="108">eos + mac</tspan><tspan x="108" dy="16">states ×6</tspan></text>
+<line x1="318" y1="1936" x2="341" y2="1936" stroke="#a8487f" stroke-width="2"></line><path d="M341,1931.7 L348,1936 L341,1940.3 Z" fill="#a8487f"></path>
+<rect x="350" y="1896" width="296" height="80" rx="9" fill="#ffffff" stroke="#a8487f" stroke-width="1.1"></rect>
+<text x="366" y="1914" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#8d3868">METHOD / TOOL</text>
+<text x="366" y="1932" font-size="11.5" fill="#3c424b"><tspan x="366">CellChat, per condition (×6)</tspan><tspan x="366" dy="15.5">chord · in/out heatmaps · centrality</tspan><tspan x="366" dy="15.5">eos↔mac CCL L–R heatmaps + top-10</tspan></text>
+<line x1="650" y1="1936" x2="681" y2="1936" stroke="#a8487f" stroke-width="2"></line><path d="M681,1931.7 L688,1936 L681,1940.3 Z" fill="#a8487f"></path>
+<text x="690" y="1916" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#8d3868">OUTPUT</text>
+<text x="690" y="1935" font-size="12" fill="#41464e"><tspan x="690">signaling</tspan><tspan x="690" dy="16">networks</tspan></text>
+<circle cx="840" cy="1900" r="3" fill="#a8487f"></circle>
+<line x1="844" y1="1900" x2="883" y2="1900" stroke="#a8487f" stroke-width="2"></line><path d="M883,1895.7 L890,1900 L883,1904.3 Z" fill="#a8487f"></path>
+<rect x="892" y="1825" width="460" height="150" rx="12" fill="#ffffff" stroke="#a8487f" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="1838" width="5" height="124" fill="#a8487f"></rect>
+<text x="916" y="1855" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#8d3868">FINDING</text>
+<text x="1332" y="1855" text-anchor="end" font-size="10.5" font-weight="600" letter-spacing="0.5" fill="#a6acb5">Fig 3A–F · 4A–B</text>
+<text x="916" y="1877" font-size="13.5" fill="#3a3f47"><tspan x="916">A chemokine CCL axis (CCL6/CCL9/CCL24 ↔</tspan><tspan x="916" dy="20">CCR1/CCR2/CCR3) wires the eos–mac network;</tspan><tspan x="916" dy="20">cluster <tspan font-weight="700" fill="#3E8E7E">C3</tspan> is the CCL6 hub — signaling is</tspan><tspan x="916" dy="20">remodeled in males and RELMα-KO.</tspan></text>
+<line x1="459" y1="1992" x2="459" y2="2021" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,2021 L464,2021 L459,2030 Z" fill="#9aa1ab"></path>
+<rect x="78" y="2034" width="762" height="176" rx="14" fill="#e4efe0" stroke="#4e8a4a" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="2074" r="21" fill="#4e8a4a"></circle>
+<text x="114" y="2081" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">8</text>
+<text x="150" y="2064" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#3e6f3f">STAGE 8  ·  FIG 2G–J</text>
+<text x="150" y="2089" font-size="18" font-weight="700" fill="#23262d">Trajectory &amp; cross-dataset positioning</text>
+<line x1="150" y1="2102" x2="816" y2="2102" stroke="#4e8a4a" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="2138" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#3e6f3f">INPUT</text>
+<text x="108" y="2157" font-size="12" fill="#41464e"><tspan x="108">eos clusters</tspan><tspan x="108" dy="16">+ Gurtner BM</tspan></text>
+<line x1="318" y1="2158" x2="341" y2="2158" stroke="#4e8a4a" stroke-width="2"></line><path d="M341,2153.7 L348,2158 L341,2162.3 Z" fill="#4e8a4a"></path>
+<rect x="350" y="2118" width="296" height="80" rx="9" fill="#ffffff" stroke="#4e8a4a" stroke-width="1.1"></rect>
+<text x="366" y="2136" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#3e6f3f">METHOD / TOOL</text>
+<text x="366" y="2154" font-size="11.5" fill="#3c424b"><tspan x="366">Monocle 3 + CellRank (root = BM)</tspan><tspan x="366" dy="15.5">pseudotime + gene-dynamics heatmap</tspan><tspan x="366" dy="15.5">Harmony similarity vs human adipose</tspan></text>
+<line x1="650" y1="2158" x2="681" y2="2158" stroke="#4e8a4a" stroke-width="2"></line><path d="M681,2153.7 L688,2158 L681,2162.3 Z" fill="#4e8a4a"></path>
+<text x="690" y="2138" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#3e6f3f">OUTPUT</text>
+<text x="690" y="2157" font-size="12" fill="#41464e"><tspan x="690">maturation</tspan><tspan x="690" dy="16">trajectory</tspan></text>
+<circle cx="840" cy="2122" r="3" fill="#4e8a4a"></circle>
+<line x1="844" y1="2122" x2="883" y2="2122" stroke="#4e8a4a" stroke-width="2"></line><path d="M883,2117.7 L890,2122 L883,2126.3 Z" fill="#4e8a4a"></path>
+<rect x="892" y="2047" width="460" height="150" rx="12" fill="#ffffff" stroke="#4e8a4a" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="2060" width="5" height="124" fill="#4e8a4a"></rect>
+<text x="916" y="2077" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#3e6f3f">FINDING</text>
+<text x="1332" y="2077" text-anchor="end" font-size="10.5" font-weight="600" letter-spacing="0.5" fill="#a6acb5">Fig 2G–J</text>
+<text x="916" y="2099" font-size="13.5" fill="#3a3f47"><tspan x="916">A bone-marrow → blood → adipose</tspan><tspan x="916" dy="20">maturation trajectory: <tspan font-weight="700" fill="#C0504D">C0</tspan>/<tspan font-weight="700" fill="#D9883C">C1</tspan> ≈ human</tspan><tspan x="916" dy="20">scWAT/BAT, <tspan font-weight="700" fill="#3E8E7E">C3</tspan> ≈ human eWAT, and</tspan><tspan x="916" dy="20"><tspan font-weight="700" fill="#C0A12B">C2</tspan>/<tspan font-weight="700" fill="#3F6F9E">C4</tspan>/<tspan font-weight="700" fill="#8A5DA6">C5</tspan> are HFD-specific.</tspan></text>
+<line x1="459" y1="2214" x2="459" y2="2227" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,2227 L464,2227 L459,2236 Z" fill="#9aa1ab"></path>
+<rect x="78" y="2240" width="762" height="176" rx="14" fill="#ece5f4" stroke="#6f51a0" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="2280" r="21" fill="#6f51a0"></circle>
+<text x="114" y="2287" text-anchor="middle" font-size="18" font-weight="700" fill="#ffffff">9</text>
+<text x="150" y="2270" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#5a4185">STAGE 9  ·  FIG 5A–E</text>
+<text x="150" y="2295" font-size="18" font-weight="700" fill="#23262d">Gene regulatory networks</text>
+<line x1="150" y1="2308" x2="816" y2="2308" stroke="#6f51a0" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="2344" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#5a4185">INPUT</text>
+<text x="108" y="2363" font-size="12" fill="#41464e"><tspan x="108">per-cluster</tspan><tspan x="108" dy="16">expression</tspan></text>
+<line x1="318" y1="2364" x2="341" y2="2364" stroke="#6f51a0" stroke-width="2"></line><path d="M341,2359.7 L348,2364 L341,2368.3 Z" fill="#6f51a0"></path>
+<rect x="350" y="2324" width="296" height="80" rx="9" fill="#ffffff" stroke="#6f51a0" stroke-width="1.1"></rect>
+<text x="366" y="2342" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#5a4185">METHOD / TOOL</text>
+<text x="366" y="2360" font-size="11.5" fill="#3c424b"><tspan x="366">pySCENIC: GRNBoost2 → cisTarget</tspan><tspan x="366" dy="15.5">→ AUCell · regulon-activity heatmaps</tspan><tspan x="366" dy="15.5">sex-differential regulons (Mann-Whitney)</tspan></text>
+<line x1="650" y1="2364" x2="681" y2="2364" stroke="#6f51a0" stroke-width="2"></line><path d="M681,2359.7 L688,2364 L681,2368.3 Z" fill="#6f51a0"></path>
+<text x="690" y="2344" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#5a4185">OUTPUT</text>
+<text x="690" y="2363" font-size="12" fill="#41464e"><tspan x="690">cluster TF</tspan><tspan x="690" dy="16">regulons</tspan></text>
+<circle cx="840" cy="2328" r="3" fill="#6f51a0"></circle>
+<line x1="844" y1="2328" x2="883" y2="2328" stroke="#6f51a0" stroke-width="2"></line><path d="M883,2323.7 L890,2328 L883,2332.3 Z" fill="#6f51a0"></path>
+<rect x="892" y="2253" width="460" height="150" rx="12" fill="#ffffff" stroke="#6f51a0" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="2266" width="5" height="124" fill="#6f51a0"></rect>
+<text x="916" y="2283" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#5a4185">FINDING</text>
+<text x="1332" y="2283" text-anchor="end" font-size="10.5" font-weight="600" letter-spacing="0.5" fill="#a6acb5">Fig 5A–E</text>
+<text x="916" y="2305" font-size="13.5" fill="#3a3f47"><tspan x="916">Cluster-specific TF regulons, five</tspan><tspan x="916" dy="20">validated sex-differential regulons, and</tspan><tspan x="916" dy="20">HFD-enriched regulatory programs.</tspan></text>
+<line x1="459" y1="2420" x2="459" y2="2449" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,2449 L464,2449 L459,2458 Z" fill="#9aa1ab"></path>
+<rect x="78" y="2462" width="762" height="176" rx="14" fill="#e9eaee" stroke="#586073" stroke-width="1.5" filter="url(#soft)"></rect>
+<circle cx="114" cy="2502" r="21" fill="#586073"></circle>
+<text x="114" y="2509" text-anchor="middle" font-size="16" font-weight="700" fill="#ffffff">10</text>
+<text x="150" y="2492" font-size="11.5" font-weight="700" letter-spacing="1.3" fill="#454c5e">STAGE 10</text>
+<text x="150" y="2517" font-size="18" font-weight="700" fill="#23262d">Cross-dataset integration &amp; validation</text>
+<line x1="150" y1="2530" x2="816" y2="2530" stroke="#586073" stroke-opacity="0.28" stroke-width="1"></line>
+<text x="108" y="2566" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#454c5e">INPUT</text>
+<text x="108" y="2585" font-size="12" fill="#41464e"><tspan x="108">this atlas</tspan><tspan x="108" dy="16">+ 2 refs</tspan></text>
+<line x1="318" y1="2586" x2="341" y2="2586" stroke="#586073" stroke-width="2"></line><path d="M341,2581.7 L348,2586 L341,2590.3 Z" fill="#586073"></path>
+<rect x="350" y="2546" width="296" height="80" rx="9" fill="#ffffff" stroke="#586073" stroke-width="1.1"></rect>
+<text x="366" y="2564" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#454c5e">METHOD / TOOL</text>
+<text x="366" y="2582" font-size="11.5" fill="#3c424b"><tspan x="366">Harmony integration with</tspan><tspan x="366" dy="15.5">Hu 2026 (eWAT/scWAT/BAT) +</tspan><tspan x="366" dy="15.5">Gurtner 2023 (BM/blood/intestine)</tspan></text>
+<line x1="650" y1="2586" x2="681" y2="2586" stroke="#586073" stroke-width="2"></line><path d="M681,2581.7 L688,2586 L681,2590.3 Z" fill="#586073"></path>
+<text x="690" y="2566" font-size="9.5" font-weight="700" letter-spacing="1.2" fill="#454c5e">OUTPUT</text>
+<text x="690" y="2585" font-size="12" fill="#41464e"><tspan x="690">conserved</tspan><tspan x="690" dy="16">eos states</tspan></text>
+<circle cx="840" cy="2550" r="3" fill="#586073"></circle>
+<line x1="844" y1="2550" x2="883" y2="2550" stroke="#586073" stroke-width="2"></line><path d="M883,2545.7 L890,2550 L883,2554.3 Z" fill="#586073"></path>
+<rect x="892" y="2475" width="460" height="150" rx="12" fill="#ffffff" stroke="#586073" stroke-width="1.2" filter="url(#soft)"></rect>
+<rect x="893" y="2488" width="5" height="124" fill="#586073"></rect>
+<text x="916" y="2505" font-size="10.5" font-weight="700" letter-spacing="1.5" fill="#454c5e">FINDING</text>
+<text x="916" y="2527" font-size="13.5" fill="#3a3f47"><tspan x="916">Adipose eosinophil states are conserved</tspan><tspan x="916" dy="20">across datasets and reproduced against</tspan><tspan x="916" dy="20">independent human and mouse references.</tspan></text>
+<rect x="34" y="322" width="7" height="382.0" rx="3.5" fill="#3f6695"></rect>
+<text x="22" y="513.0" transform="rotate(-90 22 513.0)" text-anchor="middle" font-size="11.5" font-weight="700" letter-spacing="2" fill="#37557d">PREPROCESSING</text>
+<rect x="34" y="750" width="7" height="588.0" rx="3.5" fill="#2f8174"></rect>
+<text x="22" y="1044.0" transform="rotate(-90 22 1044.0)" text-anchor="middle" font-size="11.5" font-weight="700" letter-spacing="2" fill="#28685d">ATLAS &amp; HETEROGENEITY</text>
+<rect x="34" y="1384" width="7" height="382.0" rx="3.5" fill="#b0892c"></rect>
+<text x="22" y="1575.0" transform="rotate(-90 22 1575.0)" text-anchor="middle" font-size="11.5" font-weight="700" letter-spacing="2" fill="#85651d">DIFFERENTIAL &amp; SUBTYPING</text>
+<rect x="34" y="1812" width="7" height="176.0" rx="3.5" fill="#a8487f"></rect>
+<text x="22" y="1900.0" transform="rotate(-90 22 1900.0)" text-anchor="middle" font-size="11.5" font-weight="700" letter-spacing="2" fill="#8d3868">COMMUNICATION</text>
+<rect x="34" y="2034" width="7" height="191.0" rx="3" fill="#4e8a4a"></rect>
+<rect x="34" y="2225.0" width="7" height="191.0" rx="3" fill="#6f51a0"></rect>
+<text x="22" y="2225.0" transform="rotate(-90 22 2225.0)" text-anchor="middle" font-size="11.5" font-weight="700" letter-spacing="2" fill="#46504a">TRAJECTORY &amp; REGULONS</text>
+<rect x="34" y="2462" width="7" height="176.0" rx="3.5" fill="#586073"></rect>
+<text x="22" y="2550.0" transform="rotate(-90 22 2550.0)" text-anchor="middle" font-size="11.5" font-weight="700" letter-spacing="2" fill="#454c5e">INTEGRATION</text>
+<line x1="459" y1="2642" x2="459" y2="2677" stroke="#9aa1ab" stroke-width="2.4"></line><path d="M454,2677 L464,2677 L459,2686 Z" fill="#9aa1ab"></path>
+<rect x="78" y="2690" width="1274" height="192" rx="14" fill="#f1f0ec" stroke="#bcb6aa" stroke-width="1.4" stroke-dasharray="6 4" filter="url(#soft)"></rect>
+<text x="104" y="2722" font-size="13.5" font-weight="700" letter-spacing="0.5" fill="#5b554a">EXPERIMENTAL VALIDATION <tspan font-weight="600" fill="#9a9384">  ·  WET-LAB, PARALLEL TRACK</tspan></text>
+<text x="104" y="2742" font-size="12.5" font-style="italic" fill="#8b8576">Non-computational confirmation of the in-silico atlas — protein and spatial validation.</text>
+<rect x="104" y="2756" width="600" height="108" rx="10" fill="#ffffff" stroke="#ddd8cd" stroke-width="1.1"></rect>
+<text x="124" y="2786" font-size="14.5" font-weight="700" fill="#3a3f47">Spectral flow cytometry</text>
+<text x="124" y="2812" font-size="12.5" font-weight="600" fill="#6a7079">Eosinophil subsets · MHC-II MFI gradient</text>
+<text x="124" y="2834" font-size="12.5" fill="#5b6068"><tspan x="124">Protein-level confirmation of the</tspan><tspan x="124" dy="16">C0 antigen-presentation axis.</tspan></text>
+<rect x="726" y="2756" width="600" height="108" rx="10" fill="#ffffff" stroke="#ddd8cd" stroke-width="1.1"></rect>
+<text x="746" y="2786" font-size="14.5" font-weight="700" fill="#3a3f47">RNAscope / Imaris spatial imaging</text>
+<text x="746" y="2812" font-size="12.5" font-weight="600" fill="#6a7079">G-cross spatial statistics</text>
+<text x="746" y="2834" font-size="12.5" fill="#5b6068"><tspan x="746">A CCR2–CCR3–CCL6 chemokine gradient</tspan><tspan x="746" dy="16">localizes to adipose crown-like structures.</tspan></text>
+<rect x="78" y="2926" width="804" height="140" rx="12" fill="#ffffff" stroke="#e3ddd5" stroke-width="1.2" filter="url(#soft)"></rect>
+<text x="102" y="2956" font-size="12" font-weight="700" letter-spacing="1.5" fill="#86655a">EOSINOPHIL CLUSTERS  ·  C0–C5 (consistent palette)</text>
+<rect x="102" y="2978" width="15" height="15" rx="3" fill="#C0504D"></rect>
+<text x="126" y="2990.5" font-size="13"><tspan font-weight="700" fill="#C0504D">C0</tspan><tspan fill="#454a52">  MHC-II · antigen presentation</tspan></text>
+<rect x="102" y="3006" width="15" height="15" rx="3" fill="#D9883C"></rect>
+<text x="126" y="3018.5" font-size="13"><tspan font-weight="700" fill="#D9883C">C1</tspan><tspan fill="#454a52">  migratory (Il4, Itgb2)</tspan></text>
+<rect x="102" y="3034" width="15" height="15" rx="3" fill="#C0A12B"></rect>
+<text x="126" y="3046.5" font-size="13"><tspan font-weight="700" fill="#C0A12B">C2</tspan><tspan fill="#454a52">  stress / AP-1 (Atf6)</tspan></text>
+<rect x="502" y="2978" width="15" height="15" rx="3" fill="#3E8E7E"></rect>
+<text x="526" y="2990.5" font-size="13"><tspan font-weight="700" fill="#3E8E7E">C3</tspan><tspan fill="#454a52">  tissue-resident CCL6 hub</tspan></text>
+<rect x="502" y="3006" width="15" height="15" rx="3" fill="#3F6F9E"></rect>
+<text x="526" y="3018.5" font-size="13"><tspan font-weight="700" fill="#3F6F9E">C4</tspan><tspan fill="#454a52">  infection-response</tspan></text>
+<rect x="502" y="3034" width="15" height="15" rx="3" fill="#8A5DA6"></rect>
+<text x="526" y="3046.5" font-size="13"><tspan font-weight="700" fill="#8A5DA6">C5</tspan><tspan fill="#454a52">  metabolically adapted</tspan></text>
+<rect x="906" y="2926" width="446" height="140" rx="12" fill="#ffffff" stroke="#e3ddd5" stroke-width="1.2" filter="url(#soft)"></rect>
+<text x="930" y="2956" font-size="12" font-weight="700" letter-spacing="1.5" fill="#86655a">STAGE GROUPS</text>
+<rect x="930" y="2976" width="13" height="13" rx="3" fill="#3f6695"></rect>
+<text x="951" y="2987" font-size="12" fill="#454a52">Preprocessing</text>
+<rect x="930" y="2998" width="13" height="13" rx="3" fill="#2f8174"></rect>
+<text x="951" y="3009" font-size="12" fill="#454a52">Atlas &amp; heterogeneity</text>
+<rect x="930" y="3020" width="13" height="13" rx="3" fill="#b0892c"></rect>
+<text x="951" y="3031" font-size="12" fill="#454a52">Differential &amp; subtyping</text>
+<rect x="930" y="3042" width="13" height="13" rx="3" fill="#a8487f"></rect>
+<text x="951" y="3053" font-size="12" fill="#454a52">Communication</text>
+<rect x="1140" y="2976" width="13" height="13" rx="3" fill="#4e8a4a"></rect>
+<text x="1161" y="2987" font-size="12" fill="#454a52">Trajectory</text>
+<rect x="1140" y="2998" width="13" height="13" rx="3" fill="#6f51a0"></rect>
+<text x="1161" y="3009" font-size="12" fill="#454a52">Regulons</text>
+<rect x="1140" y="3020" width="13" height="13" rx="3" fill="#586073"></rect>
+<text x="1161" y="3031" font-size="12" fill="#454a52">Integration</text>
+<line x1="78" y1="3082" x2="1352" y2="3082" stroke="#d8d5cb" stroke-width="1"></line>
+<text x="78" y="3100" font-size="12.5" fill="#6a7079"><tspan font-weight="700" fill="#454a52">Data &amp; code</tspan>   GEO GSE311941  ·  github.com/xqiu625/adipose-eos-subtype-atlas</text>
+<text x="1352" y="3100" text-anchor="end" font-size="12" fill="#9298a2">Mouse visceral adipose · 16 samples · 6 eosinophil states</text>
+</svg>
