@@ -678,7 +678,7 @@ Idents(eos) <- eos$eos_cluster
 cat("\n  Cluster sizes after renaming:\n")
 print(table(eos$eos_cluster))
 
-# Remove C6 — too few cells (Cldn5/Rasip1, no mature eos markers)
+# Remove C6 — too few cells (n=14)
 n_c6 <- sum(eos$eos_cluster == "C6")
 if (n_c6 > 0) {
   cells_keep <- colnames(eos)[eos$eos_cluster != "C6"]

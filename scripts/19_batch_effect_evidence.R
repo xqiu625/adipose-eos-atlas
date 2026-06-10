@@ -46,7 +46,7 @@ gem_colors <- c("GEM1" = "#E41A1C", "GEM2" = "#377EB8",
 # ── Load eos_subclustered object ─────────────────────────────────────────────
 cat("Loading eos_subclustered.rds...\n")
 eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
-# Remove C6 if still present (too few cells)
+# Remove C6 if still present (too few cells, n=14)
 if ("C6" %in% levels(Idents(eos))) {
   eos <- subset(eos, idents = "C6", invert = TRUE)
   Idents(eos) <- droplevels(Idents(eos))

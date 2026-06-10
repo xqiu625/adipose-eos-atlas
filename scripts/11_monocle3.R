@@ -40,7 +40,7 @@ eos <- tryCatch(
   readRDS(file.path(BASE, "eos_subclustered.rds")),
   error = function(e) { cat("ERROR: Cannot load input:", e$message, "\n"); quit(status = 1) }
 )
-# Remove C6 if still present (too few cells)
+# Remove C6 if still present (too few cells, n=14)
 if ("C6" %in% levels(Idents(eos))) {
   eos <- subset(eos, idents = "C6", invert = TRUE)
   Idents(eos) <- droplevels(Idents(eos))

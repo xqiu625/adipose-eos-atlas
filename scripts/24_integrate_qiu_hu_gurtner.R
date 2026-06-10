@@ -38,7 +38,7 @@ dir.create(export_dir, recursive = TRUE, showWarnings = FALSE)
 # --- Our eosinophils (HFD adipose, C0-C6) ---
 cat("Loading Qiu adipose eosinophils ...\n")
 qiu <- readRDS(file.path(BASE, "eos_subclustered.rds"))
-# Remove C6 if still present (too few cells)
+# Remove C6 if still present (too few cells, n=14)
 if ("C6" %in% levels(Idents(qiu))) {
   qiu <- subset(qiu, idents = "C6", invert = TRUE)
   Idents(qiu) <- droplevels(Idents(qiu))

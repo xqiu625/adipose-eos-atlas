@@ -53,7 +53,7 @@ End-to-end pipeline from raw 10x FLEX reads to figures, annotated with the key f
 | C4 | Infection response | Helminth-infected females |
 | C5 | Metabolically adapted | Helminth-infected females |
 
-Note: an additional small cluster (14 cells, identified as too few cells) was excluded from downstream analysis.
+Note: an additional small cluster (14 cells) was excluded from downstream analysis due to its low cell number.
 
 ### Macrophage Subtypes (module score classification)
 - **M1-like** — *Itgax, Cd80, Tnf, Il6, Ccl2*

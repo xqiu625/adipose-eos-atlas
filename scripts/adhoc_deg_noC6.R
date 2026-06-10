@@ -3,7 +3,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 .libPaths(c(lib_path, .libPaths()))
 
 ## ADHOC: Pseudobulk DESeq2 for KO Female vs WT Female, excluding C6
-## C6 has enriched endothelial markers (Cldn5 21%, Rasip1 21%) — likely contamination
+## C6 excluded — too few cells (n=14)
 ## SLURM: --mem=64G --cpus-per-task=4 --time=1:00:00 -p batch
 
 suppressPackageStartupMessages({

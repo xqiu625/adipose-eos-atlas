@@ -137,7 +137,7 @@ eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
 cat(sprintf("  %d eosinophils, clusters: %s\n", ncol(eos),
             paste(sort(unique(Idents(eos))), collapse = ", ")))
 
-# Remove C6 — too few cells (Cldn5/Rasip1 enriched, 14 cells)
+# Remove C6 — too few cells (n=14)
 n_c6 <- sum(Idents(eos) == "C6")
 eos <- subset(eos, idents = "C6", invert = TRUE)
 cat(sprintf("  Removed C6: %d cells. Remaining: %d eos (C0-C5)\n", n_c6, ncol(eos)))

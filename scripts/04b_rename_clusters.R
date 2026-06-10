@@ -53,7 +53,7 @@ Idents(eos) <- factor(new_labels, levels = paste0("C", 0:6))  # C6 removed below
 cat("\n  After renaming:\n")
 print(table(eos$eos_cluster))
 
-# ── Remove C6 — too few cells (Cldn5/Rasip1, no mature eos markers)
+# ── Remove C6 — too few cells (n=14)
 n_c6 <- sum(Idents(eos) == "C6")
 if (n_c6 > 0) {
   eos <- subset(eos, idents = "C6", invert = TRUE)
