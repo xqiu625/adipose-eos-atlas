@@ -288,6 +288,19 @@ sbatch --job-name=38_violin --partition=batch --mem=32G --cpus-per-task=4 --time
 # Gurtner intestinal eos comparison
 sbatch --job-name=39_intestinal --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/39_intestinal_%j.out --error=${LOGS}/39_intestinal_%j.err --wrap="export LD_LIBRARY_PATH=/bigdata/godziklab/shared/Xinru/cellrank_env/lib:/opt/linux/rocky/8.x/x86_64/pkgs/gcc/12.2.0/lib64:\$LD_LIBRARY_PATH; module load R/4.5.0; Rscript ${SCRIPTS}/39_gurtner_intestinal_comparison.R"
 
+# --- Block 18: Integration-method benchmark -----------------------
+# Depends on: Block 4 (04b → eos_subclustered.rds)
+# Benchmark batch-correction tools (Harmony, Scanorama, scVI, scANVI, ComBat,
+# BBKNN vs unintegrated) and score each with scib-metrics. See INTEGRATION_BENCHMARK.md.
+# One-time env: pip install harmonypy scanorama bbknn scvi-tools scib-metrics
+
+# Step 1 (CPU): export eos object -> h5ad
+sbatch --job-name=45_int_export --partition=batch --mem=64G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/45_int_export_%j.out --error=${LOGS}/45_int_export_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/45_integration_export_h5ad.R"
+
+# Step 2 (GPU): run + score the benchmark (45 export runs first inside the driver;
+# for CPU-only, drop scvi,scanvi from --methods and use --partition=batch)
+sbatch scripts/46b_run_integration_benchmark.sh
+
 # ==============================================================================
 # Monitor jobs:
 #   squeue -u $USER
