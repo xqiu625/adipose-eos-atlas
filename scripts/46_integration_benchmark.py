@@ -136,8 +136,13 @@ def run_combat(adata, args):
 
 
 def run_harmony(adata, args):
-    sc.external.pp.harmony_integrate(adata, key=args.batch_key,
-                                     basis="X_pca", adjusted_basis="X_pca_harmony")
+    # Call harmonypy directly rather than sc.external.pp.harmony_integrate: the
+    # scanpy wrapper mis-shapes the output under scanpy 1.11 / harmonypy >=0.2
+    # (writes a (n_pcs,) vector instead of (n_cells, n_pcs)). Z_corr is
+    # (n_pcs, n_cells); transpose to cells-by-PCs.
+    import harmonypy
+    ho = harmonypy.run_harmony(adata.obsm["X_pca"], adata.obs, [args.batch_key])
+    adata.obsm["X_pca_harmony"] = np.asarray(ho.Z_corr).T.copy()
     return "X_pca_harmony"
 
 
