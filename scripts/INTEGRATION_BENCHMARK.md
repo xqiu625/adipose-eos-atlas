@@ -57,14 +57,31 @@ provided commented-out in `46b`.
 ## How to run
 
 ```bash
-# one-time, in the project conda env
-pip install harmonypy scanorama bbknn scvi-tools scib-metrics
+# one-time, in the project conda env (cellrank_env)
+pip install harmonypy scanorama bbknn scib-metrics
 
 sbatch scripts/46b_run_integration_benchmark.sh
 ```
 
-`46b` runs the export (`45`) then the benchmark (`46`). scVI/scANVI use the GPU
-partition; for a CPU-only subset use `--methods unintegrated,combat,harmony,scanorama,bbknn`.
+`46b` runs the export (`45`) then the benchmark (`46`). `46` also runs on the CPU
+`highmem` partition (force exact-NN, no GPU needed); on shared HPCC nodes annoy's
+SIMD kernels SIGILL, so Scanorama/BBKNN are pinned to `approx=False`.
+
+### scVI / scANVI need a SEPARATE env
+
+Do **not** add `scvi-tools` to `cellrank_env`. scvi-tools requires `anndata>=0.11`,
+which the rest of the env (scanpy 1.10.3, cellrank 2.0.7) is pinned below
+(`anndata==0.10.9`); forcing the upgrade cascades into a `zarr>=3` conflict that
+breaks anndata's import. Run the deep-generative methods from a dedicated env:
+
+```bash
+conda create -n sc_scvi python=3.10 -y && conda activate sc_scvi
+pip install "scvi-tools>=1.2" scanpy scib-metrics
+python scripts/46_integration_benchmark.py --methods scvi,scanvi ...
+```
+
+The default `cellrank_env` run therefore scores: Unintegrated, ComBat, Harmony,
+Scanorama, BBKNN.
 
 ## Outputs (`$BASE/integration/benchmark/`)
 
