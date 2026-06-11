@@ -145,8 +145,11 @@ def run_scanorama(adata, args):
     # scanorama integrates per-batch; cells must be contiguous by batch
     order = np.argsort(adata.obs[args.batch_key].astype(str).values, kind="stable")
     a = adata[order].copy()
+    # approx=False -> exact NN (sklearn) instead of annoy. annoy's SIMD kernels
+    # SIGILL ("Illegal instruction") on some HPCC compute nodes; exact is fine
+    # at this cell count and cannot crash the interpreter.
     sc.external.pp.scanorama_integrate(a, key=args.batch_key, basis="X_pca",
-                                       adjusted_basis="X_scanorama")
+                                       adjusted_basis="X_scanorama", approx=False)
     # scatter back to original order
     emb = np.zeros((adata.n_obs, a.obsm["X_scanorama"].shape[1]), dtype=np.float32)
     emb[order] = a.obsm["X_scanorama"]
@@ -188,7 +191,9 @@ def run_bbknn(adata, args):
     # the embedding methods (PCA-UMAP on the batch-balanced graph).
     import bbknn  # noqa: F401
     a = adata.copy()
-    sc.external.pp.bbknn(a, batch_key=args.batch_key, use_rep="X_pca")
+    # use_annoy=False + approx=False -> exact NN, avoids the annoy SIGILL (see scanorama)
+    sc.external.pp.bbknn(a, batch_key=args.batch_key, use_rep="X_pca",
+                         approx=False, use_annoy=False)
     sc.tl.umap(a, random_state=args.seed)
     adata.obsm["X_bbknn"] = a.obsm["X_umap"]
     del a; gc.collect()
