@@ -308,7 +308,9 @@ def main():
             log(f"  ! scib plot failed (metrics CSVs still written): {e}")
         log("  scib-metrics done. Summary (Total):")
         if "Total" in res_raw.columns:
-            print(res_raw["Total"].sort_values(ascending=False).to_string())
+            # last row is a non-numeric "Metric Type" header; coerce + drop it
+            tot = pd.to_numeric(res_raw["Total"], errors="coerce").dropna()
+            print(tot.sort_values(ascending=False).to_string())
     except Exception as e:
         log(f"  ! scib-metrics FAILED: {type(e).__name__}: {e}")
         log("    (per-method embeddings + cluster-recovery CSV are still saved)")
