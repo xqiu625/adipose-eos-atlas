@@ -80,7 +80,10 @@ sm <- eos@meta.data %>%
     )
   )
 gem_map          <- setNames(sm$gem_reaction, sm$orig.ident)
-eos$gem_reaction <- gem_map[eos$orig.ident]
+# unname(): gem_map[...] is named by sample ID; Seurat's `$<-` would try to match
+# those names to cell barcodes and error ("No cell overlap"). Strip names so the
+# vector is assigned positionally, in cell order.
+eos$gem_reaction <- unname(gem_map[eos$orig.ident])
 print(table(eos$orig.ident, eos$gem_reaction))
 
 # ── Raw counts (cells x genes) -> scipy CSC ───────────────────────────────────
