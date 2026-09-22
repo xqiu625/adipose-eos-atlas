@@ -19,32 +19,57 @@ set -euo pipefail
 # --id=RR0104 for both the standard and "highmem" runs of the same pool,
 # which collide on the same pipestance output directory. This version submits
 # one independent SLURM job per run via `sbatch`, each with its own resource
-# request, and gives the highmem reruns a distinct --id/output directory.
+# request.
+#
+# ==== RERUN_ROOT + redundant-job fix (2026-09-22) ============================
+# Two fixes for the audited rerun:
+# 1. `cellranger multi --id=X` writes its pipestance into the CURRENT
+#    directory, so submitting via a bare --wrap from an arbitrary cwd landed
+#    output in whatever directory sbatch happened to be invoked from -- a
+#    "legacy hard-coded root" failure mode. This version requires RERUN_ROOT
+#    to be set and --chdir's every job into
+#    $RERUN_ROOT/upstream_cellranger/cellranger_multi so output always
+#    resolves under the versioned rerun root.
+# 2. Dropped the redundant standard-resource RR1316/RR0104 submissions. The
+#    original script submitted BOTH a standard-resource run and a "highmem
+#    rerun" of the same pool under a different --id; the "rerun" naming
+#    implies the standard-resource attempt was insufficient (OOM), so
+#    resubmitting it here would just spend ~4 days of batch-partition time on
+#    a run likely to fail the same way. This version submits exactly one
+#    (the higher-resource) job per pool -- 4 jobs total.
 
+: "${RERUN_ROOT:?RERUN_ROOT must be set, e.g. export RERUN_ROOT=/bigdata/nairlab/shared/XQiu/EOS_project/reruns/doublet_YYYYMMDD_HHMMSS}"
 CONFIG_DIR="/bigdata/godziklab/shared/Xinru/302025/dataset/batch3/csv_config"
+OUT_DIR="$RERUN_ROOT/upstream_cellranger/cellranger_multi"
+mkdir -p "$OUT_DIR"
+
+# Optional: set FASTQC_JOBID to the 02_fastqc.sh SLURM job ID to make every
+# cellranger multi job wait on it (afterok) as a raw-read QC gate before
+# committing multi-day compute.
+DEP_ARGS=()
+if [[ -n "${FASTQC_JOBID:-}" ]]; then
+  DEP_ARGS=(--dependency="afterok:${FASTQC_JOBID}")
+fi
 
 submit() {
   local job_name="$1" ntasks="$2" mem="$3" time="$4" partition="$5"
   local run_id="$6" csv="$7"
   sbatch --job-name="$job_name" --ntasks="$ntasks" --mem="$mem" \
-    --time="$time" -p "$partition" \
+    --time="$time" -p "$partition" --chdir="$OUT_DIR" "${DEP_ARGS[@]}" \
     --wrap="cellranger multi --id=$run_id --csv=$csv"
 }
 
-# RR1316
-submit "RR1316"  10 256gb 4-00:00:00 batch    RR1316          "$CONFIG_DIR/RR1316_config.csv"
-# RR1316 highmem rerun -- distinct --id so it writes to its own pipestance dir
-submit "hRR1316" 16 512gb 4-00:00:00 highmem  RR1316_highmem  "$CONFIG_DIR/RR1316_config.csv"
+# RR1316 -- highmem resources (standard-resource attempt is documented as
+# needing a rerun; submit only the resource level known to be sufficient)
+submit "RR1316" 16 512gb 4-00:00:00 highmem RR1316 "$CONFIG_DIR/RR1316_config.csv"
 
-# RR0104
-submit "RR0104"  10 256gb 4-00:00:00 intel    RR0104          "$CONFIG_DIR/RR0104_config.csv"
-# RR0104 highmem rerun -- distinct --id so it writes to its own pipestance dir
-submit "hRR0104" 16 512gb 4-00:00:00 highmem  RR0104_highmem  "$CONFIG_DIR/RR0104_config.csv"
+# RR0104 -- highmem resources, same reasoning
+submit "RR0104" 16 512gb 4-00:00:00 highmem RR0104 "$CONFIG_DIR/RR0104_config.csv"
 
 # RR0508
-submit "RR0508"  10 256gb  4-00:00:00  intel  RR0508 "$CONFIG_DIR/RR0508_config.csv"
+submit "RR0508" 10 256gb  4-00:00:00 intel   RR0508 "$CONFIG_DIR/RR0508_config.csv"
 
 # RR0912
-submit "RR0912"  16 256gb 10-00:00:00  intel  RR0912 "$CONFIG_DIR/RR0912_config.csv"
+submit "RR0912" 16 256gb 10-00:00:00 intel   RR0912 "$CONFIG_DIR/RR0912_config.csv"
 
-echo "Submitted 6 cellranger multi jobs."
+echo "Submitted 4 cellranger multi jobs, output under $OUT_DIR"
