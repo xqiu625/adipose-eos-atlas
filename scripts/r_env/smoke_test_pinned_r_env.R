@@ -105,7 +105,7 @@ smoke("sccomp FUNCTIONAL (sccomp_estimate)", {
   cell_groups <- paste0("cg", 1:3)
   synth <- do.call(rbind, lapply(1:n_samples, function(s) {
     counts <- rpois(3, lambda = c(50, 30, 20) + ifelse(s <= 3, c(10, 0, -5), 0))
-    counts <- pmax(counts, 1)
+    counts <- as.integer(pmax(counts, 1))
     data.frame(
       sample = paste0("sample", s),
       cell_group = cell_groups,
@@ -125,7 +125,7 @@ smoke("sccomp FUNCTIONAL (sccomp_estimate)", {
     .cell_group = cell_group,
     .count = count,
     cores = 1,
-    approximate_posterior_inference = TRUE
+    variational_inference = TRUE
   )
   stopifnot(!is.null(fit))
   cat("  sccomp_estimate() returned an object of class:", paste(class(fit), collapse = ", "), "\n")
