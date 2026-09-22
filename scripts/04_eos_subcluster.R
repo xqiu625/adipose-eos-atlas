@@ -441,7 +441,31 @@ if (!is.null(scshc_result)) {
   cat("\n  sc-SHC analysis complete.\n")
 
 } else {
-  cat("  sc-SHC could not be run. Proceeding with Seurat clusters only.\n")
+  # README/methods.md present sc-SHC as one of four completed, convergent
+  # lines of evidence for the chosen resolution. Previously this branch just
+  # printed a log line and moved on -- no artifact recorded that the check
+  # never ran, so a downstream reader (or the manuscript) could not tell
+  # "sc-SHC confirmed the clusters" apart from "sc-SHC was never run." Write
+  # an explicit NOT_RUN status file so that gap is auditable instead of silent.
+  cat("\n")
+  cat("  ############################################################\n")
+  cat("  # WARNING: sc-SHC significance testing did NOT run.        #\n")
+  cat("  # methods.md/README list sc-SHC as one of four completed   #\n")
+  cat("  # lines of evidence for the chosen resolution -- that claim#\n")
+  cat("  # is NOT satisfied for this run. Proceeding with Seurat    #\n")
+  cat("  # clusters validated by clustree/silhouette/subsampling    #\n")
+  cat("  # ARI only.                                                #\n")
+  cat("  ############################################################\n\n")
+
+  scshc_status <- data.frame(
+    status = "NOT_RUN",
+    reason = "scSHC package unavailable (requireNamespace('scSHC') == FALSE)",
+    n_original_clusters = n_original,
+    n_scshc_clusters = NA,
+    all_significant = NA
+  )
+  write.csv(scshc_status, file.path(supp_dir, "scshc_summary.csv"), row.names = FALSE)
+  cat(sprintf("  Wrote NOT_RUN status: %s\n", file.path(supp_dir, "scshc_summary.csv")))
 }
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -70,12 +70,22 @@ pathway_colors <- c(
 cat("Loading CellChat objects...\n")
 
 cell_states <- names(cell_colors)
-all_pathway_data <- list()
+
+# per_condition[[key]][[cond]] holds one summed value per (pathway, broad
+# source group, broad target group) per condition. A condition in which that
+# pathway/group-pair never appears (pathway undetected entirely, or every
+# underlying fine-subtype edge was zero) is filled with 0 below rather than
+# omitted -- omitting it previously meant mean() divided only by the
+# conditions where SOME signal existed, inflating rare/condition-specific
+# links relative to ones present in every condition.
+per_condition <- list()
+loaded_conditions <- character()
 
 for (cond in condition_order) {
   f <- file.path(cc_dir, paste0("cellchat_", cond, ".rds"))
   if (!file.exists(f)) next
   cat(sprintf("  %s ...\n", cond))
+  loaded_conditions <- c(loaded_conditions, cond)
 
   con <- gzfile(f, "rb")
   cc_raw <- .Internal(unserialize(con, NULL))
@@ -85,32 +95,43 @@ for (cond in condition_order) {
   pathways  <- dimnames(netP_prob)[[3]]
   ct_names  <- dimnames(netP_prob)[[1]]
   groups    <- chord_group(ct_names)
+  keep <- !is.na(groups)
 
-  for (pw in pathways) {
+  # Sum fine-subtype probabilities into one value per (pathway, broad source,
+  # broad target) for this condition; pathways absent from this condition
+  # contribute no keys here and are zero-filled below.
+  cond_totals <- list()
+  for (pw in FOCUS_PATHWAYS) {
+    if (!(pw %in% pathways)) next
     prob_mat <- netP_prob[, , pw]
-    keep <- !is.na(groups)
     for (i in which(keep)) {
       for (j in which(keep)) {
-        val <- prob_mat[i, j]
-        if (val > 0) {
-          key <- paste(pw, groups[i], groups[j], sep = "|||")
-          if (is.null(all_pathway_data[[key]])) {
-            all_pathway_data[[key]] <- list(
-              pathway = pw, source = groups[i], target = groups[j], vals = c()
-            )
-          }
-          all_pathway_data[[key]]$vals <- c(all_pathway_data[[key]]$vals, val)
-        }
+        key <- paste(pw, groups[i], groups[j], sep = "|||")
+        cond_totals[[key]] <- (if (is.null(cond_totals[[key]])) 0 else cond_totals[[key]]) + prob_mat[i, j]
       }
     }
   }
+
+  for (key in names(cond_totals)) {
+    if (is.null(per_condition[[key]])) per_condition[[key]] <- list()
+    per_condition[[key]][[cond]] <- cond_totals[[key]]
+  }
+
   rm(cc_raw); gc(verbose = FALSE)
 }
 
-# Average across conditions
-pw_df <- do.call(rbind, lapply(all_pathway_data, function(x) {
-  data.frame(pathway = x$pathway, source = x$source, target = x$target,
-             prob = mean(x$vals), stringsAsFactors = FALSE)
+n_cond <- length(loaded_conditions)
+cat(sprintf("  Loaded %d/%d conditions\n", n_cond, length(condition_order)))
+
+# Average across conditions, zero-filling conditions where a key never appeared
+pw_df <- do.call(rbind, lapply(names(per_condition), function(key) {
+  parts <- strsplit(key, "\\|\\|\\|")[[1]]
+  vals <- vapply(loaded_conditions, function(cond) {
+    v <- per_condition[[key]][[cond]]
+    if (is.null(v)) 0 else v
+  }, numeric(1))
+  data.frame(pathway = parts[1], source = parts[2], target = parts[3],
+             prob = mean(vals), stringsAsFactors = FALSE)
 }))
 
 # Filter to focus pathways, cross-type only

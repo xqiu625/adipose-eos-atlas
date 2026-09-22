@@ -58,11 +58,13 @@ MIN_FOLD_CHANGE    = 1.2
 MIN_UNIQUENESS     = 0.003
 TOP_PER_CLUSTER    = 5      # top N per Eos cluster → shown in figure
 
-EXCLUDE_REGULONS = {
-    "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Tef", "Bclaf1",
-    "Crem", "Atf4", "Etv5", "Zbtb7b", "Sp3", "Elk1", "Cebpb", "Max",
-    "Atf3", "Ikzf1", "Atf1", "Cux1", "Stat6", "Elk3"
-}
+# Regulons are excluded from selection only via an objective, reproducible
+# rule computed from the data: a minimum target-gene-set size. Regulons with
+# very few inferred targets are noisier and less interpretable as a "module."
+# (Previously a hand-picked list of ~20 TF names -- including biologically
+# relevant factors such as Stat6, Atf4, Atf3, Cebpb -- was excluded with no
+# documented rationale; that list has been removed.)
+MIN_REGULON_SIZE = 10
 
 print("=" * 60)
 print("16b_scenic_eos_mac_heatmap.py")
@@ -169,6 +171,18 @@ elif os.path.exists(regulon_csv):
     print(f"  Parsed {len(regulon_gene_sets)} regulon gene sets")
 else:
     print("  WARNING: neither adj.csv nor regulons.csv found")
+
+
+def regulon_size(reg):
+    """Number of inferred target genes for a regulon column name (handles
+    the '(+)'/'(-)' suffix). Returns None if sizes are unknown (gene sets
+    could not be parsed), in which case the size filter should be skipped
+    rather than treated as size 0."""
+    if not regulon_gene_sets:
+        return None
+    tf = reg.replace("(+)", "").replace("(-)", "").strip()
+    return len(regulon_gene_sets.get(tf, []))
+
 
 # =============================================================================
 # Step 3: Compute Eos cluster means (subsampled)
@@ -287,9 +301,15 @@ if os.path.exists(rss_path):
         if cl not in rss.columns:
             print(f"  WARNING: cluster {cl} not in RSS columns {list(rss.columns)}")
             continue
-        # Exclude unwanted TFs
-        valid = rss[~rss.index.str.replace(r"\(\+\)|\(\-\)", "", regex=True)
-                    .str.strip().isin(EXCLUDE_REGULONS)]
+        # Exclude regulons with too few target genes to be interpretable
+        # (skip the filter entirely if sizes are unknown, rather than
+        # dropping everything)
+        sizes = {r: regulon_size(r) for r in rss.index}
+        if any(s is not None for s in sizes.values()):
+            keep_idx = [r for r in rss.index if (sizes[r] or 0) >= MIN_REGULON_SIZE]
+            valid = rss.loc[keep_idx]
+        else:
+            valid = rss
         top = valid[cl].nlargest(TOP_PER_CLUSTER)
         for reg, score in top.items():
             tf = reg.replace("(+)", "").replace("(-)", "").strip()
@@ -309,7 +329,8 @@ else:
     results = []
     for reg in regulon_cols:
         tf = reg.replace("(+)", "").replace("(-)", "").strip()
-        if tf in EXCLUDE_REGULONS or reg not in eos_mean_df.index:
+        size = regulon_size(reg)
+        if (size is not None and size < MIN_REGULON_SIZE) or reg not in eos_mean_df.index:
             continue
         eos_vals = eos_mean_df.loc[reg, [c for c in EOS_CLUSTERS if c in eos_mean_df.columns]]
         if eos_vals.empty:

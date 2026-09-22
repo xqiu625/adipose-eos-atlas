@@ -63,7 +63,17 @@ sample_meta <- eos@meta.data %>%
   select(orig.ident, condition, sex, genotype, infection) %>%
   distinct()
 
-comp_data <- comp_data %>%
+# Ensure all cluster-sample combinations exist. group_by/summarise above only
+# emits rows for observed combinations, so a sample with zero cells in a given
+# cluster is silently absent rather than modeled as a true biological zero.
+all_combos <- expand.grid(
+  orig.ident  = unique(comp_data$orig.ident),
+  eos_cluster = levels(eos$eos_cluster),
+  stringsAsFactors = FALSE
+)
+comp_data <- all_combos %>%
+  left_join(comp_data, by = c("orig.ident", "eos_cluster")) %>%
+  mutate(count = replace_na(count, 0)) %>%
   left_join(sample_meta, by = "orig.ident")
 
 # Compute proportions per sample
@@ -79,7 +89,7 @@ cat(sprintf("  %d samples, %d cluster-sample combinations\n",
             length(unique(comp_data$orig.ident)), nrow(comp_data)))
 cat(sprintf("  Conditions: %s\n", paste(unique(comp_data$condition), collapse = ", ")))
 
-# --- Try sccomp; fall back to glmer if unavailable ----------------------------
+# --- Try sccomp; fall back to per-cluster glm if unavailable ----------------------------
 use_sccomp <- requireNamespace("sccomp", quietly = TRUE)
 
 # Detect which sccomp API is available (v1: sccomp_glm, v2: sccomp_estimate)
@@ -93,7 +103,7 @@ if (use_sccomp) {
     sccomp_func <- "sccomp_glm"
     cat("\nUsing sccomp (v1 API: sccomp_glm)...\n")
   } else {
-    cat("\nsccomp loaded but no known function found. Falling back to glmer.\n")
+    cat("\nsccomp loaded but no known function found. Falling back to per-cluster glm.\n")
     use_sccomp <- FALSE
   }
 }
@@ -121,9 +131,9 @@ run_sccomp <- function(data, formula_comp, formula_var = ~ 1) {
 
 if (use_sccomp) {
 
-  # --- Test 1: Sex effect (within non-infected samples) -----------------------
-  cat("\n--- Test 1: Sex effect (HFD only) ---\n")
-  data_sex <- comp_data %>% filter(infection == "HFD")
+  # --- Test 1: Sex effect (WT, HFD only) ---------------------------------------
+  cat("\n--- Test 1: Sex effect (WT, HFD only) ---\n")
+  data_sex <- comp_data %>% filter(infection == "HFD", genotype == "WT")
   cat(sprintf("  Samples: %d, Cells in total: %d\n",
               length(unique(data_sex$orig.ident)), sum(data_sex$count)))
 
@@ -193,26 +203,45 @@ if (use_sccomp) {
   save_sccomp(res_inf, "infection")
 
 } else {
-  cat("\nsccomp not available. Falling back to logistic mixed-effects model (glmer)...\n")
-  library(lme4)
+  cat("\nsccomp not available. Falling back to per-cluster binomial GLM (glm)...\n")
+  cat("WARNING: this is an approximate frequentist substitute, not a repeat of\n")
+  cat("the sccomp Bayesian compositional model. Outputs are flagged with a\n")
+  cat("'method' column and should not be treated as equivalent to sccomp results.\n")
 
-  run_glmer_composition <- function(data, formula_str, test_name) {
+  run_glm_composition <- function(data, formula_str, test_name) {
     clusters <- sort(unique(data$eos_cluster))
+    covariate_cols <- setdiff(colnames(data),
+                               c("eos_cluster", "count", "total", "proportion"))
     results <- list()
 
     for (cl in clusters) {
       cat(sprintf("  Cluster %s...\n", cl))
-      data$is_cluster <- as.integer(data$eos_cluster == cl)
 
+      # One row per sample: successes = cells in cluster cl, failures = cells
+      # in every other cluster, so successes + failures = total cells in that
+      # sample (sum-constrained). This is the correct binomial representation
+      # of "cluster cl's share of the sample"; the previous construction gave
+      # each cluster-row its own denominator, which is not sum-constrained and
+      # does not represent cluster count vs. total-minus-cluster count.
+      cl_data <- data %>%
+        group_by(orig.ident) %>%
+        summarise(
+          successes = sum(count[eos_cluster == cl]),
+          failures  = sum(count[eos_cluster != cl]),
+          across(all_of(covariate_cols), dplyr::first),
+          .groups = "drop"
+        )
+
+      # One row per sample means there is no repeated-measures structure left
+      # to justify a (1|orig.ident) random effect, so this is a plain glm.
       fit <- tryCatch({
-        glmer(
-          as.formula(paste("cbind(is_cluster * count, (1 - is_cluster) * count) ~",
-                           formula_str)),
-          data = data,
+        glm(
+          as.formula(paste("cbind(successes, failures) ~", formula_str)),
+          data = cl_data,
           family = binomial
         )
       }, error = function(e) {
-        cat(sprintf("    glmer error: %s\n", e$message))
+        cat(sprintf("    glm error: %s\n", e$message))
         NULL
       })
 
@@ -226,6 +255,7 @@ if (use_sccomp) {
             std_error = coefs[2, "Std. Error"],
             z_value = coefs[2, "z value"],
             p_value = coefs[2, "Pr(>|z|)"],
+            method = "glm_fallback",
             stringsAsFactors = FALSE
           )
         }
@@ -241,34 +271,31 @@ if (use_sccomp) {
     return(NULL)
   }
 
-  # Per-sample long format: each row = one sample-cluster pair with binary outcome
-  # For glmer, we use counts directly
-
   # Test 1: Sex effect
-  cat("\n--- Test 1: Sex effect (HFD only) ---\n")
-  data_sex <- comp_data %>% filter(infection == "HFD")
-  res_sex_df <- run_glmer_composition(data_sex, "sex + (1|orig.ident)", "sex")
+  cat("\n--- Test 1: Sex effect (WT, HFD only) ---\n")
+  data_sex <- comp_data %>% filter(infection == "HFD", genotype == "WT")
+  res_sex_df <- run_glm_composition(data_sex, "sex", "sex")
   if (!is.null(res_sex_df)) {
     write.csv(res_sex_df, file.path(comp_dir, "sccomp_sex.csv"), row.names = FALSE)
-    cat("  Saved: sccomp_sex.csv\n")
+    cat("  Saved: sccomp_sex.csv (method=glm_fallback)\n")
   }
 
   # Test 2: Genotype effect
   cat("\n--- Test 2: Genotype effect (Females, HFD) ---\n")
   data_geno <- comp_data %>% filter(sex == "Female", infection == "HFD")
-  res_geno_df <- run_glmer_composition(data_geno, "genotype + (1|orig.ident)", "genotype")
+  res_geno_df <- run_glm_composition(data_geno, "genotype", "genotype")
   if (!is.null(res_geno_df)) {
     write.csv(res_geno_df, file.path(comp_dir, "sccomp_genotype.csv"), row.names = FALSE)
-    cat("  Saved: sccomp_genotype.csv\n")
+    cat("  Saved: sccomp_genotype.csv (method=glm_fallback)\n")
   }
 
   # Test 3: Infection effect
   cat("\n--- Test 3: Infection effect (Females) ---\n")
   data_inf <- comp_data %>% filter(sex == "Female")
-  res_inf_df <- run_glmer_composition(data_inf, "infection + (1|orig.ident)", "infection")
+  res_inf_df <- run_glm_composition(data_inf, "infection", "infection")
   if (!is.null(res_inf_df)) {
     write.csv(res_inf_df, file.path(comp_dir, "sccomp_infection.csv"), row.names = FALSE)
-    cat("  Saved: sccomp_infection.csv\n")
+    cat("  Saved: sccomp_infection.csv (method=glm_fallback)\n")
   }
 }
 
@@ -316,7 +343,7 @@ for (test_name in c("sex", "genotype", "infection")) {
   csv_path <- file.path(comp_dir, paste0("sccomp_", test_name, ".csv"))
   if (file.exists(csv_path)) {
     df <- read.csv(csv_path)
-    # Identify the cluster column (sccomp uses cell_group, glmer uses cluster)
+    # Identify the cluster column (sccomp uses cell_group, glm fallback uses cluster)
     cluster_col <- intersect(c("eos_cluster", "cell_group", "cluster"), colnames(df))
     estimate_col <- intersect(c("c_effect", "estimate"), colnames(df))
     lower_col <- intersect(c("c_lower", "lower"), colnames(df))
@@ -329,7 +356,7 @@ for (test_name in c("sex", "genotype", "infection")) {
         test = test_name,
         stringsAsFactors = FALSE
       )
-      # Add CI if available (sccomp), otherwise compute from SE (glmer)
+      # Add CI if available (sccomp), otherwise compute from SE (glm fallback)
       if (length(lower_col) > 0 && length(upper_col) > 0) {
         plot_df$lower <- df[[lower_col[1]]]
         plot_df$upper <- df[[upper_col[1]]]
@@ -421,7 +448,7 @@ cat("Figure 4: Boxplot (per-cluster proportions by condition)...\n")
 # Create condition groups for faceting
 box_df <- comp_data %>%
   mutate(
-    comparison_sex = ifelse(infection == "HFD", sex, NA),
+    comparison_sex = ifelse(infection == "HFD" & genotype == "WT", sex, NA),
     comparison_geno = ifelse(infection == "HFD" & sex == "Female", genotype, NA),
     comparison_inf = ifelse(sex == "Female", infection, NA)
   )
@@ -436,7 +463,7 @@ box_sex <- box_df %>%
              size = 1.5, alpha = 0.8) +
   scale_fill_manual(values = c("Female" = "#E84A5F", "Male" = "#6CA6CD")) +
   scale_color_manual(values = c("Female" = "#E84A5F", "Male" = "#6CA6CD")) +
-  labs(x = "Cluster", y = "Proportion", title = "Sex Effect (HFD only)") +
+  labs(x = "Cluster", y = "Proportion", title = "Sex Effect (WT, HFD only)") +
   theme_pub(base_size = 11) +
   theme(legend.position = "bottom")
 
@@ -487,7 +514,7 @@ cat("========================================\n")
 cat(sprintf("  Cells:    %d\n", ncol(eos)))
 cat(sprintf("  Samples:  %d\n", length(unique(eos$orig.ident))))
 cat(sprintf("  Clusters: %d\n", length(unique(eos$eos_cluster))))
-cat(sprintf("  Method:   %s\n", ifelse(use_sccomp, "sccomp (Bayesian)", "glmer (frequentist)")))
+cat(sprintf("  Method:   %s\n", ifelse(use_sccomp, "sccomp (Bayesian)", "glm (frequentist, fallback)")))
 cat("\nOutput files:\n")
 cat(sprintf("  %s/sccomp_sex.csv\n", comp_dir))
 cat(sprintf("  %s/sccomp_genotype.csv\n", comp_dir))

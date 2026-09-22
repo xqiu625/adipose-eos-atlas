@@ -5,7 +5,7 @@ lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 #SBATCH --partition=batch
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=4
-#SBATCH --time=6:00:00
+#SBATCH --time=10:00:00
 #SBATCH --job-name=cellchat
 #SBATCH --output=cellchat_%j.out
 
@@ -50,6 +50,13 @@ is_eos <- function(ct) grepl("^Eos_", ct)
 is_mac <- function(ct) grepl("^Mac_", ct)
 
 # --- Run CellChat per condition ----------------------------------------------
+# NOTE: each object below pools ALL biological replicates of a condition into
+# one network, so any pathway/network-level comparison drawn from these
+# objects (including the merged object below) is a descriptive comparison of
+# two point estimates, not a test across replicates. A genuine replicate-level
+# statistical comparison (per-sample CellChat + Wilcoxon test) is added further
+# down and should be what's cited for "does communication differ" claims; use
+# these pooled networks only for which pathways/genes are involved.
 cellchat_list <- list()
 interaction_summary <- data.frame(condition = character(),
                                   n_eos = integer(),
@@ -166,6 +173,106 @@ for (cond in conditions) {
     cat("  ERROR processing", cond, ":", e$message, "\n")
   })
 }
+
+# --- Replicate-level statistical test (per-sample CellChat) -------------------
+# Runs CellChat once per biological replicate (orig.ident) instead of pooling
+# by condition, then compares conditions on the resulting per-sample summary
+# with a Wilcoxon rank-sum test -- giving actual n=samples-per-condition
+# inference for "does overall Eos<->Mac communication strength differ between
+# conditions," which the pooled per-condition networks above cannot provide.
+cat("\n========== Replicate-level CellChat (per sample) ==========\n")
+
+samples_all <- unique(obj$orig.ident)
+sample_summary <- data.frame(sample = character(), condition = character(),
+                             n_eos = integer(), n_mac = integer(),
+                             total_interactions = integer(),
+                             total_strength = numeric(),
+                             stringsAsFactors = FALSE)
+
+for (s in samples_all) {
+  cells_s <- colnames(obj)[obj$orig.ident == s]
+  sub_s <- subset(obj, cells = cells_s)
+  cond_s <- as.character(unique(sub_s$condition))[1]
+
+  n_eos_s <- sum(is_eos(sub_s$detailed_celltype))
+  n_mac_s <- sum(is_mac(sub_s$detailed_celltype))
+
+  if (n_eos_s < 10 || n_mac_s < 10) {
+    cat(sprintf("  %s (%s): fewer than 10 eos or 10 mac (eos=%d, mac=%d) - skipping\n",
+                s, cond_s, n_eos_s, n_mac_s))
+    next
+  }
+
+  cc_s <- tryCatch({
+    data_input_s <- GetAssayData(sub_s, layer = "data")
+    meta_s <- data.frame(labels = sub_s$detailed_celltype, row.names = colnames(sub_s))
+    cc_tmp <- createCellChat(object = data_input_s, meta = meta_s, group.by = "labels")
+    cc_tmp@DB <- CellChatDB.mouse
+    cc_tmp <- subsetData(cc_tmp)
+    cc_tmp <- identifyOverExpressedGenes(cc_tmp)
+    cc_tmp <- identifyOverExpressedInteractions(cc_tmp)
+    cc_tmp <- computeCommunProb(cc_tmp, type = "triMean")
+    cc_tmp <- filterCommunication(cc_tmp, min.cells = 10)
+    cc_tmp <- aggregateNet(cc_tmp)
+    cc_tmp
+  }, error = function(e) {
+    cat(sprintf("  %s (%s): ERROR - %s\n", s, cond_s, e$message))
+    NULL
+  })
+
+  if (is.null(cc_s)) next
+
+  total_int <- sum(cc_s@net$count)
+  total_str <- sum(cc_s@net$weight)
+  cat(sprintf("  %s (%s): eos=%d, mac=%d, interactions=%d, strength=%.4f\n",
+              s, cond_s, n_eos_s, n_mac_s, total_int, total_str))
+
+  sample_summary <- rbind(sample_summary, data.frame(
+    sample = s, condition = cond_s, n_eos = n_eos_s, n_mac = n_mac_s,
+    total_interactions = total_int, total_strength = total_str,
+    stringsAsFactors = FALSE
+  ))
+}
+
+write.csv(sample_summary, file.path(outdir, "cellchat_replicate_summary.csv"), row.names = FALSE)
+cat("Saved cellchat_replicate_summary.csv\n")
+
+# Wilcoxon rank-sum test: each condition vs WT_Female_HFD (reference)
+ref_cond <- "WT_Female_HFD"
+replicate_tests <- data.frame(condition = character(), n_ref = integer(),
+                              n_test = integer(), p_value_count = numeric(),
+                              p_value_strength = numeric(),
+                              stringsAsFactors = FALSE)
+
+if (nrow(sample_summary) > 0 && ref_cond %in% sample_summary$condition) {
+  ref_vals <- sample_summary[sample_summary$condition == ref_cond, ]
+  for (cond in setdiff(unique(sample_summary$condition), ref_cond)) {
+    test_vals <- sample_summary[sample_summary$condition == cond, ]
+    if (nrow(ref_vals) < 2 || nrow(test_vals) < 2) {
+      cat(sprintf("  %s vs %s: fewer than 2 replicates on one side - skipping test\n",
+                  cond, ref_cond))
+      next
+    }
+    p_count <- tryCatch(wilcox.test(test_vals$total_interactions, ref_vals$total_interactions)$p.value,
+                        error = function(e) NA)
+    p_strength <- tryCatch(wilcox.test(test_vals$total_strength, ref_vals$total_strength)$p.value,
+                           error = function(e) NA)
+    replicate_tests <- rbind(replicate_tests, data.frame(
+      condition = cond, n_ref = nrow(ref_vals), n_test = nrow(test_vals),
+      p_value_count = p_count, p_value_strength = p_strength,
+      stringsAsFactors = FALSE
+    ))
+  }
+} else {
+  cat(sprintf("  Reference condition %s has no replicate summary - skipping tests\n", ref_cond))
+}
+
+if (nrow(replicate_tests) > 0) {
+  replicate_tests$fdr_count    <- p.adjust(replicate_tests$p_value_count, method = "BH")
+  replicate_tests$fdr_strength <- p.adjust(replicate_tests$p_value_strength, method = "BH")
+}
+write.csv(replicate_tests, file.path(outdir, "cellchat_replicate_tests.csv"), row.names = FALSE)
+cat("Saved cellchat_replicate_tests.csv (Wilcoxon, each condition vs WT_Female_HFD, BH-corrected)\n")
 
 # --- Merge CellChat objects ---------------------------------------------------
 cat("\n========== Merging CellChat objects ==========\n")

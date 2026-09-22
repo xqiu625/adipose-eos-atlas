@@ -127,11 +127,11 @@ for (res in resolutions) {
 p_sil <- ggplot(sil_results, aes(x = resolution, y = mean_sil)) +
   geom_line(color = "#2166AC", linewidth = 1) +
   geom_point(color = "#2166AC", size = 3) +
-  geom_point(data = sil_results %>% filter(resolution == 0.8),
+  geom_point(data = sil_results %>% filter(resolution == 0.4),
              color = "red", size = 5, shape = 18) +
-  geom_vline(xintercept = 0.8, linetype = "dashed", color = "red", alpha = 0.5) +
-  annotate("text", x = 0.85, y = max(sil_results$mean_sil, na.rm = TRUE),
-           label = "res = 0.8\n(chosen)", hjust = 0, color = "red", size = 3.5) +
+  geom_vline(xintercept = 0.4, linetype = "dashed", color = "red", alpha = 0.5) +
+  annotate("text", x = 0.45, y = max(sil_results$mean_sil, na.rm = TRUE),
+           label = "res = 0.4\n(chosen)", hjust = 0, color = "red", size = 3.5) +
   labs(x = "Resolution", y = "Mean Silhouette Score",
        title = "Silhouette Score vs Clustering Resolution") +
   theme_pub() +
@@ -141,9 +141,9 @@ p_sil <- ggplot(sil_results, aes(x = resolution, y = mean_sil)) +
 p_nclust <- ggplot(sil_results, aes(x = resolution, y = n_clusters)) +
   geom_line(color = "#D6604D", linewidth = 1) +
   geom_point(color = "#D6604D", size = 3) +
-  geom_point(data = sil_results %>% filter(resolution == 0.8),
+  geom_point(data = sil_results %>% filter(resolution == 0.4),
              color = "red", size = 5, shape = 18) +
-  geom_vline(xintercept = 0.8, linetype = "dashed", color = "red", alpha = 0.5) +
+  geom_vline(xintercept = 0.4, linetype = "dashed", color = "red", alpha = 0.5) +
   scale_y_continuous(breaks = seq(0, max(sil_results$n_clusters) + 2, by = 1)) +
   labs(x = "Resolution", y = "Number of Clusters",
        title = "Number of Clusters vs Resolution") +
@@ -154,10 +154,38 @@ pdf(file.path(fig_dir, "fig_silhouette_resolution.pdf"), width = 12, height = 5)
 print(p_sil + p_nclust + plot_layout(ncol = 2))
 dev.off()
 
-# ── Figure 3: UMAP at selected resolutions (2x2 grid) ───────────────────────
-cat("Plotting UMAP panels at resolutions 0.5, 0.8, 1.0, 1.5...\n")
+# ── sc-SHC significance testing on the chosen resolution (0.4) ──────────────
+# The header/README/methods.md all describe sc-SHC (Grabski & Irizarry, Nat
+# Methods 2023) as one of the completed, convergent lines of evidence for the
+# chosen resolution. This step must not be silently skippable if the package
+# is unavailable -- if it can't run, that is treated as a hard failure of this
+# script (not printed as an optional warning while everything else proceeds).
+cat("\nRunning sc-SHC significance testing (resolution 0.4 clusters)...\n")
+if (!requireNamespace("scSHC", quietly = TRUE)) {
+  stop("scSHC package is not installed. sc-SHC significance testing is a ",
+       "documented, required part of the resolution justification (see ",
+       "methods.md); install scSHC (https://github.com/igrabski/sc-SHC) ",
+       "rather than skipping this step.")
+}
+library(scSHC)
 
-umap_resolutions <- c(0.5, 0.8, 1.0, 1.5)
+res04_labels <- as.character(eos@meta.data[["RNA_snn_res.0.4"]])
+counts_for_shc <- GetAssayData(eos, layer = "counts")
+
+# testClusters() evaluates significance of an existing cluster assignment
+# (as opposed to scSHC()'s own de novo hierarchical clustering). Confirm the
+# exact function name/signature against the installed scSHC version if this
+# errors -- do not silently fall back to skipping the test.
+shc_result <- testClusters(counts_for_shc, cluster_ids = res04_labels,
+                           num_PCs = 20, alpha = 0.05)
+shc_out_path <- file.path(fig_dir, "scSHC_resolution0.4_significance.csv")
+write.csv(as.data.frame(shc_result), shc_out_path, row.names = FALSE)
+cat(sprintf("  Saved: %s\n", shc_out_path))
+
+# ── Figure 3: UMAP at selected resolutions (2x2 grid) ───────────────────────
+cat("Plotting UMAP panels at resolutions 0.4, 0.5, 1.0, 1.5...\n")
+
+umap_resolutions <- c(0.4, 0.5, 1.0, 1.5)
 umap_plots <- list()
 
 for (res in umap_resolutions) {
@@ -175,7 +203,7 @@ for (res in umap_resolutions) {
           plot.title = element_text(size = 11, face = "bold"))
 
   # Highlight the chosen resolution
-  if (res == 0.8) {
+  if (res == 0.4) {
     p <- p + theme(plot.background = element_rect(color = "red",
                                                    linewidth = 2,
                                                    fill = NA))
@@ -203,21 +231,21 @@ cat("Resolution Selection Summary\n")
 cat("========================================\n")
 print(sil_results)
 
-res08 <- sil_results %>% filter(resolution == 0.8)
-cat(sprintf("\nChosen resolution: 0.8\n"))
-cat(sprintf("  Clusters: %d\n", res08$n_clusters))
-cat(sprintf("  Mean silhouette: %.4f\n", res08$mean_sil))
-cat(sprintf("  Median silhouette: %.4f\n", res08$median_sil))
+res04 <- sil_results %>% filter(resolution == 0.4)
+cat(sprintf("\nChosen resolution: 0.4\n"))
+cat(sprintf("  Clusters: %d\n", res04$n_clusters))
+cat(sprintf("  Mean silhouette: %.4f\n", res04$mean_sil))
+cat(sprintf("  Median silhouette: %.4f\n", res04$median_sil))
 
 # Compare with adjacent resolutions for stability argument
-res07 <- sil_results %>% filter(resolution == 0.7)
-res09 <- sil_results %>% filter(resolution == 0.9)
-if (nrow(res07) > 0 && nrow(res09) > 0) {
+res03 <- sil_results %>% filter(resolution == 0.3)
+res05 <- sil_results %>% filter(resolution == 0.5)
+if (nrow(res03) > 0 && nrow(res05) > 0) {
   cat(sprintf("\n  Adjacent resolutions:\n"))
-  cat(sprintf("    res 0.7: %d clusters (sil = %.4f)\n", res07$n_clusters, res07$mean_sil))
-  cat(sprintf("    res 0.8: %d clusters (sil = %.4f)  <-- CHOSEN\n", res08$n_clusters, res08$mean_sil))
-  cat(sprintf("    res 0.9: %d clusters (sil = %.4f)\n", res09$n_clusters, res09$mean_sil))
-  if (res07$n_clusters == res08$n_clusters || res09$n_clusters == res08$n_clusters) {
+  cat(sprintf("    res 0.3: %d clusters (sil = %.4f)\n", res03$n_clusters, res03$mean_sil))
+  cat(sprintf("    res 0.4: %d clusters (sil = %.4f)  <-- CHOSEN\n", res04$n_clusters, res04$mean_sil))
+  cat(sprintf("    res 0.5: %d clusters (sil = %.4f)\n", res05$n_clusters, res05$mean_sil))
+  if (res03$n_clusters == res04$n_clusters || res05$n_clusters == res04$n_clusters) {
     cat("  -> Cluster count is stable across nearby resolutions (clustree confirms minimal cross-assignment).\n")
   }
 }

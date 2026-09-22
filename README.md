@@ -23,7 +23,7 @@ End-to-end pipeline from raw 10x FLEX reads to figures, annotated with the key f
 | Diet | High-Fat Diet (HFD) |
 | Challenge (females only) | HFD + *N. brasiliensis* infection |
 
-16 samples total (4 conditions × 2–3 biological replicates), multiplexed using 10x Genomics Flex (4 samples per GEM reaction).
+Crossing these factors gives **six experimental groups**: WT/KO Male HFD, WT/KO Female HFD, and WT/KO Female HFD+Infected (infection was assessed in females only). 16 samples total — 3 biological replicates for each of the 4 non-infected groups and 2 for each of the 2 infected groups — multiplexed using 10x Genomics Flex (4 samples per GEM reaction).
 
 ## Repository Structure
 
@@ -87,11 +87,21 @@ The pipeline runs end-to-end from raw sequencing reads. Stage 0 (raw-data proces
 
 ## Dependencies
 
-### R (≥ 4.4.2)
-Seurat 5.1.0 · DESeq2 · clusterProfiler · CellChat 1.6.1 · Harmony 1.2.1 · Monocle 3 1.2.9 · sccomp 1.7 · celda (DecontX) · clustree
+Pinned versions used for the published analysis: **R 4.5.0**, **Python 3.12**
+(see [`methods.md`](methods.md) for the full package list). Best-effort,
+hand-maintained manifests are provided as a starting point for reproducing
+the environment -- see [`environment.yml`](environment.yml) (Python/conda)
+and [`r_packages.txt`](r_packages.txt) (R); neither is a byte-exact lockfile
+generated from the actual HPCC environment (this repo has no access to it),
+so re-run `renv::snapshot()` / `conda env export` there to produce a true
+lockfile. SCENIC, CellRank, and scVI/scANVI steps require separate conda
+environments (see git history).
 
-### Python (≥ 3.10)
-scanpy 1.10.3 · pyscenic · cellrank 2.0.7 · scrublet · anndata · matplotlib
+### R (≥ 4.4.2; 4.5.0 used for the published run)
+Seurat 5.1.0 · DESeq2 · clusterProfiler · CellChat 1.6.1 · Harmony 1.2.1 · Monocle 3 1.2.9 · sccomp 1.7 · celda (DecontX) · clustree · scSHC
+
+### Python (≥ 3.10; 3.12 used for the published run)
+scanpy 1.10.3 · pyscenic · cellrank 2.0.7 · scrublet · anndata · matplotlib · statsmodels
 
 ## Configuration
 

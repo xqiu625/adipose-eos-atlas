@@ -105,11 +105,14 @@ plot_volcano <- function(deg_df, title, filename, label_up, label_down,
   top_down <- deg_df %>% arrange(log2FC) %>% head(top_n)
   top_genes <- bind_rows(top_up, top_down) %>% distinct(gene, .keep_all = TRUE)
 
-  # X-axis range for annotation placement
+  # X-axis range for annotation placement. Plot -log10(padj), not raw pval --
+  # `sig` and the padj_cutoff dashed line are both defined in adjusted-p space,
+  # so the y-axis and the significance line must be too, or the line's position
+  # does not correspond to the padj_cutoff separating "Up"/"Down" from "NS".
   x_range <- range(deg_df$log2FC, na.rm = TRUE)
-  y_min <- min(-log10(deg_df$pval), na.rm = TRUE)
+  y_min <- min(-log10(deg_df$padj), na.rm = TRUE)
 
-  p <- ggplot(deg_df, aes(x = log2FC, y = -log10(pval), color = sig)) +
+  p <- ggplot(deg_df, aes(x = log2FC, y = -log10(padj), color = sig)) +
     geom_point(size = 0.8, alpha = 0.7) +
     geom_text_repel(data = top_genes,
                     aes(label = gene), size = 2.5, max.overlaps = 30,
@@ -122,7 +125,7 @@ plot_volcano <- function(deg_df, title, filename, label_up, label_down,
     annotate("text", x = x_range[1] * 0.7, y = y_min, label = paste0("\u2190 Up in ", label_down),
              size = 3.5, fontface = "bold", color = "#2166AC", hjust = 0.5) +
     labs(x = "log2 Fold Change",
-         y = expression(-log[10](italic(p)-value)),
+         y = expression(-log[10](italic(adj.p)-value)),
          title = title, color = "Significance") +
     theme_pub()
 

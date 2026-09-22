@@ -18,6 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from scipy import stats
+from statsmodels.stats.multitest import multipletests
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -46,11 +47,10 @@ ZSCORE_CAP  = 2.5
 FIXED_FEMALE = ["Tbx21", "Stat5a"]
 FIXED_MALE   = ["Gata2", "Xbp1", "Stat3"]
 
-EXCLUDE = {
-    "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Bclaf1",
-    "Crem", "Atf4", "Etv5", "Zbtb7b", "Sp3", "Elk1", "Cebpb", "Max",
-    "Atf3", "Ikzf1", "Atf1", "Cux1", "Stat6", "Elk3"
-}
+# No hand-picked TF exclusion list: this script does not have regulon
+# target-gene-set sizes available (unlike 16b_scenic_eos_mac_heatmap.py) to
+# apply an objective size-based filter, so every regulon is tested and the
+# FDR-corrected q-value threshold below is the only selection criterion.
 
 print("=" * 60)
 print("16e_sex_diff_regulons.py")
@@ -145,8 +145,6 @@ wt_m = auc.loc[group_cells[("Male",   "WT")]]
 
 results = []
 for tf in auc.columns:
-    if tf in EXCLUDE:
-        continue
     f_vals = wt_f[tf].values
     m_vals = wt_m[tf].values
     _, pval = stats.mannwhitneyu(f_vals, m_vals, alternative="two-sided")
@@ -159,8 +157,15 @@ for tf in auc.columns:
 res = pd.DataFrame(results)
 res["log2fc"] = np.log2(res["fc"])
 
-sig = res[res["pval"] < PVAL_THRESH].copy()
-print(f"  Significant regulons: {len(sig)}")
+# BH-FDR correction across all tested regulons -- raw p<0.05 alone does not
+# account for the multiple-testing burden of testing every regulon.
+res["qval"] = np.nan
+valid = res["pval"].notna()
+if valid.any():
+    res.loc[valid, "qval"] = multipletests(res.loc[valid, "pval"], method="fdr_bh")[1]
+
+sig = res[res["qval"] < PVAL_THRESH].copy()
+print(f"  Significant regulons (FDR q < {PVAL_THRESH}): {len(sig)}")
 
 if FIXED_FEMALE is not None and FIXED_MALE is not None:
     # Use manually specified TFs from reference figure

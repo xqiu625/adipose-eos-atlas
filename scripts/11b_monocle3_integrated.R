@@ -50,14 +50,18 @@ cds <- new_cell_data_set(expr_mat,
                          cell_metadata = cell_meta,
                          gene_metadata = gene_meta)
 
-# Transfer UMAP coordinates
-umap_coords <- Embeddings(combined, "umap")
-umap_coords <- umap_coords[colnames(cds), ]
-reducedDims(cds)[["UMAP"]] <- umap_coords
-
-# --- 3. Preprocess and learn trajectory ---------------------------------------
-cat("Preprocessing and learning trajectory...\n")
+# --- 3. Preprocess, batch-align, and learn trajectory --------------------------
+# NOTE: previously this script skipped monocle3's own batch alignment and
+# instead injected the Seurat/Harmony UMAP embedding directly into
+# reducedDims(cds)[["UMAP"]], so cluster_cells()/learn_graph() ran on a UMAP
+# that align_cds() never touched, even though the manuscript states align_cds()
+# was used. Batch-align natively within monocle3 instead, using "dataset"
+# (Qiu_2025_Adipose / Hu_2026_Healthy / Gurtner_2022_Blood_BM) as the alignment
+# group, so the trajectory is actually built on monocle3's own aligned space.
+cat("Preprocessing, aligning, and learning trajectory...\n")
 cds <- preprocess_cds(cds, num_dim = 30)
+cds <- align_cds(cds, alignment_group = "dataset")
+cds <- reduce_dimension(cds, reduction_method = "UMAP", preprocess_method = "Aligned")
 cds <- cluster_cells(cds, reduction_method = "UMAP")
 cds <- learn_graph(cds)
 
