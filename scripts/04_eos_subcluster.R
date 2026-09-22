@@ -18,6 +18,7 @@ suppressPackageStartupMessages({
   library(clustree)
   library(cluster)
   library(patchwork)
+  library(clue)  # solve_LSAP: Hungarian algorithm for cluster-correspondence assignment
 })
 
 # sc-SHC is optional — requires scry which may have system library issues
@@ -609,6 +610,71 @@ if (!is.null(old_eos_labels) && length(old_eos_labels) > 0) {
     cat("  Saved: cluster_correspondence_new_vs_old.csv\n")
     cat("  Saved: cluster_confusion_matrix.csv\n")
 
+    # Global one-to-one assignment (Hungarian algorithm / linear sum
+    # assignment) on the confusion matrix. dominant_map above is a per-row
+    # greedy pick and can (a) assign two new clusters to the same old
+    # cluster, and (b) have individual rows with low confidence even when an
+    # unambiguous best-overall assignment exists -- the documented historical
+    # correspondence for this dataset includes primary fractions as low as
+    # 34%/43%/44%. solve_LSAP finds the assignment that maximizes total
+    # overlap across ALL clusters simultaneously; per-cluster ambiguity is
+    # reported as a diagnostic (see Step 5c) rather than gating on any single
+    # row's fraction.
+    cat("\n  Computing globally optimal one-to-one assignment (Hungarian algorithm)...\n")
+    count_mat <- as.matrix(conf_mat)  # rows = new, cols = old (raw counts)
+    n_new <- nrow(count_mat)
+    n_old <- ncol(count_mat)
+    n_dim <- max(n_new, n_old)
+    # solve_LSAP requires a nonnegative cost matrix, so cost = max_val - count
+    # (maximizing overlap = minimizing this cost) rather than -count. Padding
+    # rows/cols beyond n_new/n_old are given cost = max_val, i.e. exactly as
+    # unattractive as a real zero-overlap entry (max_val - 0) -- they are
+    # only ever chosen when a real cluster has no better option left, which
+    # is itself informative (assigned_fraction == 0 below), not an
+    # artificially "free" assignment.
+    max_val <- max(count_mat)
+    cost_mat <- matrix(max_val, n_dim, n_dim)
+    cost_mat[seq_len(n_new), seq_len(n_old)] <- max_val - count_mat
+    assignment <- clue::solve_LSAP(cost_mat)
+
+    optimal_map <- data.frame(
+      new_cluster = rownames(count_mat),
+      stringsAsFactors = FALSE
+    )
+    optimal_map$assigned_old_cluster <- vapply(seq_len(n_new), function(i) {
+      j <- assignment[i]
+      if (j <= n_old) colnames(count_mat)[j] else NA_character_
+    }, character(1))
+    optimal_map$assigned_fraction <- vapply(seq_len(n_new), function(i) {
+      j <- assignment[i]
+      if (j <= n_old) prop_mat[i, j] else 0
+    }, numeric(1))
+    optimal_map$n_cells <- as.integer(rowSums(count_mat))
+
+    AMBIGUITY_THRESHOLD <- 0.5
+    cat("\n  Globally optimal assignment (new -> old):\n")
+    for (i in seq_len(nrow(optimal_map))) {
+      row <- optimal_map[i, ]
+      flag <- if (is.na(row$assigned_old_cluster)) {
+        " [UNASSIGNED: no old cluster left]"
+      } else if (row$assigned_fraction == 0) {
+        " [ZERO OVERLAP: assigned only because every other cluster was a better match for something else]"
+      } else if (row$assigned_fraction < AMBIGUITY_THRESHOLD) {
+        " [AMBIGUOUS: <50% of this cluster's cells agree, but still the best global assignment]"
+      } else {
+        ""
+      }
+      cat(sprintf("    %s (n=%d) -> %s (%.1f%%)%s\n",
+                  row$new_cluster, row$n_cells,
+                  ifelse(is.na(row$assigned_old_cluster), "NA", row$assigned_old_cluster),
+                  row$assigned_fraction * 100, flag))
+    }
+
+    write.csv(optimal_map,
+              file.path(supp_dir, "cluster_correspondence_optimal_assignment.csv"),
+              row.names = FALSE)
+    cat("  Saved: cluster_correspondence_optimal_assignment.csv\n")
+
     # Confusion matrix heatmap
     cat("  Plotting confusion matrix heatmap...\n")
     conf_df <- as.data.frame(conf_mat)
@@ -670,16 +736,27 @@ cat("\n========================================\n")
 cat("Step 5c: Rename clusters to match manuscript\n")
 cat("========================================\n\n")
 
-# Renaming must come from THIS run's validated correspondence (dominant_map,
-# barcode-matched against the old manuscript object in Step 5b above), not a
-# fixed historical permutation. Preprocessing now removes doublets before
-# DecontX, so cluster numbering -- and which old cluster each new cluster
-# corresponds to -- can genuinely change between runs; a stale hardcoded map
-# (as this used to be, e.g. "New C0 -> Old C1 (69%)") could silently mislabel
-# clusters if the correspondence shifted. Abort rather than guess.
+# Renaming must come from THIS run's validated correspondence (optimal_map,
+# the Hungarian-algorithm global one-to-one assignment computed in Step 5b
+# above from barcode matching against the old manuscript object), not a fixed
+# historical permutation. Preprocessing now removes doublets before DecontX,
+# so cluster numbering -- and which old cluster each new cluster corresponds
+# to -- can genuinely change between runs; a stale hardcoded map (as this
+# used to be, e.g. "New C0 -> Old C1 (69%)") could silently mislabel clusters
+# if the correspondence shifted. Abort rather than guess.
+#
+# A per-row minimum-confidence requirement (e.g. every cluster's dominant
+# match >= 50%) is NOT used as a gate: the documented historical
+# correspondence for this exact dataset includes primary fractions as low as
+# 34%/43%/44%, so that gate would abort on a known-good assignment. Instead,
+# the global assignment is validated as complete and one-to-one (guaranteed
+# by construction via solve_LSAP, given every cluster has some
+# correspondence data), and any individual low-confidence or zero-overlap
+# assignment is reported explicitly rather than silently accepted or used to
+# block the run.
 current_new_clusters <- sort(unique(as.character(eos$eos_cluster)))
 
-if (!exists("dominant_map") || is.null(dominant_map) || nrow(dominant_map) == 0) {
+if (!exists("optimal_map") || is.null(optimal_map) || nrow(optimal_map) == 0) {
   stop("Cannot rename clusters to manuscript numbering: no validated ",
        "correspondence to the old manuscript object was computed this run ",
        "(old object missing or no common barcodes -- see Step 5b above). ",
@@ -687,37 +764,38 @@ if (!exists("dominant_map") || is.null(dominant_map) || nrow(dominant_map) == 0)
        "may not match this run's cluster numbering.")
 }
 
-missing_clusters <- setdiff(current_new_clusters, dominant_map$new_cluster)
+missing_clusters <- setdiff(current_new_clusters, optimal_map$new_cluster)
 if (length(missing_clusters) > 0) {
   stop(sprintf(
-    "Cluster correspondence is incomplete: cluster(s) %s exist in this run ",
-    "but have no barcode-matched correspondence to the manuscript (likely ",
-    "no common barcodes for that cluster). Cannot safely rename.",
+    "Cluster correspondence is incomplete: cluster(s) %s exist in this run but have no barcode-matched correspondence to the manuscript (likely no common barcodes for that cluster). Cannot safely rename.",
     paste(missing_clusters, collapse = ", ")))
 }
 
-MIN_MAP_CONFIDENCE <- 0.5
-low_confidence <- dominant_map$new_cluster[dominant_map$primary_fraction < MIN_MAP_CONFIDENCE]
-if (length(low_confidence) > 0) {
+unassigned <- optimal_map$new_cluster[is.na(optimal_map$assigned_old_cluster)]
+if (length(unassigned) > 0) {
   stop(sprintf(
-    "Cluster correspondence to the manuscript is not confident enough to ",
-    "auto-rename: cluster(s) %s have primary_fraction < %.2f (see ",
-    "cluster_correspondence_new_vs_old.csv). Resolve manually before renaming.",
-    paste(low_confidence, collapse = ", "), MIN_MAP_CONFIDENCE))
+    "Cluster correspondence assignment is incomplete: cluster(s) %s have no old-cluster counterpart in the optimal one-to-one assignment (more new clusters than old ones?). See cluster_correspondence_optimal_assignment.csv. Cannot safely rename.",
+    paste(unassigned, collapse = ", ")))
 }
 
-if (any(duplicated(dominant_map$primary_old_cluster))) {
-  dup_old <- dominant_map$primary_old_cluster[duplicated(dominant_map$primary_old_cluster)]
+zero_overlap <- optimal_map$new_cluster[optimal_map$assigned_fraction == 0]
+if (length(zero_overlap) > 0) {
   stop(sprintf(
-    "Cluster correspondence to the manuscript is not one-to-one: old ",
-    "cluster(s) %s are the dominant match for more than one new cluster ",
-    "(see cluster_correspondence_new_vs_old.csv). Resolve manually before renaming.",
-    paste(unique(dup_old), collapse = ", ")))
+    "Cluster correspondence assignment is degenerate: cluster(s) %s were assigned an old cluster with ZERO shared barcodes (forced by the one-to-one constraint, not real correspondence). See cluster_correspondence_optimal_assignment.csv. Resolve manually before renaming.",
+    paste(zero_overlap, collapse = ", ")))
 }
 
-rename_map <- setNames(dominant_map$primary_old_cluster, dominant_map$new_cluster)
+ambiguous <- optimal_map$new_cluster[optimal_map$assigned_fraction < 0.5]
+if (length(ambiguous) > 0) {
+  cat(sprintf("  NOTE: cluster(s) %s have an ambiguous assignment (<50%% agreement) -- still the best global one-to-one assignment; see cluster_correspondence_optimal_assignment.csv.\n",
+              paste(ambiguous, collapse = ", ")))
+}
 
-cat("  Renaming map (Seurat -> Manuscript), derived from this run's barcode-matched correspondence:\n")
+stopifnot(!any(duplicated(optimal_map$assigned_old_cluster)))  # guaranteed by solve_LSAP; sanity check only
+
+rename_map <- setNames(optimal_map$assigned_old_cluster, optimal_map$new_cluster)
+
+cat("  Renaming map (Seurat -> Manuscript), derived from this run's globally optimal barcode-matched correspondence:\n")
 for (from in names(rename_map)) {
   cat(sprintf("    %s -> %s\n", from, rename_map[from]))
 }
@@ -892,17 +970,17 @@ if (!is.null(scshc_result)) {
   cat(sprintf("   (see scshc_summary.csv, scshc_pvalues.csv)\n"))
 }
 
-if (exists("dominant_map") && !is.null(dominant_map)) {
+if (exists("optimal_map") && !is.null(optimal_map)) {
   cat(sprintf("\n5. CLUSTER CORRESPONDENCE & RENAMING:\n"))
   cat(sprintf("   Old: no DecontX (10,698 eos) | New: DecontX + QC (7,475 eos)\n"))
   cat(sprintf("   ARI (before renaming) = %.4f\n", ari_old_new))
-  cat(sprintf("   Clusters renamed to match manuscript numbering:\n"))
+  cat(sprintf("   Clusters renamed to match manuscript numbering (Hungarian-algorithm global assignment):\n"))
   for (from in names(rename_map)) {
     cat(sprintf("     Seurat %s -> Manuscript %s\n", from, rename_map[from]))
   }
   cat(sprintf("\n   Final cluster sizes (manuscript labels):\n"))
   print(table(eos$eos_cluster))
-  cat(sprintf("   (see fig_cluster_correspondence.pdf, cluster_correspondence_new_vs_old.csv)\n"))
+  cat(sprintf("   (see fig_cluster_correspondence.pdf, cluster_correspondence_optimal_assignment.csv)\n"))
 }
 
 cat("\n================================================================\n")

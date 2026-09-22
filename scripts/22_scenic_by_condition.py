@@ -104,7 +104,14 @@ condition_col = "condition" if "condition" in cell_meta.columns else None
 sex_col = "sex" if "sex" in cell_meta.columns else None
 genotype_col = "genotype" if "genotype" in cell_meta.columns else None
 infection_col = "infection" if "infection" in cell_meta.columns else None
-sample_col = "sample" if "sample" in cell_meta.columns else "orig.ident"
+if "sample" in cell_meta.columns:
+    sample_col = "sample"
+elif "orig.ident" in cell_meta.columns:
+    sample_col = "orig.ident"
+else:
+    raise ValueError("cell metadata has neither 'sample' nor 'orig.ident' -- "
+                     "cannot identify biological replicates for sample-level "
+                     "statistics.")
 
 print(f"  Cluster column: {cluster_col}")
 print(f"  Condition column: {condition_col}")
@@ -227,6 +234,18 @@ def multipletests_bh(pvals):
     return adjusted
 
 
+def sample_means(mask, reg):
+    """Per-sample mean AUCell for `reg` over cells matching `mask` (a boolean
+    mask aligned to cell_meta/auc_mtx). Statistical tests below use this, not
+    per-cell values: testing across individual cells treats them as
+    independent biological replicates (pseudoreplication) and produces
+    artificially small p-values when the true n is a handful of samples per
+    group. Returns one value per sample present in `mask`."""
+    sub_meta = cell_meta.loc[mask]
+    sub_auc = auc_mtx.loc[mask, reg]
+    return sub_auc.groupby(sub_meta[sample_col].values).mean().values
+
+
 # ==============================================================================
 # Analysis 1: Regulon activity by condition (within each cluster)
 # ==============================================================================
@@ -247,10 +266,11 @@ for cl in clusters:
     print(f"  {cl}: {cl_mask.sum()} cells, {len(cl_conditions)} conditions")
 
     for reg in regulon_names:
-        groups = [cl_auc.loc[cl_meta[condition_col] == cond, reg].values
+        groups = [sample_means(cl_mask & (cell_meta[condition_col] == cond), reg)
                   for cond in cl_conditions]
-        # Filter out groups with < 3 cells
-        valid_groups = [g for g in groups if len(g) >= 3]
+        # Filter out groups with < 2 samples (the smallest replicate groups
+        # in this design, e.g. infected conditions, have 2 samples)
+        valid_groups = [g for g in groups if len(g) >= 2]
         if len(valid_groups) < 2:
             continue
 
@@ -265,7 +285,7 @@ for cl in clusters:
             "kruskal_stat": stat,
             "p_value": pval,
             "n_conditions": len(valid_groups),
-            "n_cells": sum(len(g) for g in valid_groups)
+            "n_samples": sum(len(g) for g in valid_groups)
         })
 
 kw_df = pd.DataFrame(all_kw_results)
@@ -298,13 +318,12 @@ if len(kw_df) > 0:
         reg = row["regulon"]
         cl_mask = cell_meta[cluster_col] == cl
         cl_meta_sub = cell_meta.loc[cl_mask]
-        cl_auc_sub = auc_mtx.loc[cl_mask]
 
         cl_conditions = sorted(cl_meta_sub[condition_col].unique())
         for cond1, cond2 in combinations(cl_conditions, 2):
-            g1 = cl_auc_sub.loc[cl_meta_sub[condition_col] == cond1, reg].values
-            g2 = cl_auc_sub.loc[cl_meta_sub[condition_col] == cond2, reg].values
-            if len(g1) < 3 or len(g2) < 3:
+            g1 = sample_means(cl_mask & (cell_meta[condition_col] == cond1), reg)
+            g2 = sample_means(cl_mask & (cell_meta[condition_col] == cond2), reg)
+            if len(g1) < 2 or len(g2) < 2:
                 continue
             try:
                 stat, pval = stats.mannwhitneyu(g1, g2, alternative="two-sided")
@@ -544,10 +563,10 @@ for comp in comparisons:
     comp_name = comp["name"]
 
     for reg in regulon_names:
-        wt_vals = auc_mtx.loc[comp["wt_mask"], reg].values
-        ko_vals = auc_mtx.loc[comp["ko_mask"], reg].values
+        wt_vals = sample_means(comp["wt_mask"], reg)
+        ko_vals = sample_means(comp["ko_mask"], reg)
 
-        if len(wt_vals) < 3 or len(ko_vals) < 3:
+        if len(wt_vals) < 2 or len(ko_vals) < 2:
             continue
 
         try:

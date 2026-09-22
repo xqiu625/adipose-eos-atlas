@@ -310,6 +310,7 @@ def main():
     for m in method_list:
         if m not in METHODS:
             log(f"  ! unknown method '{m}', skipping")
+            failed_methods.append(m)
             continue
         log(f"Running: {m}")
         t0 = time.time()
@@ -369,6 +370,10 @@ def main():
     except Exception as e:
         log(f"  ! scib-metrics FAILED: {type(e).__name__}: {e}")
         log("    (per-method embeddings + cluster-recovery CSV are still saved)")
+        # scib-metrics produces this script's principal output (the batch-
+        # correction/bio-conservation scores) -- its failure must not let the
+        # run exit 0 with integration_benchmark_metrics*.csv missing.
+        failed_methods.append("scib-metrics (batch-correction/bio-conservation scoring)")
 
     # ── UMAP grid per method ─────────────────────────────────────────────────
     log("Building per-method UMAP grid")

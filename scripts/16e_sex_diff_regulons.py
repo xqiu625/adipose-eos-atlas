@@ -61,16 +61,29 @@ print("=" * 60)
 # =============================================================================
 print("\nLoading per-cluster AUCell scores...")
 auc_parts = []
+union_regulons = set()
 for cl in EOS_CLUSTERS:
     auc_path = os.path.join(SCENIC_DIR, cl, "auc_matrix.csv")
     if os.path.exists(auc_path):
         df = pd.read_csv(auc_path, index_col=0)
         print(f"  {cl}: {df.shape[0]} cells x {df.shape[1]} regulons")
+        union_regulons |= set(df.columns)
         auc_parts.append(df)
     else:
         print(f"  WARNING: {auc_path} not found")
-auc = pd.concat(auc_parts, join="outer").fillna(0.0)
-print(f"  Combined: {auc.shape[0]} cells x {auc.shape[1]} regulons")
+
+# SCENIC is inferred independently per cluster, so each cluster's regulon set
+# differs. An outer join + fillna(0.0) would record "not inferred in this
+# cluster's independently fitted network" as if it were a real AUCell score
+# of zero -- indistinguishable from "scored and found inactive" -- which
+# systematically makes regulons look cluster-specific. Use an inner join
+# instead: keep only regulons that were actually scored in every cluster, so
+# every remaining value is a genuine AUCell score, not an inference artifact.
+auc = pd.concat(auc_parts, join="inner")
+print(f"  Combined: {auc.shape[0]} cells x {auc.shape[1]} regulons "
+      f"(inner join: regulons scored in ALL {len(EOS_CLUSTERS)} clusters; "
+      f"{len(union_regulons)} total distinct regulons existed across clusters, "
+      f"{auc.shape[1]} survive the intersection)")
 
 print("Loading metadata...")
 meta = pd.read_csv(META_FILE)
@@ -339,9 +352,26 @@ sb_ax.axis("off")
 ax.set_zorder(1)
 ax.patch.set_alpha(0)   # transparent background so sidebar shows through
 
-# Title
-ax.set_title("Eosinophil Sex Differential Regulons",
-             fontsize=13, fontweight="bold", pad=12)
+# Title. With FIXED_FEMALE/FIXED_MALE set, this panel is a preselected,
+# direction-filtered visualization, NOT a statistically supported
+# differential-expression result: at n=3 vs 3 samples the Mann-Whitney test
+# above cannot reach even raw p<0.05 (exact two-tailed floor of 0.1), so
+# every q-value here is nonsignificant regardless of effect size. Label the
+# figure accordingly rather than calling it "differential" or "validated" --
+# see res_by_tf/qval for the actual (nonsignificant) statistics.
+using_fixed_tfs = FIXED_FEMALE is not None and FIXED_MALE is not None
+if using_fixed_tfs:
+    title = "Eosinophil Sex-Associated Regulons (preselected, descriptive)"
+    caption = ("Preselected TFs shown by direction of effect only "
+              f"(n={n_f} vs {n_m} samples; q-values nonsignificant at this "
+              "sample size -- not a statistical differential-expression claim)")
+else:
+    title = "Eosinophil Sex Differential Regulons (data-driven, FDR q<0.05)"
+    caption = f"Data-driven selection, FDR q < {PVAL_THRESH}"
+
+ax.set_title(title, fontsize=12, fontweight="bold", pad=20)
+ax.text(0.5, 1.06, caption, transform=ax.transAxes,
+        ha="center", va="bottom", fontsize=7.5, style="italic", color="dimgrey")
 
 # Colorbar
 cbar_ax = fig.add_axes([ax_left + ax_width + 0.02,
@@ -355,13 +385,17 @@ cbar.ax.tick_params(labelsize=8)
 
 # Legend
 import matplotlib.patches as mpatches
-female_patch = mpatches.Patch(color=FEMALE_COLOR, label="Female-enriched in WT")
-male_patch   = mpatches.Patch(color=MALE_COLOR,   label="Male-enriched in WT")
+female_label = ("Higher in WT♀ (direction only)" if using_fixed_tfs
+               else "Female-enriched in WT (FDR q<0.05)")
+male_label = ("Higher in WT♂ (direction only)" if using_fixed_tfs
+             else "Male-enriched in WT (FDR q<0.05)")
+female_patch = mpatches.Patch(color=FEMALE_COLOR, label=female_label)
+male_patch   = mpatches.Patch(color=MALE_COLOR,   label=male_label)
 ax.legend(handles=[female_patch, male_patch], fontsize=8,
           loc="lower right", bbox_to_anchor=(1.0, -0.22),
           frameon=False)
 
-suffix  = "_validated" if (FIXED_FEMALE is not None) else "_datadriven"
+suffix  = "_preselected_descriptive" if using_fixed_tfs else "_datadriven"
 out_pdf = os.path.join(FIG_DIR, f"Fig5_sex_diff_regulons{suffix}.pdf")
 fig.savefig(out_pdf, dpi=300, bbox_inches="tight")
 plt.close(fig)

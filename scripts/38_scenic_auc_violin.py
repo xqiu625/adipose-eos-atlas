@@ -22,6 +22,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
+from statsmodels.stats.multitest import multipletests
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -335,6 +336,23 @@ for tf in all_tfs_ordered:
             stat_rows[-1][f"WTvsKO_{sex_label}_n"] = f"{len(wt_vals)}v{len(ko_vals)}"
 
 stat_df = pd.DataFrame(stat_rows)
+
+# BH-FDR correction, each test family (omnibus Kruskal-Wallis, and each
+# pairwise WT-vs-KO comparison) corrected separately across all regulons
+# tested in that family -- raw p-values alone don't account for the
+# multiple-testing burden of testing every selected regulon.
+def _add_fdr(df, pcol, fdrcol):
+    valid = df[pcol].notna()
+    df[fdrcol] = np.nan
+    if valid.any():
+        df.loc[valid, fdrcol] = multipletests(df.loc[valid, pcol], method="fdr_bh")[1]
+
+_add_fdr(stat_df, "kruskal_p", "kruskal_fdr")
+for sex_label in ["Female", "Male"]:
+    pcol = f"WTvsKO_{sex_label}_p"
+    if pcol in stat_df.columns:
+        _add_fdr(stat_df, pcol, f"WTvsKO_{sex_label}_fdr")
+
 stat_csv = os.path.join(BASE, "scenic", "38_regulon_condition_stats.csv")
 stat_df.to_csv(stat_csv, index=False)
 print(f"  Saved: {stat_csv}")

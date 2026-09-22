@@ -74,10 +74,17 @@ for cl in EOS_CLUSTERS:
         eos_meta[cl] = pd.Series(cl, index=df.index)
         print(f"  {cl}: {df.shape[0]} cells")
 
-# Merge all eos cells
-all_eos_auc = pd.concat(eos_data.values(), join="outer").fillna(0)
+# Merge all eos cells. SCENIC is inferred independently per cluster, so each
+# cluster's regulon set differs; an outer join + fillna(0) would record "not
+# inferred in this cluster's independently fitted network" as a real AUCell
+# score of zero, indistinguishable from "scored and found inactive" -- which
+# systematically makes regulons look cluster-specific. Inner join instead:
+# keep only regulons scored in every cluster, so every remaining value is a
+# genuine AUCell score.
+all_eos_auc = pd.concat(eos_data.values(), join="inner")
 all_eos_group = pd.concat(eos_meta.values())
-print(f"  Total eos: {len(all_eos_auc)} cells")
+print(f"  Total eos: {len(all_eos_auc)} cells, {all_eos_auc.shape[1]} regulons "
+      f"scored in all {len(EOS_CLUSTERS)} clusters")
 
 # Compute cluster means and select top regulons
 all_tfs = sorted(all_eos_auc.columns)

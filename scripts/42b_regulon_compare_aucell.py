@@ -82,9 +82,16 @@ for cl in EOS_CLUSTERS:
         eos_group_parts.append(pd.Series(cl, index=df.index))
         print(f"  {cl}: {df.shape[0]} cells x {df.shape[1]} regulons")
 
-qiu_auc = pd.concat(eos_auc_parts, join="outer").fillna(0)
+# SCENIC is inferred independently per cluster, so each cluster's regulon set
+# differs; an outer join + fillna(0) would record "not inferred in this
+# cluster's independently fitted network" as a real AUCell score of zero,
+# indistinguishable from "scored and found inactive" -- which systematically
+# makes regulons look cluster-specific. Inner join instead: keep only
+# regulons scored in every cluster.
+qiu_auc = pd.concat(eos_auc_parts, join="inner")
 qiu_group = pd.concat(eos_group_parts)
-print(f"  Total Qiu: {len(qiu_auc)} cells, {qiu_auc.shape[1]} regulons")
+print(f"  Total Qiu: {len(qiu_auc)} cells, {qiu_auc.shape[1]} regulons "
+      f"scored in all {len(EOS_CLUSTERS)} clusters")
 
 # =============================================================================
 # 2. Load Hu AUCell (combined SCENIC, split by depot)
@@ -125,7 +132,10 @@ else:
     if not hu_auc_parts:
         print("  ERROR: No Hu AUCell data found.")
         exit(1)
-    hu_auc = pd.concat(hu_auc_parts, join="outer").fillna(0)
+    # Same reasoning as the Qiu per-cluster merge above: inner join, not
+    # outer + fillna(0), so a regulon not inferred for a given depot's
+    # independently fitted network isn't recorded as a real zero score.
+    hu_auc = pd.concat(hu_auc_parts, join="inner")
     hu_group = pd.concat(hu_group_parts)
 
 print(f"  Total Hu: {len(hu_auc)} cells, {hu_auc.shape[1]} regulons")

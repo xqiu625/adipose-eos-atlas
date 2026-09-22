@@ -47,6 +47,7 @@ org.Mm.eg.db,NA
 RANN,NA
 cluster,NA
 reticulate,NA
+clue,NA
 
 # Packages listed as NA had no pinned version in methods.md/README at the
 # time this file was generated -- fill in from the actual HPCC library
