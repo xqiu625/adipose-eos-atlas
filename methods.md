@@ -21,7 +21,7 @@ Eosinophils were subset and re-processed *de novo* (NormalizeData, FindVariableF
 3. **Subsampling stability** — ARI over 100 iterations of 80% subsampling.
 4. **sc-SHC** significance testing (Grabski et al., *Nat Methods* 2023).
 
-One small cluster (n = 14 cells) was excluded due to its low cell number, yielding **six final eosinophil clusters (C0–C5)**. Cluster markers were identified using FindAllMarkers (min.pct = 0.25, logfc.threshold = 0.25, Wilcoxon). [`04_eos_subcluster.R`, `04b_rename_clusters.R`, `18_clustree_resolution.R`]
+One small cluster (n = 14 cells) was excluded due to its low cell number, yielding **six final eosinophil clusters (C0–C5)**. Cluster markers were identified using FindAllMarkers (min.pct = 0.25, logfc.threshold = 0.25, Wilcoxon). Cluster renaming to manuscript numbering is derived each run from barcode-matched correspondence to the original manuscript object (`04_eos_subcluster.R`, Step 5c); `04b_rename_clusters.R` previously duplicated this with an independent hardcoded map and is retired. [`04_eos_subcluster.R`, `18_clustree_resolution.R`]
 
 ## Batch Effect Assessment and Harmony Sensitivity
 Samples were multiplexed using the 10x Genomics Flex probe-based assay (4 samples per GEM reaction), which eliminates the primary technical batch sources at the experimental level (PMIDs 38612639, 35927335). Within-study Harmony integration was tested as a sensitivity analysis (Supplementary Fig. S7) but disrupted cluster structure (ARI = 0.28, mean Jaccard index = 0.54) because GEM reaction is partially confounded with biological condition; integration cannot distinguish these and removes biological signal along with technical noise (PMIDs 34949812, 31948481). Three independent analyses confirmed clusters are not batch-driven: (i) every cluster contains cells from all six experimental conditions, (ii) replicates of the same condition processed in different GEM reactions show concordant cluster proportions, (iii) per-cluster condition composition tracks biological variables rather than technical covariates. [`19_batch_effect_evidence.R`]
@@ -39,7 +39,7 @@ Four comparisons:
 - **Panel D** WT Female vs WT Male (n = 3 vs 3)
 - **Panel E** KO Male vs WT Male (n = 3 vs 3)
 - **Panel F** KO vs WT, all females, multifactor (n = 5 vs 5)
-- **Panel G** Infected vs Naive, all females, multifactor (n = 4 vs 4)
+- **Panel G** Infected vs Naive, all females, multifactor (n = 4 vs 6)
 
 Single-cell-level `FindMarkers` (Wilcoxon) was used only for identifying cluster-defining markers, not for condition-level inference. [`05_eos_pseudobulk.R`, `05b_pseudobulk_methods.R`, `07c_deg_pseudobulk.R`, `25_fig1_revision_v3.R`, `27_deg_excel_export.R`]
 

@@ -52,11 +52,10 @@ COND_SHORT = {
 TOP_PER_CLUSTER = 3   # top regulons per cluster to plot
 MIN_AUC         = 0.02
 
-EXCLUDE = {
-    "Erf", "Pura", "Zbtb14", "Rfx5", "Smad3", "Jund", "Bclaf1",
-    "Crem", "Atf4", "Etv5", "Zbtb7b", "Sp3", "Elk1", "Cebpb", "Max",
-    "Atf3", "Ikzf1", "Atf1", "Cux1", "Stat6", "Elk3"
-}
+# No hand-picked TF exclusion list here (this script has no regulon
+# target-gene-set sizes available to apply an objective size-based filter,
+# same as 16e_sex_diff_regulons.py) -- selection below is MIN_AUC + uniqueness
+# only.
 
 print("=" * 60)
 print("38_scenic_auc_violin.py")
@@ -96,9 +95,25 @@ auc = auc.loc[common]
 meta = meta.loc[common]
 print(f"  Aligned: {len(common)} cells")
 
+# Resolve the per-sample identity column: 14_scenic_export.R renames
+# orig.ident -> "sample" in this CSV; fall back to "orig.ident" for older
+# exports. Previously this script referenced "orig.ident" directly with a
+# silent fallback to the literal string "unknown" wherever it was missing,
+# which would collapse the per-sample dot overlay (and any per-sample
+# statistic) into a single group per condition with no warning.
+if "sample" in meta.columns:
+    SAMPLE_COL = "sample"
+elif "orig.ident" in meta.columns:
+    SAMPLE_COL = "orig.ident"
+else:
+    raise ValueError("eos_cell_metadata.csv has neither 'sample' nor "
+                     "'orig.ident' -- cannot identify biological replicates "
+                     "for per-sample statistics/plotting.")
+print(f"  Using '{SAMPLE_COL}' as the sample/replicate identity column")
+
 # Derive condition (strip trailing _N replicate)
 if "condition" not in meta.columns:
-    meta["condition"] = meta["orig.ident"].str.replace(r"_\d+$", "", regex=True)
+    meta["condition"] = meta[SAMPLE_COL].str.replace(r"_\d+$", "", regex=True)
 
 # Keep only conditions in our order
 valid = meta["condition"].isin(COND_ORDER)
@@ -133,8 +148,6 @@ for cl in EOS_CLUSTERS:
         continue
     scores = []
     for tf in auc.columns:
-        if tf in EXCLUDE:
-            continue
         max_val = mean_df.loc[tf, cl]
         if max_val < MIN_AUC:
             continue
@@ -173,7 +186,7 @@ for cl in EOS_CLUSTERS:
         plot_df = pd.DataFrame({
             "AUC": auc[tf].values,
             "condition": meta["condition"].values,
-            "sample": meta["orig.ident"].values if "orig.ident" in meta.columns else "unknown",
+            "sample": meta[SAMPLE_COL].values,
         })
         plot_df["cond_short"] = plot_df["condition"].map(COND_SHORT)
         plot_df["cond_short"] = pd.Categorical(
@@ -238,7 +251,7 @@ if n_total > 0:
             plot_df = pd.DataFrame({
                 "AUC": auc[tf].values,
                 "condition": meta["condition"].values,
-                "sample": meta["orig.ident"].values if "orig.ident" in meta.columns else "unknown",
+                "sample": meta[SAMPLE_COL].values,
             })
             plot_df["cond_short"] = plot_df["condition"].map(COND_SHORT)
 
@@ -272,13 +285,27 @@ if n_total > 0:
 # =============================================================================
 print("\nStep 6: Statistical tests...")
 
+# Per-sample mean AUCell ("pseudobulk" summary), not per-cell values: testing
+# across individual cells treats them as independent biological replicates
+# (pseudoreplication) when there are only a handful of samples per condition,
+# and produces artificially small p-values. The unit of replication is the
+# sample.
+auc_sample = auc.copy()
+auc_sample["__sample__"] = meta[SAMPLE_COL].values
+auc_sample["__condition__"] = meta["condition"].values
+sample_means = (auc_sample.groupby(["__condition__", "__sample__"])
+                 .mean(numeric_only=True))
+sample_cond = sample_means.index.get_level_values("__condition__")
+
 stat_rows = []
 for tf in all_tfs_ordered:
     groups = []
+    group_ns = []
     for cond in COND_ORDER:
-        mask = meta["condition"] == cond
-        if mask.sum() > 0:
-            groups.append(auc.loc[mask, tf].values)
+        vals = sample_means.loc[sample_cond == cond, tf].values
+        if len(vals) > 0:
+            groups.append(vals)
+            group_ns.append(len(vals))
 
     if len(groups) >= 2:
         h_stat, p_val = stats.kruskal(*groups)
@@ -289,23 +316,23 @@ for tf in all_tfs_ordered:
     stat_rows.append({
         "regulon": tf, "cluster": cl,
         "kruskal_H": h_stat, "kruskal_p": p_val,
+        "n_samples_per_condition": ",".join(str(n) for n in group_ns),
     })
 
-    # Pairwise: WT vs KO within each sex
+    # Pairwise: WT vs KO within each sex, on per-sample means
     for sex_label, wt_cond, ko_cond in [
         ("Female", "WT_Female_HFD", "KO_Female_HFD"),
         ("Male",   "WT_Male_HFD",   "KO_Male_HFD"),
     ]:
-        wt_mask = meta["condition"] == wt_cond
-        ko_mask = meta["condition"] == ko_cond
-        if wt_mask.sum() > 0 and ko_mask.sum() > 0:
+        wt_vals = sample_means.loc[sample_cond == wt_cond, tf].values
+        ko_vals = sample_means.loc[sample_cond == ko_cond, tf].values
+        if len(wt_vals) > 0 and len(ko_vals) > 0:
             u_stat, u_p = stats.mannwhitneyu(
-                auc.loc[wt_mask, tf].values,
-                auc.loc[ko_mask, tf].values,
-                alternative="two-sided"
+                wt_vals, ko_vals, alternative="two-sided"
             )
             stat_rows[-1][f"WTvsKO_{sex_label}_U"] = u_stat
             stat_rows[-1][f"WTvsKO_{sex_label}_p"] = u_p
+            stat_rows[-1][f"WTvsKO_{sex_label}_n"] = f"{len(wt_vals)}v{len(ko_vals)}"
 
 stat_df = pd.DataFrame(stat_rows)
 stat_csv = os.path.join(BASE, "scenic", "38_regulon_condition_stats.csv")

@@ -195,6 +195,14 @@ cat("\n============================================================\n")
 cat("Pseudobulk DESeq2 DEG Analysis\n")
 cat("============================================================\n")
 
+# Failures are collected (not just printed) so the script can abort with a
+# nonzero exit before the multi-factor section and MAST-comparison figures
+# run on top of incomplete results. Previously each comparison's error was
+# caught, printed, and the loop just moved on -- the script would still
+# finish and print "completed successfully" even if one or more manuscript
+# result files were never written.
+comparison_failures <- character()
+
 for (comp in comparisons) {
   cat(sprintf("\n=== Comparison: %s ===\n", comp$desc))
 
@@ -242,7 +250,20 @@ for (comp in comparisons) {
 
   }, error = function(e) {
     cat(sprintf("  ERROR in comparison %s: %s\n", comp$name, e$message))
+    comparison_failures <<- c(comparison_failures,
+                              sprintf("%s: %s", comp$name, e$message))
   })
+}
+
+if (length(comparison_failures) > 0) {
+  cat("\n============================================================\n")
+  cat(sprintf("FAILED: %d/%d comparisons did not complete:\n",
+              length(comparison_failures), length(comparisons)))
+  for (f in comparison_failures) cat(sprintf("  - %s\n", f))
+  cat("============================================================\n")
+  stop(sprintf(
+    "%d pseudobulk DEG comparison(s) failed; aborting before the multi-factor model and MAST comparison run on incomplete results.",
+    length(comparison_failures)))
 }
 
 # ==============================================================================

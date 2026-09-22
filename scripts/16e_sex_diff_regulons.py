@@ -140,19 +140,39 @@ for sex, geno in GROUPS:
 # =============================================================================
 print("\nTesting WT Female vs WT Male...")
 
-wt_f = auc.loc[group_cells[("Female", "WT")]]
-wt_m = auc.loc[group_cells[("Male",   "WT")]]
+if "sample" not in meta.columns:
+    raise ValueError("Expected a 'sample' column in eos_cell_metadata.csv -- "
+                     "testing must be done on per-sample summaries, not "
+                     "individual cells (see below).")
+
+wt_f_cells = group_cells[("Female", "WT")]
+wt_m_cells = group_cells[("Male",   "WT")]
+wt_f_samples = sorted(meta.loc[wt_f_cells, "sample"].unique())
+wt_m_samples = sorted(meta.loc[wt_m_cells, "sample"].unique())
+print(f"  WT Female samples ({len(wt_f_samples)}): {wt_f_samples}")
+print(f"  WT Male samples   ({len(wt_m_samples)}): {wt_m_samples}")
+
+# Per-sample mean AUCell ("pseudobulk" summary), not per-cell values: with
+# only ~3 biological samples per sex, testing across the thousands of
+# individual cells instead treats cells as independent replicates
+# (pseudoreplication) and produces artificially small p-values. The unit of
+# replication here is the sample.
+auc_sample = auc.copy()
+auc_sample["sample"] = meta.loc[auc.index, "sample"].values
+wt_f_sample_means = auc_sample.loc[wt_f_cells].groupby("sample").mean(numeric_only=True)
+wt_m_sample_means = auc_sample.loc[wt_m_cells].groupby("sample").mean(numeric_only=True)
 
 results = []
 for tf in auc.columns:
-    f_vals = wt_f[tf].values
-    m_vals = wt_m[tf].values
+    f_vals = wt_f_sample_means[tf].values
+    m_vals = wt_m_sample_means[tf].values
     _, pval = stats.mannwhitneyu(f_vals, m_vals, alternative="two-sided")
     mean_f = f_vals.mean()
     mean_m = m_vals.mean()
     fc = (mean_f + 1e-6) / (mean_m + 1e-6)
     results.append({"tf": tf, "pval": pval, "mean_f": mean_f,
-                    "mean_m": mean_m, "fc": fc})
+                    "mean_m": mean_m, "fc": fc,
+                    "n_samples_f": len(f_vals), "n_samples_m": len(m_vals)})
 
 res = pd.DataFrame(results)
 res["log2fc"] = np.log2(res["fc"])
@@ -166,16 +186,60 @@ if valid.any():
 
 sig = res[res["qval"] < PVAL_THRESH].copy()
 print(f"  Significant regulons (FDR q < {PVAL_THRESH}): {len(sig)}")
+n_f, n_m = len(wt_f_samples), len(wt_m_samples)
+if min(n_f, n_m) <= 3:
+    print(f"  NOTE: Mann-Whitney on n={n_f} vs n={n_m} samples has a small-n "
+          f"exact two-tailed p-value floor (e.g. 0.1 for a balanced 3-vs-3 "
+          f"comparison) that may sit above {PVAL_THRESH} regardless of effect "
+          f"size -- see per-TF pval/qval below rather than expecting 'sig' "
+          f"to be populated.")
+
+res_by_tf = res.set_index("tf")
+
+
+def _validate_fixed_tfs(tf_list, expect_female_higher):
+    """Predeclared selection criteria for the fixed/"validated" TF list: the
+    direction of effect in the CURRENT run's sample-level data must match the
+    claimed direction. This is the hard gate (always computable, unlike
+    nominal significance at n=3 vs n=3 -- see NOTE above); failures are
+    dropped and reported explicitly rather than displayed anyway."""
+    passed, failed = [], []
+    for tf in tf_list:
+        if tf not in res_by_tf.index:
+            failed.append((tf, "not found in tested regulons"))
+            continue
+        row = res_by_tf.loc[tf]
+        direction_ok = (row["mean_f"] > row["mean_m"]) == expect_female_higher
+        if direction_ok:
+            passed.append(tf)
+        else:
+            failed.append((tf, f"direction mismatch (mean_f={row['mean_f']:.4f}, "
+                               f"mean_m={row['mean_m']:.4f}, qval={row['qval']:.4f})"))
+    return passed, failed
+
 
 if FIXED_FEMALE is not None and FIXED_MALE is not None:
-    # Use manually specified TFs from reference figure
+    # Use manually specified TFs from reference figure, intersected with the
+    # predeclared direction criterion computed from this run's data.
     available = set(auc.columns)
-    female_top = [tf for tf in FIXED_FEMALE if tf in available]
-    male_top   = [tf for tf in FIXED_MALE   if tf in available]
+    fixed_female_avail = [tf for tf in FIXED_FEMALE if tf in available]
+    fixed_male_avail   = [tf for tf in FIXED_MALE   if tf in available]
     missing = [tf for tf in FIXED_FEMALE + FIXED_MALE if tf not in available]
     if missing:
         print(f"  WARNING: TFs not found in AUCell data: {missing}")
-    print(f"  Using fixed TFs — Female: {female_top}, Male: {male_top}")
+
+    female_top, female_failed = _validate_fixed_tfs(fixed_female_avail, expect_female_higher=True)
+    male_top,   male_failed   = _validate_fixed_tfs(fixed_male_avail,   expect_female_higher=False)
+
+    for tf, reason in female_failed + male_failed:
+        print(f"  EXCLUDED fixed TF {tf}: {reason}")
+
+    print(f"  Using fixed TFs (direction-validated against this run) — "
+          f"Female: {female_top}, Male: {male_top}")
+    for tf in female_top + male_top:
+        row = res_by_tf.loc[tf]
+        print(f"    {tf}: mean_f={row['mean_f']:.4f}, mean_m={row['mean_m']:.4f}, "
+              f"pval={row['pval']:.4f}, qval={row['qval']:.4f}")
 else:
     female_top = (sig[sig["log2fc"] > 0]
                   .nlargest(TOP_FEMALE, "log2fc")["tf"].tolist())

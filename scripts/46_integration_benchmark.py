@@ -45,6 +45,7 @@
 
 import argparse
 import gc
+import importlib.util
 import sys
 import time
 import warnings
@@ -215,6 +216,36 @@ METHODS = {
     "bbknn": run_bbknn,
 }
 
+# Top-level package each method needs, for a preflight availability check.
+# environment.yml only covers the core (unintegrated/combat/harmony) path;
+# scanorama, scvi-tools (scvi/scanvi), and bbknn need separate environments
+# (scvi-tools in particular conflicts with the core env's anndata pin -- see
+# git history). None of that is a reason to let a partial run report success:
+# this preflight check, plus the exit-code check at the end of main(), make a
+# silently incomplete benchmark impossible to mistake for a complete one.
+METHOD_REQUIRES = {
+    "unintegrated": None,
+    "combat": None,          # part of scanpy itself
+    "harmony": "harmonypy",
+    "scanorama": "scanorama",
+    "scvi": "scvi",
+    "scanvi": "scvi",
+    "bbknn": "bbknn",
+}
+
+
+def check_method_availability(method_list):
+    """Report which requested methods have their required package importable.
+    Returns (available, unavailable) method-name lists."""
+    available, unavailable = [], []
+    for m in method_list:
+        pkg = METHOD_REQUIRES.get(m)
+        if pkg is None or importlib.util.find_spec(pkg) is not None:
+            available.append(m)
+        else:
+            unavailable.append((m, pkg))
+    return available, unavailable
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Main
@@ -230,6 +261,24 @@ def main():
         method_list = list(METHODS.keys())
     else:
         method_list = [m.strip() for m in args.methods.split(",") if m.strip()]
+
+    # Preflight: report method availability BEFORE the expensive preprocessing
+    # runs, rather than discovering a missing package deep into a long job.
+    # This does not abort by itself (this script's purpose is comparing
+    # whatever methods are available), but every unavailable method is
+    # recorded and reflected in the exit code at the end of main() -- a
+    # partial run can no longer look identical to a complete one.
+    available, unavailable = check_method_availability(method_list)
+    failed_methods = []
+    if unavailable:
+        log("Preflight: the following requested methods are UNAVAILABLE "
+            "(package not importable in this environment) and will be skipped:")
+        for m, pkg in unavailable:
+            log(f"  ! {m}: requires '{pkg}' (not installed)")
+        failed_methods.extend(m for m, _ in unavailable)
+    log(f"Preflight: {len(available)}/{len(method_list)} requested methods available: "
+        f"{available}")
+    method_list = available
 
     log(f"Loading {args.h5ad}")
     adata = sc.read_h5ad(args.h5ad)
@@ -270,6 +319,7 @@ def main():
             log(f"  {m} -> obsm['{key}']  ({time.time() - t0:.0f}s)")
         except Exception as e:  # one bad method must not kill the run
             log(f"  ! {m} FAILED: {type(e).__name__}: {e}")
+            failed_methods.append(m)
 
     if "_scvi_model" in adata.uns:
         del adata.uns["_scvi_model"]
@@ -360,6 +410,12 @@ def main():
     adata.write_h5ad(outdir / "integrated_eos_benchmark.h5ad")
 
     log("Done. Methods run: " + ", ".join(embeddings.keys()))
+
+    if failed_methods:
+        log(f"INCOMPLETE: {len(failed_methods)} requested method(s) did not "
+            f"produce an embedding: {failed_methods}")
+        log("Exiting nonzero -- do not treat this as a completed benchmark.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ This file maps each published figure panel to the script(s) that produce it. Scr
 
 | Panel | Description | Script(s) |
 |-------|-------------|-----------|
-| 2A | Eosinophil UMAP (7,461 cells, six clusters C0–C5) | `04_eos_subcluster.R`, `04b_rename_clusters.R` |
+| 2A | Eosinophil UMAP (7,461 cells, six clusters C0–C5) | `04_eos_subcluster.R` (`04b_rename_clusters.R` is retired -- do not run) |
 | 2B | Dot plot of top-6 signature genes per cluster | `31_fig2B_dotplot.R` |
 | 2C | Hierarchical GO BP enrichment heatmap of cluster markers | `08_pathway_eos_clusters.R` |
 | 2D | Stacked bar of eos subcluster proportions by group | `20_compositional_analysis.R` (sccomp), `43_composition_biorep.R` (per-biorep supplement) |

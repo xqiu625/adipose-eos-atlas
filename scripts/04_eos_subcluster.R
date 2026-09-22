@@ -670,26 +670,54 @@ cat("\n========================================\n")
 cat("Step 5c: Rename clusters to match manuscript\n")
 cat("========================================\n\n")
 
-# Mapping: new Seurat label -> manuscript label (based on dominant old cluster)
-# New C0 -> Old C1 (69%) => rename to C1
-# New C1 -> Old C0 (34%) => rename to C0
-# New C2 -> Old C4 (44%) => rename to C4
-# New C3 -> Old C2 (60%) => rename to C2
-# New C4 -> Old C5 (82%) => rename to C5
-# New C5 -> Old C3 (43%) => rename to C3
-# New C6 -> Old C6 (100%) => rename to C6
+# Renaming must come from THIS run's validated correspondence (dominant_map,
+# barcode-matched against the old manuscript object in Step 5b above), not a
+# fixed historical permutation. Preprocessing now removes doublets before
+# DecontX, so cluster numbering -- and which old cluster each new cluster
+# corresponds to -- can genuinely change between runs; a stale hardcoded map
+# (as this used to be, e.g. "New C0 -> Old C1 (69%)") could silently mislabel
+# clusters if the correspondence shifted. Abort rather than guess.
+current_new_clusters <- sort(unique(as.character(eos$eos_cluster)))
 
-rename_map <- c(
-  "C0" = "C1",
-  "C1" = "C0",
-  "C2" = "C4",
-  "C3" = "C2",
-  "C4" = "C5",
-  "C5" = "C3",
-  "C6" = "C6"
-)
+if (!exists("dominant_map") || is.null(dominant_map) || nrow(dominant_map) == 0) {
+  stop("Cannot rename clusters to manuscript numbering: no validated ",
+       "correspondence to the old manuscript object was computed this run ",
+       "(old object missing or no common barcodes -- see Step 5b above). ",
+       "Refusing to fall back to a hardcoded historical permutation, which ",
+       "may not match this run's cluster numbering.")
+}
 
-cat("  Renaming map (Seurat -> Manuscript):\n")
+missing_clusters <- setdiff(current_new_clusters, dominant_map$new_cluster)
+if (length(missing_clusters) > 0) {
+  stop(sprintf(
+    "Cluster correspondence is incomplete: cluster(s) %s exist in this run ",
+    "but have no barcode-matched correspondence to the manuscript (likely ",
+    "no common barcodes for that cluster). Cannot safely rename.",
+    paste(missing_clusters, collapse = ", ")))
+}
+
+MIN_MAP_CONFIDENCE <- 0.5
+low_confidence <- dominant_map$new_cluster[dominant_map$primary_fraction < MIN_MAP_CONFIDENCE]
+if (length(low_confidence) > 0) {
+  stop(sprintf(
+    "Cluster correspondence to the manuscript is not confident enough to ",
+    "auto-rename: cluster(s) %s have primary_fraction < %.2f (see ",
+    "cluster_correspondence_new_vs_old.csv). Resolve manually before renaming.",
+    paste(low_confidence, collapse = ", "), MIN_MAP_CONFIDENCE))
+}
+
+if (any(duplicated(dominant_map$primary_old_cluster))) {
+  dup_old <- dominant_map$primary_old_cluster[duplicated(dominant_map$primary_old_cluster)]
+  stop(sprintf(
+    "Cluster correspondence to the manuscript is not one-to-one: old ",
+    "cluster(s) %s are the dominant match for more than one new cluster ",
+    "(see cluster_correspondence_new_vs_old.csv). Resolve manually before renaming.",
+    paste(unique(dup_old), collapse = ", ")))
+}
+
+rename_map <- setNames(dominant_map$primary_old_cluster, dominant_map$new_cluster)
+
+cat("  Renaming map (Seurat -> Manuscript), derived from this run's barcode-matched correspondence:\n")
 for (from in names(rename_map)) {
   cat(sprintf("    %s -> %s\n", from, rename_map[from]))
 }
