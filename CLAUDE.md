@@ -35,6 +35,16 @@ Only `PASS` permits automatic submission of dependents. `PASS_WITH_WARNING`
 requires explicit investigator approval. `FAIL` or `BLOCKED` stops the affected
 branch.
 
+The HPCC `$RERUN_ROOT` must mirror the relative directory layout of the local
+destination `/Users/xinruqiu/Desktop/302025/adipose-eos-atlas-results-v2` (for
+example, `04_eos_subcluster/results`, `04_eos_subcluster/figures`, and the stage
+logs). After each `PASS`, report the exact remote relative paths ready for
+transfer and add them to `$RERUN_ROOT/transfer_ready.tsv` with stage, path, byte
+size, file count, and checkpoint status. Do not claim that HPCC pushed files to
+the Mac: the transfer is initiated locally with the v2 directory's
+`pull_from_hpcc.sh` over SSH/SCP. Never transfer failed or unvalidated partial
+outputs as final results.
+
 Important current pipeline facts:
 
 - `scripts/04_eos_subcluster.R` performs manuscript cluster assignment and C6
