@@ -79,9 +79,20 @@ for cl in EOS_CLUSTERS:
         df = df.T.groupby(level=0).max().T  # deduplicate TFs
         auc_parts.append(df)
         print(f"  {cl}: {df.shape[0]} cells x {df.shape[1]} regulons")
+    else:
+        raise FileNotFoundError(
+            f"Missing auc_matrix.csv for cluster {cl}. Regenerate the "
+            f"missing cluster's SCENIC output rather than silently "
+            f"continuing with an incomplete analysis.")
 
-auc = pd.concat(auc_parts, join="outer").fillna(0.0)
-print(f"  Combined: {auc.shape[0]} cells x {auc.shape[1]} regulons")
+# Inner join, not outer + fillna(0.0): SCENIC is fit independently per
+# cluster, so a regulon absent from one cluster's network is "not inferred,"
+# not a real AUCell score of zero -- an outer join would make it look like
+# every OTHER cluster's cells were scored and found inactive for that
+# regulon, systematically inflating apparent cluster-specificity.
+auc = pd.concat(auc_parts, join="inner")
+print(f"  Combined: {auc.shape[0]} cells x {auc.shape[1]} regulons "
+      f"(scored in all {len(EOS_CLUSTERS)} clusters)")
 
 # =============================================================================
 # 2. Load metadata
@@ -291,19 +302,35 @@ print("\nStep 6: Statistical tests...")
 # (pseudoreplication) when there are only a handful of samples per condition,
 # and produces artificially small p-values. The unit of replication is the
 # sample.
-auc_sample = auc.copy()
-auc_sample["__sample__"] = meta[SAMPLE_COL].values
-auc_sample["__condition__"] = meta["condition"].values
-sample_means = (auc_sample.groupby(["__condition__", "__sample__"])
-                 .mean(numeric_only=True))
-sample_cond = sample_means.index.get_level_values("__condition__")
+#
+# Critically, each regulon's per-sample mean is computed ONLY over cells in
+# that regulon's home cluster (selected[tf]), not pooled across all
+# eosinophils. `selected` holds each TF's top-scoring cluster; testing a
+# cluster-selected regulon over all clusters combined would confound the
+# condition effect with each sample's cluster composition -- a sample with
+# proportionally fewer cells from that cluster would show a lower "mean
+# AUCell" largely because of composition, not the condition being tested.
+def cluster_sample_means(tf, cl, cond):
+    """Per-sample mean AUCell for `tf`, restricted to cells in cluster `cl`
+    and condition `cond`."""
+    mask = (meta["cluster"] == cl) & (meta["condition"] == cond)
+    if mask.sum() == 0:
+        return np.array([])
+    sub_meta = meta.loc[mask]
+    sub_auc = auc.loc[mask, tf]
+    return sub_auc.groupby(sub_meta[SAMPLE_COL].values).mean().values
+
 
 stat_rows = []
 for tf in all_tfs_ordered:
+    cl = selected.get(tf, "")
+    if not cl:
+        continue
+
     groups = []
     group_ns = []
     for cond in COND_ORDER:
-        vals = sample_means.loc[sample_cond == cond, tf].values
+        vals = cluster_sample_means(tf, cl, cond)
         if len(vals) > 0:
             groups.append(vals)
             group_ns.append(len(vals))
@@ -313,20 +340,19 @@ for tf in all_tfs_ordered:
     else:
         h_stat, p_val = np.nan, np.nan
 
-    cl = selected.get(tf, "")
     stat_rows.append({
         "regulon": tf, "cluster": cl,
         "kruskal_H": h_stat, "kruskal_p": p_val,
         "n_samples_per_condition": ",".join(str(n) for n in group_ns),
     })
 
-    # Pairwise: WT vs KO within each sex, on per-sample means
+    # Pairwise: WT vs KO within each sex, on per-sample means within cl
     for sex_label, wt_cond, ko_cond in [
         ("Female", "WT_Female_HFD", "KO_Female_HFD"),
         ("Male",   "WT_Male_HFD",   "KO_Male_HFD"),
     ]:
-        wt_vals = sample_means.loc[sample_cond == wt_cond, tf].values
-        ko_vals = sample_means.loc[sample_cond == ko_cond, tf].values
+        wt_vals = cluster_sample_means(tf, cl, wt_cond)
+        ko_vals = cluster_sample_means(tf, cl, ko_cond)
         if len(wt_vals) > 0 and len(ko_vals) > 0:
             u_stat, u_p = stats.mannwhitneyu(
                 wt_vals, ko_vals, alternative="two-sided"

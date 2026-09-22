@@ -62,8 +62,17 @@ for cl in EOS_CLUSTERS:
         df = df.T.groupby(level=0).max().T
         qiu_parts.append(df)
         qiu_groups.append(pd.Series(cl, index=df.index))
+    else:
+        raise FileNotFoundError(
+            f"Missing auc_matrix.csv for cluster {cl}. Regenerate the "
+            f"missing cluster's SCENIC output rather than silently "
+            f"continuing with an incomplete analysis.")
 
-qiu_auc = pd.concat(qiu_parts, join="outer").fillna(0)
+# Inner join, not outer + fillna(0): SCENIC is fit independently per
+# cluster, so a regulon absent from one cluster's network is "not inferred,"
+# not a real AUCell score of zero. Keep only regulons scored in every
+# cluster so qiu_regulons genuinely reflects Qiu-wide activity.
+qiu_auc = pd.concat(qiu_parts, join="inner")
 qiu_group = pd.concat(qiu_groups)
 qiu_regulons = set(qiu_auc.columns)
 
@@ -78,7 +87,9 @@ for depot in HU_DEPOTS:
         hu_parts.append(df)
         hu_groups.append(pd.Series(f"Hu_{depot}", index=df.index))
 
-hu_auc = pd.concat(hu_parts, join="outer").fillna(0)
+# Same reasoning as qiu_auc above: inner join across independently fitted
+# per-depot networks.
+hu_auc = pd.concat(hu_parts, join="inner")
 hu_group = pd.concat(hu_groups)
 hu_regulons = set(hu_auc.columns)
 
@@ -332,22 +343,27 @@ print("\nStep 5: HFD vs Hu_eWAT bar comparison...")
 all_tfs = [t for t in sorted(qiu_auc.columns) if t not in EXCLUDE]
 qiu_max = {}
 hu_ewat_val = {}
+tfs_with_hu_ewat_data = []
 for tf in all_tfs:
-    # Max across Qiu clusters
-    vals = []
-    for cl in EOS_CLUSTERS:
-        mask = qiu_group == cl
-        if tf in qiu_auc.columns:
-            vals.append(qiu_auc.loc[mask, tf].mean())
-    qiu_max[tf] = max(vals) if vals else 0
+    # Max across Qiu clusters (tf is drawn from qiu_auc.columns, so always present)
+    vals = [qiu_auc.loc[qiu_group == cl, tf].mean() for cl in EOS_CLUSTERS]
+    qiu_max[tf] = max(vals)
 
-    # Hu eWAT mean
-    mask = hu_group == "Hu_eWAT"
-    hu_ewat_val[tf] = hu_auc.loc[mask, tf].mean() if tf in hu_auc.columns else 0
+    # Hu eWAT mean -- only if this regulon was actually scored in Hu's
+    # SCENIC network at all. A regulon not in hu_auc.columns was "not
+    # inferred" in Hu, not measured and found at AUCell 0; defaulting it to
+    # 0 here would fabricate a huge log2FC below (qv / ~0) from missing
+    # data rather than a real Qiu-vs-Hu difference, so such regulons are
+    # excluded from this fold-change comparison entirely.
+    if tf in hu_auc.columns:
+        mask = hu_group == "Hu_eWAT"
+        hu_ewat_val[tf] = hu_auc.loc[mask, tf].mean()
+        tfs_with_hu_ewat_data.append(tf)
 
-# Sort by fold-change (Qiu / Hu_eWAT)
+# Sort by fold-change (Qiu / Hu_eWAT), restricted to regulons actually
+# scored in both datasets
 fc_data = []
-for tf in all_tfs:
+for tf in tfs_with_hu_ewat_data:
     qv = qiu_max[tf]
     hv = hu_ewat_val[tf]
     if qv > 0.03:  # only meaningful regulons

@@ -70,21 +70,30 @@ for cl in EOS_CLUSTERS:
         eos_data[cl] = df
         print(f"  {cl}: {df.shape[0]} cells x {df.shape[1]} regulons")
 
-# Compute per-cluster means
-all_tfs = set()
+missing_clusters = [cl for cl in EOS_CLUSTERS if cl not in eos_data]
+if missing_clusters:
+    raise FileNotFoundError(
+        f"Missing auc_matrix.csv for cluster(s) {missing_clusters}. "
+        f"Regenerate the missing cluster's SCENIC output rather than "
+        f"silently continuing with an incomplete analysis.")
+
+# TF set = INTERSECTION (not union) of each cluster's independently inferred
+# TFs. A TF absent from one cluster's network was "not inferred" there, not
+# scored and found at AUCell 0 -- filling it as 0.0 would corrupt which TF
+# looks "top" for that cluster and make regulons look artificially
+# cluster-specific.
+all_tfs = None
 for df in eos_data.values():
-    all_tfs.update(df.columns)
-all_tfs = sorted(all_tfs)
+    all_tfs = set(df.columns) if all_tfs is None else (all_tfs & set(df.columns))
+all_tfs = sorted(all_tfs) if all_tfs else []
+print(f"  TFs scored in all {len(eos_data)} loaded clusters: {len(all_tfs)}")
 
 cluster_means = {}
 for cl in EOS_CLUSTERS:
     if cl not in eos_data:
         continue
     df = eos_data[cl]
-    means = {}
-    for tf in all_tfs:
-        means[tf] = df[tf].mean() if tf in df.columns else 0.0
-    cluster_means[cl] = means
+    cluster_means[cl] = {tf: df[tf].mean() for tf in all_tfs}
 
 mean_df = pd.DataFrame(cluster_means)  # tfs x clusters
 

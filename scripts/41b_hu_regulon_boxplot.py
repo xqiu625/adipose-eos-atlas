@@ -74,6 +74,13 @@ for cl in EOS_CLUSTERS:
         eos_meta[cl] = pd.Series(cl, index=df.index)
         print(f"  {cl}: {df.shape[0]} cells")
 
+missing_clusters = [cl for cl in EOS_CLUSTERS if cl not in eos_data]
+if missing_clusters:
+    raise FileNotFoundError(
+        f"Missing auc_matrix.csv for cluster(s) {missing_clusters}. "
+        f"Regenerate the missing cluster's SCENIC output rather than "
+        f"silently continuing with an incomplete analysis.")
+
 # Merge all eos cells. SCENIC is inferred independently per cluster, so each
 # cluster's regulon set differs; an outer join + fillna(0) would record "not
 # inferred in this cluster's independently fitted network" as a real AUCell
@@ -192,7 +199,7 @@ for cl in EOS_CLUSTERS:
             plot_rows.append({
                 "group": cl,
                 "regulon": tf,
-                "score": all_eos_auc.loc[cell, tf] if tf in all_eos_auc.columns else 0,
+                "score": all_eos_auc.loc[cell, tf],
                 "dataset": "Qiu"
             })
 
@@ -279,7 +286,10 @@ for cl in EOS_CLUSTERS:
     mask = all_eos_group == cl
     vals = {}
     for tf in shared_regulons:
-        vals[tf] = all_eos_auc.loc[mask, tf].mean() if tf in all_eos_auc.columns else 0
+        # Safe without a fallback: shared_regulons is a subset of
+        # selected_tfs, itself drawn only from all_eos_auc.columns (the
+        # inner-joined, all-clusters-scored set above).
+        vals[tf] = all_eos_auc.loc[mask, tf].mean()
     group_means[cl] = vals
 
 for depot in ["eWAT", "scWAT", "BAT"]:

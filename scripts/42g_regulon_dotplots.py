@@ -68,8 +68,17 @@ for cl in EOS_CLUSTERS:
         df = df.T.groupby(level=0).max().T
         qiu_parts.append(df)
         qiu_groups.append(pd.Series(cl, index=df.index))
+    else:
+        raise FileNotFoundError(
+            f"Missing auc_matrix.csv for cluster {cl}. Regenerate the "
+            f"missing cluster's SCENIC output rather than silently "
+            f"continuing with an incomplete analysis.")
 
-qiu_auc = pd.concat(qiu_parts, join="outer").fillna(0)
+# Inner join, not outer + fillna(0): SCENIC is fit independently per
+# cluster, so a regulon absent from one cluster's network is "not inferred,"
+# not a real AUCell score of zero. Keep only regulons scored in every
+# cluster so qiu_regulons genuinely reflects Qiu-wide activity.
+qiu_auc = pd.concat(qiu_parts, join="inner")
 qiu_group = pd.concat(qiu_groups)
 qiu_regulons = set(qiu_auc.columns)
 
@@ -84,7 +93,9 @@ for depot in HU_DEPOTS:
         hu_parts.append(df)
         hu_groups.append(pd.Series(f"Hu_{depot}", index=df.index))
 
-hu_auc = pd.concat(hu_parts, join="outer").fillna(0)
+# Same reasoning as qiu_auc above: inner join across independently fitted
+# per-depot networks.
+hu_auc = pd.concat(hu_parts, join="inner")
 hu_group = pd.concat(hu_groups)
 hu_regulons = set(hu_auc.columns)
 
@@ -107,6 +118,14 @@ all_regulons = sorted(qiu_regulons | hu_regulons)
 mean_scores = {}   # {(regulon, group): mean_auc}
 pct_active = {}    # {(regulon, group): fraction_active}
 
+# all_regulons is the UNION across Qiu and Hu (qiu_regulons | hu_regulons),
+# so a regulon inferred only in one dataset is legitimately absent from the
+# other's independently fit network. Record those (tf, grp) pairs as NaN,
+# not 0.0 -- "not inferred" is not the same as "scored and found inactive,"
+# and defaulting to 0 would make e.g. a Hu-only regulon look confidently
+# absent across all six Qiu clusters instead of simply unmeasured there.
+# dotplot() below skips NaN cells (no dot drawn) rather than plotting them
+# as a real zero-activity point.
 for grp in EOS_CLUSTERS:
     mask = qiu_group == grp
     cells = qiu_auc.loc[mask]
@@ -117,8 +136,8 @@ for grp in EOS_CLUSTERS:
             mean_scores[(tf, grp)] = np.mean(vals)
             pct_active[(tf, grp)] = np.mean(vals > AUC_THRESH) * 100
         else:
-            mean_scores[(tf, grp)] = 0.0
-            pct_active[(tf, grp)] = 0.0
+            mean_scores[(tf, grp)] = np.nan
+            pct_active[(tf, grp)] = np.nan
 
 for depot in HU_DEPOTS:
     grp = f"Hu_{depot}"
@@ -131,8 +150,8 @@ for depot in HU_DEPOTS:
             mean_scores[(tf, grp)] = np.mean(vals)
             pct_active[(tf, grp)] = np.mean(vals > AUC_THRESH) * 100
         else:
-            mean_scores[(tf, grp)] = 0.0
-            pct_active[(tf, grp)] = 0.0
+            mean_scores[(tf, grp)] = np.nan
+            pct_active[(tf, grp)] = np.nan
 
 print(f"  Computed stats for {len(all_regulons)} regulons x {len(all_groups)} groups")
 
@@ -148,16 +167,18 @@ def dotplot(regulons, groups, mean_scores, pct_active, title_str, outpath,
     n_reg = len(regulons)
     n_grp = len(groups)
 
-    # Build matrices
-    mean_mat = np.zeros((n_reg, n_grp))
-    pct_mat = np.zeros((n_reg, n_grp))
+    # Build matrices. Missing (tf, grp) pairs (regulon not inferred in that
+    # group's independently fit network) are NaN, not 0 -- see the comment
+    # where mean_scores/pct_active are populated above.
+    mean_mat = np.full((n_reg, n_grp), np.nan)
+    pct_mat = np.full((n_reg, n_grp), np.nan)
     for i, tf in enumerate(regulons):
         for j, grp in enumerate(groups):
-            mean_mat[i, j] = mean_scores.get((tf, grp), 0)
-            pct_mat[i, j] = pct_active.get((tf, grp), 0)
+            mean_mat[i, j] = mean_scores.get((tf, grp), np.nan)
+            pct_mat[i, j] = pct_active.get((tf, grp), np.nan)
 
     if vmax is None:
-        vmax = max(0.05, np.max(mean_mat))
+        vmax = max(0.05, np.nanmax(mean_mat))
 
     # Color map
     cmap = LinearSegmentedColormap.from_list("custom",
@@ -168,7 +189,7 @@ def dotplot(regulons, groups, mean_scores, pct_active, title_str, outpath,
     max_dot_size = 250
     min_dot_size = 10
     # Normalize pct to [0, 1] for sizing
-    pct_max = max(1, np.max(pct_mat))
+    pct_max = max(1, np.nanmax(pct_mat)) if not np.all(np.isnan(pct_mat)) else 1
 
     if figwidth is None:
         figwidth = max(6, n_grp * 0.9 + 3)
@@ -180,6 +201,8 @@ def dotplot(regulons, groups, mean_scores, pct_active, title_str, outpath,
         for j in range(n_grp):
             m = mean_mat[i, j]
             p = pct_mat[i, j]
+            if np.isnan(m) or np.isnan(p):
+                continue  # regulon not inferred in this group -- no dot, not a zero-activity dot
             size = min_dot_size + (p / pct_max) * (max_dot_size - min_dot_size)
             color = cmap(norm(m))
             ax.scatter(j, n_reg - 1 - i, s=size, c=[color],

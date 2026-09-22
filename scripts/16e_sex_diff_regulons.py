@@ -62,6 +62,7 @@ print("=" * 60)
 print("\nLoading per-cluster AUCell scores...")
 auc_parts = []
 union_regulons = set()
+missing_clusters = []
 for cl in EOS_CLUSTERS:
     auc_path = os.path.join(SCENIC_DIR, cl, "auc_matrix.csv")
     if os.path.exists(auc_path):
@@ -71,6 +72,16 @@ for cl in EOS_CLUSTERS:
         auc_parts.append(df)
     else:
         print(f"  WARNING: {auc_path} not found")
+        missing_clusters.append(cl)
+
+if missing_clusters:
+    raise FileNotFoundError(
+        f"Missing auc_matrix.csv for cluster(s) {missing_clusters} -- the "
+        f"downstream intersection is described as 'regulons scored in all "
+        f"{len(EOS_CLUSTERS)} clusters,' which would be false if computed "
+        f"over only {len(EOS_CLUSTERS) - len(missing_clusters)} of them. "
+        f"Regenerate the missing cluster's SCENIC output rather than "
+        f"silently continuing with an incomplete analysis.")
 
 # SCENIC is inferred independently per cluster, so each cluster's regulon set
 # differs. An outer join + fillna(0.0) would record "not inferred in this

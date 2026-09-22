@@ -81,6 +81,11 @@ for cl in EOS_CLUSTERS:
         eos_auc_parts.append(df)
         eos_group_parts.append(pd.Series(cl, index=df.index))
         print(f"  {cl}: {df.shape[0]} cells x {df.shape[1]} regulons")
+    else:
+        raise FileNotFoundError(
+            f"Missing auc_matrix.csv for cluster {cl}. Regenerate the "
+            f"missing cluster's SCENIC output rather than silently "
+            f"continuing with an incomplete analysis.")
 
 # SCENIC is inferred independently per cluster, so each cluster's regulon set
 # differs; an outer join + fillna(0) would record "not inferred in this

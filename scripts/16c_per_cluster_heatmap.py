@@ -71,6 +71,10 @@ for cl in EOS_CLUSTERS:
         print(f"  {cl}: {df.shape[0]} cells x {df.shape[1]} regulons")
     else:
         print(f"  WARNING: {auc_path} not found")
+        raise FileNotFoundError(
+            f"Missing auc_matrix.csv for cluster {cl}. Regenerate the "
+            f"missing cluster's SCENIC output rather than silently "
+            f"continuing with an incomplete analysis.")
     # Extract target gene counts from regulons.csv (cisTarget output)
     if os.path.exists(reg_path):
         try:
@@ -130,17 +134,24 @@ print("\nStep 3: Computing per-cluster mean AUC...")
 def extract_tf(col_name):
     return col_name.split("(")[0].strip()
 
-# Build unified TF set
-all_tfs = set()
+# TF set = INTERSECTION (not union) of each eos cluster's independently
+# inferred TFs. A TF absent from one cluster's network was "not inferred"
+# there, not scored and found at AUCell 0 -- filling it as 0.0 would corrupt
+# which TF looks "top" for that cluster and make regulons look artificially
+# cluster-specific.
+all_tfs = None
 eos_tf_map = {}   # cl -> {tf: col_name}
 for cl, df in eos_data.items():
     eos_tf_map[cl] = {}
+    cl_tfs = set()
     for col in df.columns:
         tf = extract_tf(col)
         eos_tf_map[cl][tf] = col
-        all_tfs.add(tf)
+        cl_tfs.add(tf)
+    all_tfs = cl_tfs if all_tfs is None else (all_tfs & cl_tfs)
 
-all_tfs = sorted(all_tfs)
+all_tfs = sorted(all_tfs) if all_tfs else []
+print(f"  TFs scored in all {len(eos_data)} loaded eos clusters: {len(all_tfs)}")
 
 # Subsample and compute means
 eos_means = {}
@@ -151,16 +162,19 @@ for cl in EOS_CLUSTERS:
     n   = len(df)
     idx = np.random.choice(n, min(n, CELLS_PER_CLUSTER), replace=(n < CELLS_PER_CLUSTER))
     sub = df.iloc[idx]
-    row = {}
-    for tf in all_tfs:
-        col = eos_tf_map[cl].get(tf)
-        row[tf] = sub[col].mean() if col else 0.0
+    # Safe without a fallback: all_tfs is the intersection across clusters,
+    # so every tf here is guaranteed a real column via eos_tf_map[cl].
+    row = {tf: sub[eos_tf_map[cl][tf]].mean() for tf in all_tfs}
     eos_means[cl] = row
     print(f"  {cl}: {n} cells, {sum(1 for v in row.values() if v > 0)} active regulons")
 
 eos_mean_df = pd.DataFrame(eos_means)  # tfs x clusters
 
-# Mac means aligned to same TF names
+# Mac means aligned to same TF names. A TF with no matching mac regulon
+# column is recorded as NaN (genuinely unscored on the mac side), not 0.0 --
+# defaulting to 0.0 here would make every eos TF absent from the mac SCENIC
+# network look "infinitely" eos-specific (fold_change = max_auc / 0) below,
+# regardless of whether that's biologically true.
 mac_tf_means = {}
 if mac_mean_df is not None:
     for subtype in mac_mean_df.index:
@@ -169,7 +183,7 @@ if mac_mean_df is not None:
             # match tf to mac column (may have (n) suffix or (+) suffix)
             matched = [c for c in mac_mean_df.columns
                        if extract_tf(c.replace("(+)","").replace("(-)", "")) == tf]
-            row[tf] = mac_mean_df.loc[subtype, matched[0]] if matched else 0.0
+            row[tf] = mac_mean_df.loc[subtype, matched[0]] if matched else np.nan
         mac_tf_means[subtype] = row
     mac_tf_df = pd.DataFrame(mac_tf_means)   # tfs x mac subtypes
 else:
@@ -196,7 +210,16 @@ for tf in all_tfs:
         continue
 
     mac_mean = (mac_tf_df.loc[tf].mean()
-                if mac_tf_df is not None and tf in mac_tf_df.index else 0.0)
+                if mac_tf_df is not None and tf in mac_tf_df.index else np.nan)
+
+    if pd.isna(mac_mean):
+        # No macrophage-side measurement exists for this regulon at all (not
+        # matched to any mac subtype's SCENIC network) -- a "fold change vs
+        # macrophage" claim is meaningless without it. Skip rather than
+        # default to 0 (which would fabricate fold_change = inf, i.e. a
+        # spurious "infinitely eos-specific" result from missing data, not a
+        # real biological comparison).
+        continue
 
     fold_change = max_auc / mac_mean if mac_mean > 0 else float("inf")
     sorted_eos  = sorted(eos_vals.values(), reverse=True)

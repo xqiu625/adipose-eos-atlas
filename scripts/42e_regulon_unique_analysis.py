@@ -63,8 +63,17 @@ for cl in EOS_CLUSTERS:
         df = df.T.groupby(level=0).max().T
         qiu_parts.append(df)
         qiu_groups.append(pd.Series(cl, index=df.index))
+    else:
+        raise FileNotFoundError(
+            f"Missing auc_matrix.csv for cluster {cl}. Regenerate the "
+            f"missing cluster's SCENIC output rather than silently "
+            f"continuing with an incomplete analysis.")
 
-qiu_auc = pd.concat(qiu_parts, join="outer").fillna(0)
+# Inner join, not outer + fillna(0): SCENIC is fit independently per
+# cluster, so a regulon absent from one cluster's network is "not inferred,"
+# not a real AUCell score of zero. Keep only regulons scored in every
+# cluster so qiu_regulons genuinely reflects Qiu-wide activity.
+qiu_auc = pd.concat(qiu_parts, join="inner")
 qiu_group = pd.concat(qiu_groups)
 qiu_regulons = set(qiu_auc.columns)
 print(f"  Qiu: {len(qiu_auc)} cells, {len(qiu_regulons)} regulons")
@@ -81,7 +90,9 @@ for depot in HU_DEPOTS:
         hu_parts.append(df)
         hu_groups.append(pd.Series(f"Hu_{depot}", index=df.index))
 
-hu_auc = pd.concat(hu_parts, join="outer").fillna(0)
+# Same reasoning as qiu_auc above: inner join across independently fitted
+# per-depot networks.
+hu_auc = pd.concat(hu_parts, join="inner")
 hu_group = pd.concat(hu_groups)
 hu_regulons = set(hu_auc.columns)
 print(f"  Hu: {len(hu_auc)} cells, {len(hu_regulons)} regulons")

@@ -18,6 +18,7 @@
 # ==============================================================================
 
 import os
+import math
 import warnings
 import numpy as np
 import pandas as pd
@@ -246,6 +247,21 @@ def sample_means(mask, reg):
     return sub_auc.groupby(sub_meta[sample_col].values).mean().values
 
 
+def mannwhitney_floor_p(n1, n2):
+    """Minimum possible exact two-sided Mann-Whitney p-value achievable at
+    sample sizes (n1, n2), regardless of effect size: 2 / C(n1+n2, n1). E.g.
+    0.1 at 3-vs-3, 0.333 at 2-vs-2, 0.0286 at 4-vs-4. Used to flag pairwise
+    tests that cannot reach conventional significance at their sample size,
+    so results are reported as descriptive effect sizes rather than
+    meaningful significance tests."""
+    return 2.0 / math.comb(n1 + n2, min(n1, n2))
+
+
+MIN_GROUP_N_FOR_INFERENCE = 3  # Kruskal-Wallis heuristic: smallest documented
+# floor (3-vs-3 Mann-Whitney, p=0.1) already exceeds 0.05; groups smaller than
+# this cannot support a meaningful significance claim under any circumstance.
+
+
 # ==============================================================================
 # Analysis 1: Regulon activity by condition (within each cluster)
 # ==============================================================================
@@ -285,7 +301,12 @@ for cl in clusters:
             "kruskal_stat": stat,
             "p_value": pval,
             "n_conditions": len(valid_groups),
-            "n_samples": sum(len(g) for g in valid_groups)
+            "n_samples": sum(len(g) for g in valid_groups),
+            # Heuristic, not an exact combinatorial floor (unlike Mann-Whitney
+            # below): any group below this size cannot support a meaningful
+            # significance claim, so treat as descriptive effect-size
+            # comparison rather than a confirmed significant result.
+            "underpowered": min(len(g) for g in valid_groups) < MIN_GROUP_N_FOR_INFERENCE,
         })
 
 kw_df = pd.DataFrame(all_kw_results)
@@ -295,8 +316,12 @@ if len(kw_df) > 0:
 
     # Identify condition-responsive regulons per cluster
     sig_kw = kw_df[kw_df["fdr"] < 0.05]
+    n_sig_underpowered = int(sig_kw["underpowered"].sum())
     print(f"  Total tests: {len(kw_df)}")
-    print(f"  Significant (FDR < 0.05): {len(sig_kw)}")
+    print(f"  Significant (FDR < 0.05): {len(sig_kw)}"
+          f" ({n_sig_underpowered} flagged underpowered -- smallest group < "
+          f"{MIN_GROUP_N_FOR_INFERENCE} samples; report as descriptive "
+          f"effect-size comparisons, not confirmed significant results)")
 
     for cl in clusters:
         cl_sig = sig_kw[sig_kw["cluster"] == cl]
@@ -330,6 +355,7 @@ if len(kw_df) > 0:
                 d = cohens_d(g1, g2)
             except ValueError:
                 continue
+            floor_p = mannwhitney_floor_p(len(g1), len(g2))
             pairwise_results.append({
                 "cluster": cl,
                 "regulon": reg,
@@ -337,6 +363,8 @@ if len(kw_df) > 0:
                 "condition2": cond2,
                 "U_stat": stat,
                 "p_value": pval,
+                "floor_p": floor_p,
+                "underpowered": floor_p > 0.05,
                 "cohens_d": d,
                 "mean1": np.mean(g1),
                 "mean2": np.mean(g2),
@@ -347,9 +375,13 @@ if len(kw_df) > 0:
     pw_df = pd.DataFrame(pairwise_results)
     if len(pw_df) > 0:
         pw_df["fdr"] = multipletests_bh(pw_df["p_value"].values)
+        n_underpowered = int(pw_df["underpowered"].sum())
         pw_path = os.path.join(OUT_DIR, "regulon_condition_pairwise.csv")
         pw_df.to_csv(pw_path, index=False)
-        print(f"  Saved: {pw_path} ({len(pw_df)} tests)")
+        print(f"  Saved: {pw_path} ({len(pw_df)} tests, {n_underpowered} "
+              f"underpowered -- exact floor_p > 0.05 regardless of effect "
+              f"size; report as descriptive effect-size comparisons, not "
+              f"significance tests)")
 else:
     print("  No Kruskal-Wallis results to report")
     kw_df = pd.DataFrame()
@@ -589,6 +621,7 @@ for comp in comparisons:
         else:
             log2fc = 0.0
 
+        floor_p = mannwhitney_floor_p(len(wt_vals), len(ko_vals))
         relma_results.append({
             "comparison": comp_name,
             "sex": comp["sex"],
@@ -599,6 +632,8 @@ for comp in comparisons:
             "cohens_d": d,
             "U_stat": stat,
             "p_value": pval,
+            "floor_p": floor_p,
+            "underpowered": floor_p > 0.05,
             "n_WT": len(wt_vals),
             "n_KO": len(ko_vals)
         })
@@ -609,8 +644,12 @@ if len(relma_df) > 0:
     relma_df["fdr"] = multipletests_bh(relma_df["p_value"].values)
 
     sig_relma = relma_df[relma_df["fdr"] < 0.05]
+    n_relma_underpowered = int(relma_df["underpowered"].sum())
     print(f"  Total tests: {len(relma_df)}")
     print(f"  Significant (FDR < 0.05): {len(sig_relma)}")
+    print(f"  {n_relma_underpowered}/{len(relma_df)} tests are underpowered "
+          f"(exact floor_p > 0.05 regardless of effect size) -- report as "
+          f"descriptive effect-size comparisons, not significance tests")
 
     for comp_name in relma_df["comparison"].unique():
         comp_sig = sig_relma[sig_relma["comparison"] == comp_name]
