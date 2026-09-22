@@ -70,5 +70,11 @@ exact run and **must be edited** to reproduce the analysis elsewhere.
 ## Next step
 
 The per-sample count matrices produced by `04_cellranger_multi.sh` are the input
-to the analysis pipeline, which begins with ambient-RNA removal in
-[`../00_decontx_per_sample.R`](../00_decontx_per_sample.R).
+to the analysis pipeline. The analysis begins with Scrublet on the original
+filtered count matrices in
+[`../00a_doublet_detection_per_sample.py`](../00a_doublet_detection_per_sample.py),
+followed by DecontX on predicted singlets in
+[`../00_decontx_per_sample.R`](../00_decontx_per_sample.R). Probe-barcode
+demultiplexing can resolve cross-sample multiplets, but it cannot identify all
+same-sample or homotypic doublets; the computational calls therefore remain a
+sensitivity analysis rather than experimental ground truth.

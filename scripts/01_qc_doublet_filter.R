@@ -2,14 +2,13 @@
 lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 .libPaths(c(lib_path, .libPaths()))
 
-## QC filtering + doublet removal on DecontX-cleaned cells
+## Cell QC and merge after pre-DecontX doublet removal
 ## SLURM: --mem=128G --cpus-per-task=8 --time=4:00:00 -p batch
 
 # ── Libraries ──────────────────────────────────────────────────────────────────
 suppressPackageStartupMessages({
   library(Seurat)
   library(Matrix)
-  library(reticulate)
 })
 
 # ── Shared theme ─────────────────────────────────────────────────────────────
@@ -17,7 +16,10 @@ SCRIPTS <- dirname(sub("--file=", "", grep("--file=", commandArgs(trailingOnly =
 source(file.path(SCRIPTS, "00_theme.R"))
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-BASE <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
+BASE <- Sys.getenv(
+  "EOS_ATLAS_BASE",
+  unset = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
+)
 CONTAM_THRESHOLD <- 0.2
 
 # Sample-to-condition mapping
@@ -37,18 +39,6 @@ sample_info <- data.frame(
 # GEM reaction mapping
 gem_lookup <- c(rep("GEM1", 4), rep("GEM2", 4), rep("GEM3", 4), rep("GEM4", 4))
 
-# ── Load Scrublet via reticulate ───────────────────────────────────────────────
-cat("Importing Scrublet via reticulate...\n")
-use_condaenv("/bigdata/godziklab/shared/Xinru/cellrank_env", required = TRUE)
-scrublet <- tryCatch({
-  import("scrublet")
-}, error = function(e) {
-  stop("Failed to import scrublet: ", e$message,
-       "\nMake sure scrublet is installed in the active Python environment.")
-})
-scipy_sparse <- import("scipy.sparse")
-np <- import("numpy")
-
 # ── Helper: parse metadata from condition string ──────────────────────────────
 parse_metadata <- function(cond) {
   # e.g. "WT_Male_HFD_1" -> genotype=WT, sex=Male, infection=HFD, replicate=1
@@ -66,6 +56,7 @@ parse_metadata <- function(cond) {
 cat("========================================\n")
 cat("Step 1: Load DecontX results & filter contamination\n")
 cat("========================================\n\n")
+cat("Analysis base:", BASE, "\n\n")
 
 decontx_dir <- file.path(BASE, "decontx")
 sample_objects <- list()
@@ -82,8 +73,19 @@ for (i in seq_len(nrow(sample_info))) {
 
   tryCatch({
     decon <- readRDS(rds_file)
+    if (!isTRUE(decon$doublet_removed_before_decontx)) {
+      stop("Input was not generated after pre-DecontX doublet removal: ", rds_file)
+    }
     counts <- decon$counts
     contam <- decon$contamination
+    scrublet_score <- decon$scrublet_score
+    if (is.null(scrublet_score) || length(scrublet_score) != ncol(counts)) {
+      stop("Missing or misaligned Scrublet scores in ", rds_file)
+    }
+    if (is.null(names(scrublet_score)) ||
+        !identical(names(scrublet_score), colnames(counts))) {
+      stop("Scrublet score names do not match count-matrix columns in ", rds_file)
+    }
 
     n_before <- ncol(counts)
     keep <- contam <= CONTAM_THRESHOLD
@@ -101,6 +103,7 @@ for (i in seq_len(nrow(sample_info))) {
 
     sample_objects[[as.character(sid)]] <- list(
       counts    = counts_clean,
+      scrublet_score = scrublet_score[keep],
       condition = cond,
       sample_id = sid
     )
@@ -109,8 +112,13 @@ for (i in seq_len(nrow(sample_info))) {
     total_after  <- total_after + n_after
 
   }, error = function(e) {
-    cat(sprintf("  ERROR: %s\n", e$message))
+    stop(sprintf("ERROR processing sample %d (%s): %s", sid, cond, e$message),
+         call. = FALSE)
   })
+}
+
+if (length(sample_objects) != nrow(sample_info)) {
+  stop("QC input did not complete for all 16 samples; refusing to continue.")
 }
 
 cat(sprintf("\nTotal cells before contam filter: %d\n", total_before))
@@ -133,6 +141,9 @@ sobj <- CreateSeuratObject(counts = all_counts, project = "adipose_atlas")
 # Extract condition by removing barcode suffix after the last underscore
 ident_vec <- sub("_[^_]+$", "", colnames(sobj))
 sobj@meta.data$orig.ident <- ident_vec
+sobj$scrublet_score <- unlist(lapply(sample_objects, function(x) x$scrublet_score),
+                                use.names = FALSE)
+sobj$scrublet_doublet <- FALSE
 
 cat(sprintf("Seurat object: %d genes x %d cells\n", nrow(sobj), ncol(sobj)))
 
@@ -182,73 +193,7 @@ cat(sprintf("Cells after QC: %d (removed %d, %.1f%%)\n\n",
             n_after_qc, n_before_qc - n_after_qc,
             100 * (n_before_qc - n_after_qc) / n_before_qc))
 
-# ── Step 5: Doublet detection with Scrublet ───────────────────────────────────
-cat("========================================\n")
-cat("Step 4: Doublet detection (Scrublet)\n")
-cat("========================================\n\n")
-
-samples <- unique(sobj$orig.ident)
-doublet_scores <- rep(NA_real_, ncol(sobj))
-doublet_calls  <- rep(NA, ncol(sobj))
-names(doublet_scores) <- colnames(sobj)
-names(doublet_calls)  <- colnames(sobj)
-
-for (s in samples) {
-  cat(sprintf("[%s] ", s))
-
-  cells_idx <- which(sobj$orig.ident == s)
-  n_cells <- length(cells_idx)
-  cat(sprintf("%d cells -> ", n_cells))
-
-  tryCatch({
-    # Extract counts for this sample
-    counts_sub <- GetAssayData(sobj, layer = "counts")[, cells_idx]
-
-    # Convert to scipy sparse matrix (CSC format expected by Scrublet)
-    counts_t <- t(counts_sub)  # Scrublet expects cells x genes
-    counts_scipy <- scipy_sparse$csc_matrix(
-      tuple(
-        np$array(counts_t@x),
-        np$array(as.integer(counts_t@i)),
-        np$array(as.integer(counts_t@p))
-      ),
-      shape = tuple(as.integer(nrow(counts_t)), as.integer(ncol(counts_t)))
-    )
-
-    # Run Scrublet
-    scrub <- scrublet$Scrublet(counts_scipy, expected_doublet_rate = 0.06)
-    result <- scrub$scrub_doublets()
-
-    scores <- result[[1]]
-    predicted <- result[[2]]
-
-    doublet_scores[cells_idx] <- as.numeric(scores)
-    doublet_calls[cells_idx]  <- as.logical(predicted)
-
-    n_doublets <- sum(as.logical(predicted))
-    cat(sprintf("%d doublets (%.1f%%)\n", n_doublets,
-                100 * n_doublets / n_cells))
-
-  }, error = function(e) {
-    cat(sprintf("ERROR: %s\n", e$message))
-  })
-}
-
-# Add to metadata
-sobj$scrublet_score   <- doublet_scores
-sobj$scrublet_doublet <- doublet_calls
-
-# Remove predicted doublets
-n_before_doublet <- ncol(sobj)
-sobj <- subset(sobj, cells = colnames(sobj)[!sobj$scrublet_doublet])
-n_after_doublet <- ncol(sobj)
-
-cat(sprintf("\nCells before doublet removal: %d\n", n_before_doublet))
-cat(sprintf("Cells after doublet removal:  %d (removed %d, %.1f%%)\n",
-            n_after_doublet, n_before_doublet - n_after_doublet,
-            100 * (n_before_doublet - n_after_doublet) / n_before_doublet))
-
-# ── Step 6: Final summary and save ────────────────────────────────────────────
+# ── Step 5: Final summary and save ────────────────────────────────────────────
 cat("\n========================================\n")
 cat("Final Summary\n")
 cat("========================================\n")

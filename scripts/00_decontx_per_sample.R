@@ -2,7 +2,7 @@
 lib_path <- "/bigdata/godziklab/shared/Xinru/R"
 .libPaths(c(lib_path, .libPaths()))
 
-## DecontX ambient RNA removal per sample
+## DecontX ambient RNA removal per sample, after pre-DecontX doublet removal
 ## SLURM: --mem=128G --cpus-per-task=8 --time=4:00:00 -p batch
 
 # ── Libraries ──────────────────────────────────────────────────────────────────
@@ -13,8 +13,12 @@ suppressPackageStartupMessages({
 })
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-BASE <- "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
-CONTAM_THRESHOLD <- 0.3
+BASE <- Sys.getenv(
+  "EOS_ATLAS_BASE",
+  unset = "/bigdata/nairlab/shared/XQiu/EOS_project/PNAS_revision/atlas"
+)
+CONTAM_THRESHOLD <- 0.2
+DOUBLET_DIR <- file.path(BASE, "doublets")
 
 # Sample-to-condition mapping (16 samples)
 sample_info <- data.frame(
@@ -31,7 +35,10 @@ sample_info <- data.frame(
 )
 
 # CellRanger data paths by GEM reaction
-data_root <- "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data"
+data_root <- Sys.getenv(
+  "EOS_DATA_ROOT",
+  unset = "/bigdata/nairlab/shared/XQiu/EOS_project/dataset/processed_data"
+)
 gem_map <- list(
   "RR0104" = 1:4,
   "RR0508" = 5:8,
@@ -64,6 +71,7 @@ cat("========================================\n")
 cat("DecontX ambient RNA removal per sample\n")
 cat("========================================\n")
 cat("Output directory:", out_dir, "\n")
+cat("Cell Ranger data root:", data_root, "\n")
 cat("Contamination threshold:", CONTAM_THRESHOLD, "\n\n")
 
 # ── Run DecontX per sample ─────────────────────────────────────────────────────
@@ -90,6 +98,34 @@ for (i in seq_len(nrow(sample_info))) {
                 nrow(filtered_counts), ncol(filtered_counts)))
     cat(sprintf("  Raw: %d genes x %d cells\n",
                 nrow(raw_counts), ncol(raw_counts)))
+
+    # Apply Scrublet calls produced from the original, uncorrected filtered matrix.
+    doublet_file <- file.path(DOUBLET_DIR, sprintf("scrublet_sample_%d.csv", sid))
+    if (!file.exists(doublet_file)) {
+      stop("Missing pre-DecontX doublet calls: ", doublet_file,
+           ". Run 00a_doublet_detection_per_sample.py first.")
+    }
+    doublets <- read.csv(doublet_file, stringsAsFactors = FALSE)
+    required_cols <- c("barcode", "scrublet_score", "scrublet_doublet")
+    if (!all(required_cols %in% colnames(doublets))) {
+      stop("Doublet file lacks required columns: ", doublet_file)
+    }
+    if (anyDuplicated(doublets$barcode)) stop("Duplicate barcodes in ", doublet_file)
+    if (!setequal(doublets$barcode, colnames(filtered_counts))) {
+      stop("Doublet-call barcodes do not exactly match the filtered matrix for sample ", sid)
+    }
+    doublets <- doublets[match(colnames(filtered_counts), doublets$barcode), ]
+    call_text <- tolower(as.character(doublets$scrublet_doublet))
+    if (!all(call_text %in% c("true", "false"))) {
+      stop("Invalid Scrublet calls in ", doublet_file)
+    }
+    calls <- call_text == "true"
+    if (anyNA(calls)) stop("NA doublet calls in ", doublet_file)
+    keep_singlet <- !calls
+    cat(sprintf("  Pre-DecontX Scrublet: removing %d/%d predicted doublets (%.2f%%)\n",
+                sum(calls), length(calls), 100 * mean(calls)))
+    filtered_counts <- filtered_counts[, keep_singlet, drop = FALSE]
+    doublets <- doublets[keep_singlet, , drop = FALSE]
 
     # Subset raw to same genes as filtered (DecontX requires matching rows)
     shared_genes <- intersect(rownames(filtered_counts), rownames(raw_counts))
@@ -124,6 +160,8 @@ for (i in seq_len(nrow(sample_info))) {
     result <- list(
       counts        = decon_counts,
       contamination = contamination,
+      scrublet_score = setNames(doublets$scrublet_score, doublets$barcode),
+      doublet_removed_before_decontx = TRUE,
       sample_id     = sid,
       condition     = cond
     )
@@ -137,12 +175,14 @@ for (i in seq_len(nrow(sample_info))) {
       sample_id     = sid,
       condition     = cond,
       contamination = contamination,
+      scrublet_score = doublets$scrublet_score,
       stringsAsFactors = FALSE
     )
     all_scores[[i]] <- score_df
 
   }, error = function(e) {
-    cat(sprintf("  ERROR processing sample %d (%s): %s\n", sid, cond, e$message))
+    stop(sprintf("ERROR processing sample %d (%s): %s", sid, cond, e$message),
+         call. = FALSE)
   })
 
   cat("\n")
@@ -150,6 +190,9 @@ for (i in seq_len(nrow(sample_info))) {
 
 # ── Combine and save all contamination scores ─────────────────────────────────
 cat("Combining contamination scores...\n")
+if (length(all_scores) != nrow(sample_info) || any(vapply(all_scores, is.null, logical(1)))) {
+  stop("DecontX did not complete for all 16 samples; refusing to write partial output.")
+}
 scores_combined <- do.call(rbind, all_scores)
 scores_file <- file.path(out_dir, "decontx_all_scores.csv")
 write.csv(scores_combined, scores_file, row.names = FALSE)

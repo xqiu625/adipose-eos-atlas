@@ -7,7 +7,7 @@
 # Wait for each block to complete (squeue -u $USER) before proceeding.
 #
 # Pipeline DAG:
-#   00 → 01 → 02 → 03 → {04, 06} parallel
+#   00a → 00 → 01 → 02 → 03 → {04, 06} parallel
 #   04 → {05, 07, 11, 12, 13, 14} parallel
 #   13 → 13b (CellRank on Gurtner integration)
 #   07 → 08
@@ -31,7 +31,17 @@ SCENIC_MA="/bigdata/godziklab/shared/Xinru/scenic_data/motifs-v9-nr.mgi-m0.001-o
 mkdir -p "$LOGS" "$BASE"
 
 # ==============================================================================
-# BLOCK 1: DecontX (start here)
+# BLOCK 0: Scrublet on original Cell Ranger filtered counts (start here)
+# ==============================================================================
+sbatch --job-name=00a_doublets --partition=batch \
+  --mem=128G --cpus-per-task=8 --time=4:00:00 \
+  --output=${LOGS}/00a_doublets_%j.out --error=${LOGS}/00a_doublets_%j.err \
+  --wrap="source activate ${CONDA} && python ${SCRIPTS}/00a_doublet_detection_per_sample.py"
+
+# >>> Wait for 00a to complete and review doublets/scrublet_summary.csv <<<
+
+# ==============================================================================
+# BLOCK 1: DecontX on predicted singlets
 # ==============================================================================
 sbatch --job-name=00_decontx --partition=batch \
   --mem=128G --cpus-per-task=8 --time=4:00:00 \
@@ -41,12 +51,12 @@ sbatch --job-name=00_decontx --partition=batch \
 # >>> Wait for 00 to complete <<<
 
 # ==============================================================================
-# BLOCK 2: QC + doublet filter
+# BLOCK 2: QC + merge (doublets were removed before DecontX)
 # ==============================================================================
 sbatch --job-name=01_qc --partition=batch \
   --mem=128G --cpus-per-task=8 --time=4:00:00 \
   --output=${LOGS}/01_qc_%j.out --error=${LOGS}/01_qc_%j.err \
-  --wrap="source activate ${CONDA} && module load R/4.5.0 && Rscript ${SCRIPTS}/01_qc_doublet_filter.R"
+  --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/01_qc_doublet_filter.R"
 
 # >>> Wait for 01 to complete <<<
 
@@ -275,7 +285,7 @@ sbatch --job-name=33_fig3EF --partition=batch --mem=32G --cpus-per-task=4 --time
 sbatch --job-name=34_fig4AB --partition=batch --mem=32G --cpus-per-task=4 --time=1:00:00 --output=${LOGS}/34_fig4AB_%j.out --error=${LOGS}/34_fig4AB_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/34_fig4AB_ccl_dotplot.R"
 
 # --- Block 16: Supplementary figures (Harmony comparison) -----------------------
-# Depends on: Block 4 (04b → eos_subclustered.rds)
+# Depends on: Block 5 (04 → eos_subclustered.rds; 04b is retired)
 
 # Supp: Harmony comparison (un-integrated is primary for eos subclustering)
 sbatch --job-name=37_harmony --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/37_harmony_%j.out --error=${LOGS}/37_harmony_%j.err --wrap="module load R/4.5.0; Rscript ${SCRIPTS}/37_supp_harmony_comparison.R"
@@ -289,7 +299,7 @@ sbatch --job-name=38_violin --partition=batch --mem=32G --cpus-per-task=4 --time
 sbatch --job-name=39_intestinal --partition=batch --mem=64G --cpus-per-task=4 --time=2:00:00 --output=${LOGS}/39_intestinal_%j.out --error=${LOGS}/39_intestinal_%j.err --wrap="export LD_LIBRARY_PATH=/bigdata/godziklab/shared/Xinru/cellrank_env/lib:/opt/linux/rocky/8.x/x86_64/pkgs/gcc/12.2.0/lib64:\$LD_LIBRARY_PATH; module load R/4.5.0; Rscript ${SCRIPTS}/39_gurtner_intestinal_comparison.R"
 
 # --- Block 18: Integration-method benchmark -----------------------
-# Depends on: Block 4 (04b → eos_subclustered.rds)
+# Depends on: Block 5 (04 → eos_subclustered.rds; 04b is retired)
 # Benchmark batch-correction tools (Harmony, Scanorama, scVI, scANVI, ComBat,
 # BBKNN vs unintegrated) and score each with scib-metrics. See INTEGRATION_BENCHMARK.md.
 # One-time env: pip install harmonypy scanorama bbknn scvi-tools scib-metrics
