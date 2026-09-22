@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-lib_path <- "/bigdata/godziklab/shared/Xinru/R"
+lib_path <- Sys.getenv("RERUN_R_LIB", "/bigdata/godziklab/shared/Xinru/R")
 .libPaths(c(lib_path, .libPaths()))
 
 ## 04b_rename_clusters.R -- RETIRED, do not run.

@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-lib_path <- "/bigdata/godziklab/shared/Xinru/R"; .libPaths(c(lib_path, .libPaths()))
+lib_path <- Sys.getenv("RERUN_R_LIB", "/bigdata/godziklab/shared/Xinru/R"); .libPaths(c(lib_path, .libPaths()))
 # Per-cell data for the integration-based Fig 2: UMAP, cluster, MHC-II program
 # score, pseudotime. Output one CSV for figure-making.
 suppressPackageStartupMessages({ library(Seurat); library(monocle3) })

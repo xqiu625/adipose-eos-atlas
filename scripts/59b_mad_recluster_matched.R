@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-lib_path <- "/bigdata/godziklab/shared/Xinru/R"
+lib_path <- Sys.getenv("RERUN_R_LIB", "/bigdata/godziklab/shared/Xinru/R")
 .libPaths(c(lib_path, .libPaths()))
 # Resolution-matched MAD re-clustering: re-cluster the MAD-filtered eosinophils at
 # the resolution that yields 6 clusters and compare to C0-C5 (removes the
