@@ -1,6 +1,25 @@
 #!/usr/bin/env Rscript
 lib_path <- Sys.getenv("RERUN_R_LIB", "/bigdata/godziklab/shared/Xinru/R")
 .libPaths(c(lib_path, .libPaths()))
+if (nzchar(Sys.getenv("RERUN_R_LIB"))) {
+  .rerun_r_lib_resolved <- normalizePath(.libPaths()[1], mustWork = FALSE)
+  .rerun_r_lib_expected <- normalizePath(Sys.getenv("RERUN_R_LIB"), mustWork = FALSE)
+  if (!identical(.rerun_r_lib_resolved, .rerun_r_lib_expected)) {
+    stop(sprintf(
+      "RERUN_R_LIB audit guard: .libPaths()[1] resolved to '%s' but RERUN_R_LIB='%s' -- the shared/legacy library would take precedence over the pinned isolated library. Refusing to proceed.",
+      .rerun_r_lib_resolved, .rerun_r_lib_expected))
+  }
+  if (!nzchar(Sys.getenv("CMDSTAN"))) {
+    stop("RERUN_R_LIB audit guard: this script loads sccomp, which requires CMDSTAN to be set when running under the audited rerun.")
+  }
+  cat("=== Pinned R environment audit guard ===\n")
+  cat("R.version.string:", R.version.string, "\n")
+  cat("RERUN_R_LIB:", Sys.getenv("RERUN_R_LIB"), "\n")
+  cat("CMDSTAN:", Sys.getenv("CMDSTAN"), "\n")
+  cat(".libPaths():\n")
+  print(.libPaths())
+  cat("=========================================\n")
+}
 
 # ==============================================================================
 # 70_sccomp_both.R   (composition: un-integrated C0-C5 vs integrated i0-i5)
