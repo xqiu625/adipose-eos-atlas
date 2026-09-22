@@ -94,6 +94,13 @@ for cl in EOS_CLUSTERS:
 # makes regulons look cluster-specific. Inner join instead: keep only
 # regulons scored in every cluster.
 qiu_auc = pd.concat(eos_auc_parts, join="inner")
+if qiu_auc.shape[1] == 0:
+    raise ValueError(
+        f"Zero regulons survive the intersection across all {len(EOS_CLUSTERS)} "
+        f"clusters -- each cluster's SCENIC network shares no regulon in "
+        f"common. This analysis needs a common regulon set to test against; "
+        f"consider rescoring AUCell for a shared/union gene-set instead of "
+        f"relying on per-cluster independent inference.")
 qiu_group = pd.concat(eos_group_parts)
 print(f"  Total Qiu: {len(qiu_auc)} cells, {qiu_auc.shape[1]} regulons "
       f"scored in all {len(EOS_CLUSTERS)} clusters")
@@ -125,8 +132,13 @@ else:
     for depot in ["eWAT", "scWAT", "BAT"]:
         auc_path = os.path.join(HU_SCENIC, depot, "auc_matrix.csv")
         if not os.path.exists(auc_path):
-            print(f"  WARNING: {auc_path} not found, skipping {depot}")
-            continue
+            # One missing depot changes the regulon intersection and every
+            # downstream comparison without any other error -- fail loudly
+            # rather than silently proceeding on a subset.
+            raise FileNotFoundError(
+                f"Missing auc_matrix.csv for Hu depot {depot} ({auc_path}). "
+                f"Regenerate it, or explicitly support a declared depot "
+                f"subset instead of silently continuing.")
         df = pd.read_csv(auc_path, index_col=0)
         df.columns = [extract_tf(c) for c in df.columns]
         df = df.T.groupby(level=0).max().T
@@ -134,13 +146,17 @@ else:
         hu_group_parts.append(pd.Series(f"Hu_{depot}", index=df.index))
         print(f"  Hu_{depot}: {df.shape[0]} cells x {df.shape[1]} regulons")
 
-    if not hu_auc_parts:
-        print("  ERROR: No Hu AUCell data found.")
-        exit(1)
     # Same reasoning as the Qiu per-cluster merge above: inner join, not
     # outer + fillna(0), so a regulon not inferred for a given depot's
     # independently fitted network isn't recorded as a real zero score.
     hu_auc = pd.concat(hu_auc_parts, join="inner")
+    if hu_auc.shape[1] == 0:
+        raise ValueError(
+            "Zero regulons survive the intersection across all Hu depots "
+            "-- each depot's SCENIC network shares no regulon in common. "
+            "This analysis needs a common regulon set to test against; "
+            "consider rescoring AUCell for a shared/union gene-set instead "
+            "of relying on per-depot independent inference.")
     hu_group = pd.concat(hu_group_parts)
 
 print(f"  Total Hu: {len(hu_auc)} cells, {hu_auc.shape[1]} regulons")

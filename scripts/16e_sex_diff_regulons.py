@@ -91,6 +91,14 @@ if missing_clusters:
 # instead: keep only regulons that were actually scored in every cluster, so
 # every remaining value is a genuine AUCell score, not an inference artifact.
 auc = pd.concat(auc_parts, join="inner")
+if auc.shape[1] == 0:
+    raise ValueError(
+        f"Zero regulons survive the intersection across all {len(EOS_CLUSTERS)} "
+        f"clusters ({len(union_regulons)} distinct regulons existed across "
+        f"clusters individually) -- each cluster's SCENIC network shares no "
+        f"regulon in common. This analysis needs a common regulon set to test "
+        f"against; consider rescoring AUCell for a shared/union gene-set "
+        f"instead of relying on per-cluster independent inference.")
 print(f"  Combined: {auc.shape[0]} cells x {auc.shape[1]} regulons "
       f"(inner join: regulons scored in ALL {len(EOS_CLUSTERS)} clusters; "
       f"{len(union_regulons)} total distinct regulons existed across clusters, "

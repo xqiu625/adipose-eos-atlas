@@ -14,6 +14,7 @@ SLURM: --partition=batch --mem=32G --cpus-per-task=4 --time=01:00:00
 Conda: /bigdata/godziklab/shared/Xinru/cellrank_env
 """
 
+import math
 import os
 import numpy as np
 import pandas as pd
@@ -25,6 +26,16 @@ from scipy import stats
 from statsmodels.stats.multitest import multipletests
 import warnings
 warnings.filterwarnings("ignore")
+
+
+def mannwhitney_floor_p(n1, n2):
+    """Minimum possible exact two-sided Mann-Whitney p-value achievable at
+    sample sizes (n1, n2), regardless of effect size: 2 / C(n1+n2, n1). E.g.
+    0.1 at 3-vs-3, 0.333 at 2-vs-2. Matches 22_scenic_by_condition.py."""
+    return 2.0 / math.comb(n1 + n2, min(n1, n2))
+
+
+MIN_GROUP_N_FOR_INFERENCE = 3  # Kruskal-Wallis heuristic, matches 22_scenic_by_condition.py
 
 plt.rcParams.update({"font.family": "sans-serif", "pdf.fonttype": 42,
                      "ps.fonttype": 42, "savefig.dpi": 300})
@@ -91,6 +102,13 @@ for cl in EOS_CLUSTERS:
 # every OTHER cluster's cells were scored and found inactive for that
 # regulon, systematically inflating apparent cluster-specificity.
 auc = pd.concat(auc_parts, join="inner")
+if auc.shape[1] == 0:
+    raise ValueError(
+        f"Zero regulons survive the intersection across all {len(EOS_CLUSTERS)} "
+        f"clusters -- each cluster's SCENIC network shares no regulon in "
+        f"common. This analysis needs a common regulon set to test against; "
+        f"consider rescoring AUCell for a shared/union gene-set instead of "
+        f"relying on per-cluster independent inference.")
 print(f"  Combined: {auc.shape[0]} cells x {auc.shape[1]} regulons "
       f"(scored in all {len(EOS_CLUSTERS)} clusters)")
 
@@ -327,11 +345,14 @@ for tf in all_tfs_ordered:
     if not cl:
         continue
 
+    # Require >=2 samples per group -- a cluster present in only one sample
+    # of a condition would otherwise enter Kruskal-Wallis/Mann-Whitney as an
+    # n=1 group, which is not a valid two-sample comparison.
     groups = []
     group_ns = []
     for cond in COND_ORDER:
         vals = cluster_sample_means(tf, cl, cond)
-        if len(vals) > 0:
+        if len(vals) >= 2:
             groups.append(vals)
             group_ns.append(len(vals))
 
@@ -344,21 +365,31 @@ for tf in all_tfs_ordered:
         "regulon": tf, "cluster": cl,
         "kruskal_H": h_stat, "kruskal_p": p_val,
         "n_samples_per_condition": ",".join(str(n) for n in group_ns),
+        # Heuristic, not an exact combinatorial floor (unlike Mann-Whitney
+        # below): any group below this size cannot support a meaningful
+        # significance claim, so treat as a descriptive effect-size
+        # comparison rather than a confirmed significant result.
+        "underpowered": (len(groups) < 2
+                         or min(group_ns) < MIN_GROUP_N_FOR_INFERENCE),
     })
 
-    # Pairwise: WT vs KO within each sex, on per-sample means within cl
+    # Pairwise: WT vs KO within each sex, on per-sample means within cl.
+    # Require >=2 samples per side for the same reason as above.
     for sex_label, wt_cond, ko_cond in [
         ("Female", "WT_Female_HFD", "KO_Female_HFD"),
         ("Male",   "WT_Male_HFD",   "KO_Male_HFD"),
     ]:
         wt_vals = cluster_sample_means(tf, cl, wt_cond)
         ko_vals = cluster_sample_means(tf, cl, ko_cond)
-        if len(wt_vals) > 0 and len(ko_vals) > 0:
+        if len(wt_vals) >= 2 and len(ko_vals) >= 2:
             u_stat, u_p = stats.mannwhitneyu(
                 wt_vals, ko_vals, alternative="two-sided"
             )
+            floor_p = mannwhitney_floor_p(len(wt_vals), len(ko_vals))
             stat_rows[-1][f"WTvsKO_{sex_label}_U"] = u_stat
             stat_rows[-1][f"WTvsKO_{sex_label}_p"] = u_p
+            stat_rows[-1][f"WTvsKO_{sex_label}_floor_p"] = floor_p
+            stat_rows[-1][f"WTvsKO_{sex_label}_underpowered"] = floor_p > 0.05
             stat_rows[-1][f"WTvsKO_{sex_label}_n"] = f"{len(wt_vals)}v{len(ko_vals)}"
 
 stat_df = pd.DataFrame(stat_rows)
@@ -374,10 +405,21 @@ def _add_fdr(df, pcol, fdrcol):
         df.loc[valid, fdrcol] = multipletests(df.loc[valid, pcol], method="fdr_bh")[1]
 
 _add_fdr(stat_df, "kruskal_p", "kruskal_fdr")
+stat_df["kruskal_statistically_testable"] = ~stat_df["underpowered"]
 for sex_label in ["Female", "Male"]:
     pcol = f"WTvsKO_{sex_label}_p"
     if pcol in stat_df.columns:
         _add_fdr(stat_df, pcol, f"WTvsKO_{sex_label}_fdr")
+        upcol = f"WTvsKO_{sex_label}_underpowered"
+        # NaN (not True/False) where the pairwise test never ran at all
+        # (fewer than 2 samples on one side) -- there is no test to call
+        # testable or not.
+        stat_df[f"WTvsKO_{sex_label}_statistically_testable"] = stat_df[upcol].map(
+            lambda x: (not x) if pd.notna(x) else np.nan)
+
+n_kw_underpowered = int(stat_df["underpowered"].sum())
+print(f"  Kruskal-Wallis: {len(stat_df) - n_kw_underpowered}/{len(stat_df)} "
+      f"statistically testable (smallest group >= {MIN_GROUP_N_FOR_INFERENCE} samples)")
 
 stat_csv = os.path.join(BASE, "scenic", "38_regulon_condition_stats.csv")
 stat_df.to_csv(stat_csv, index=False)

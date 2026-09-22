@@ -89,6 +89,13 @@ if missing_clusters:
 # keep only regulons scored in every cluster, so every remaining value is a
 # genuine AUCell score.
 all_eos_auc = pd.concat(eos_data.values(), join="inner")
+if all_eos_auc.shape[1] == 0:
+    raise ValueError(
+        f"Zero regulons survive the intersection across all {len(EOS_CLUSTERS)} "
+        f"clusters -- each cluster's SCENIC network shares no regulon in "
+        f"common. This analysis needs a common regulon set to test against; "
+        f"consider rescoring AUCell for a shared/union gene-set instead of "
+        f"relying on per-cluster independent inference.")
 all_eos_group = pd.concat(eos_meta.values())
 print(f"  Total eos: {len(all_eos_auc)} cells, {all_eos_auc.shape[1]} regulons "
       f"scored in all {len(EOS_CLUSTERS)} clusters")

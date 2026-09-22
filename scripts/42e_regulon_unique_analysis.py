@@ -52,54 +52,65 @@ print("=" * 60)
 # =============================================================================
 print("\nStep 1: Loading data...")
 
+# This script's purpose is presence/absence (which regulons exist only in
+# one dataset), not a magnitude comparison -- so regulon SETS must be built
+# from the UNION of what each cluster's/depot's independently fit SCENIC
+# network inferred, not the intersection. Taking the intersection (as this
+# script previously did) silently redefines "Qiu-only" as "present in EVERY
+# Qiu cluster AND absent from EVERY Hu depot," which excludes any regulon
+# inferred in only one or two Qiu clusters -- not the normal meaning of
+# "dataset-specific." Per-cluster/per-depot DataFrames are kept (not
+# concatenated) so each regulon's value can still be looked up wherever it
+# actually was scored; a cluster/depot that didn't score a given regulon
+# contributes NaN there, not a fabricated 0.
+
 # Qiu per-cluster
-qiu_parts = []
-qiu_groups = []
+qiu_parts = {}
 for cl in EOS_CLUSTERS:
     p = os.path.join(SCENIC_DIR, cl, "auc_matrix.csv")
     if os.path.exists(p):
         df = pd.read_csv(p, index_col=0)
         df.columns = [extract_tf(c) for c in df.columns]
         df = df.T.groupby(level=0).max().T
-        qiu_parts.append(df)
-        qiu_groups.append(pd.Series(cl, index=df.index))
+        qiu_parts[cl] = df
     else:
         raise FileNotFoundError(
             f"Missing auc_matrix.csv for cluster {cl}. Regenerate the "
             f"missing cluster's SCENIC output rather than silently "
             f"continuing with an incomplete analysis.")
 
-# Inner join, not outer + fillna(0): SCENIC is fit independently per
-# cluster, so a regulon absent from one cluster's network is "not inferred,"
-# not a real AUCell score of zero. Keep only regulons scored in every
-# cluster so qiu_regulons genuinely reflects Qiu-wide activity.
-qiu_auc = pd.concat(qiu_parts, join="inner")
-qiu_group = pd.concat(qiu_groups)
-qiu_regulons = set(qiu_auc.columns)
-print(f"  Qiu: {len(qiu_auc)} cells, {len(qiu_regulons)} regulons")
+qiu_union_regulons = set()
+for df in qiu_parts.values():
+    qiu_union_regulons |= set(df.columns)
+print(f"  Qiu: {sum(len(df) for df in qiu_parts.values())} cells, "
+      f"{len(qiu_union_regulons)} regulons inferred in >=1 cluster")
 
 # Hu per-depot
-hu_parts = []
-hu_groups = []
+hu_parts = {}
 for depot in HU_DEPOTS:
     p = os.path.join(HU_SCENIC, depot, "auc_matrix.csv")
     if os.path.exists(p):
         df = pd.read_csv(p, index_col=0)
         df.columns = [extract_tf(c) for c in df.columns]
         df = df.T.groupby(level=0).max().T
-        hu_parts.append(df)
-        hu_groups.append(pd.Series(f"Hu_{depot}", index=df.index))
+        hu_parts[depot] = df
+    else:
+        raise FileNotFoundError(
+            f"Missing auc_matrix.csv for Hu depot {depot}. One missing "
+            f"depot changes the regulon union/intersection and every "
+            f"downstream comparison without any other error -- regenerate "
+            f"it, or explicitly support a declared depot subset instead of "
+            f"silently continuing.")
 
-# Same reasoning as qiu_auc above: inner join across independently fitted
-# per-depot networks.
-hu_auc = pd.concat(hu_parts, join="inner")
-hu_group = pd.concat(hu_groups)
-hu_regulons = set(hu_auc.columns)
-print(f"  Hu: {len(hu_auc)} cells, {len(hu_regulons)} regulons")
+hu_union_regulons = set()
+for df in hu_parts.values():
+    hu_union_regulons |= set(df.columns)
+print(f"  Hu: {sum(len(df) for df in hu_parts.values())} cells, "
+      f"{len(hu_union_regulons)} regulons inferred in >=1 depot")
 
-shared = sorted(qiu_regulons & hu_regulons)
-qiu_only = sorted(qiu_regulons - hu_regulons)
-hu_only = sorted(hu_regulons - qiu_regulons)
+shared = sorted(qiu_union_regulons & hu_union_regulons)
+qiu_only = sorted(qiu_union_regulons - hu_union_regulons)
+hu_only = sorted(hu_union_regulons - qiu_union_regulons)
 
 print(f"\n  Shared: {len(shared)}")
 print(f"  Qiu-only (HFD-specific): {len(qiu_only)}")
@@ -112,14 +123,21 @@ print("\n" + "=" * 60)
 print("Step 2: Hu-only regulons (healthy adipose, absent in HFD)")
 print("=" * 60)
 
+hu_only_filtered = [t for t in hu_only if t not in EXCLUDE]
 hu_only_means = {}
-for depot in ["Hu_eWAT", "Hu_scWAT", "Hu_BAT"]:
-    mask = hu_group == depot
-    hu_only_means[depot] = hu_auc.loc[mask, [t for t in hu_only if t not in EXCLUDE]].mean()
+for depot in HU_DEPOTS:
+    df = hu_parts[depot]
+    # NaN, not 0, for a regulon this depot's own SCENIC network never
+    # inferred -- every hu_only regulon is guaranteed a real value in at
+    # least one depot (that's why it's in hu_only), just not necessarily
+    # this one.
+    hu_only_means[f"Hu_{depot}"] = {
+        tf: (df[tf].mean() if tf in df.columns else np.nan) for tf in hu_only_filtered
+    }
 
 hu_only_df = pd.DataFrame(hu_only_means)
-hu_only_df["max_auc"] = hu_only_df.max(axis=1)
-hu_only_df["best_depot"] = hu_only_df[["Hu_eWAT", "Hu_scWAT", "Hu_BAT"]].idxmax(axis=1)
+hu_only_df["max_auc"] = hu_only_df.max(axis=1, skipna=True)
+hu_only_df["best_depot"] = hu_only_df[["Hu_eWAT", "Hu_scWAT", "Hu_BAT"]].idxmax(axis=1, skipna=True)
 hu_only_df = hu_only_df.sort_values("max_auc", ascending=False)
 
 print(f"\nTop 20 Hu-only regulons (active in healthy, absent in HFD):")
@@ -135,14 +153,21 @@ print("\n" + "=" * 60)
 print("Step 3: Qiu-only regulons (HFD-specific, absent in healthy)")
 print("=" * 60)
 
+qiu_only_filtered = [t for t in qiu_only if t not in EXCLUDE]
 qiu_cluster_means = {}
 for cl in EOS_CLUSTERS:
-    mask = qiu_group == cl
-    qiu_cluster_means[cl] = qiu_auc.loc[mask, [t for t in qiu_only if t not in EXCLUDE]].mean()
+    df = qiu_parts[cl]
+    # NaN, not 0, for a regulon this cluster's own SCENIC network never
+    # inferred -- every qiu_only regulon is guaranteed a real value in at
+    # least one cluster (that's why it's in qiu_only), just not necessarily
+    # this one.
+    qiu_cluster_means[cl] = {
+        tf: (df[tf].mean() if tf in df.columns else np.nan) for tf in qiu_only_filtered
+    }
 
 qiu_only_df = pd.DataFrame(qiu_cluster_means)
-qiu_only_df["max_auc"] = qiu_only_df.max(axis=1)
-qiu_only_df["best_cluster"] = qiu_only_df[EOS_CLUSTERS].idxmax(axis=1)
+qiu_only_df["max_auc"] = qiu_only_df.max(axis=1, skipna=True)
+qiu_only_df["best_cluster"] = qiu_only_df[EOS_CLUSTERS].idxmax(axis=1, skipna=True)
 qiu_only_df = qiu_only_df.sort_values("max_auc", ascending=False)
 
 print(f"\nTop 20 Qiu-only regulons (HFD-specific, absent in healthy):")
@@ -157,7 +182,9 @@ print("\nStep 4: Plotting Hu-only regulon heatmap...")
 
 top_hu_only = hu_only_df.head(15).index.tolist()
 if top_hu_only:
-    # For these regulons, show Hu depot means (Qiu is all zeros since not detected)
+    # A hu_only regulon may not have been scored in every depot (union-based
+    # selection) -- those cells are NaN, not a fabricated 0; imshow renders
+    # them blank and the text loop below skips them.
     plot_mat = hu_only_df.loc[top_hu_only, ["Hu_eWAT", "Hu_scWAT", "Hu_BAT"]]
 
     fig, ax = plt.subplots(figsize=(5, 6))
@@ -170,9 +197,12 @@ if top_hu_only:
                  fontsize=12, fontweight="bold")
     for i in range(len(top_hu_only)):
         for j in range(3):
-            ax.text(j, i, f"{plot_mat.values[i, j]:.3f}",
+            val = plot_mat.values[i, j]
+            if np.isnan(val):
+                continue  # regulon not inferred in this depot -- leave blank
+            ax.text(j, i, f"{val:.3f}",
                     ha="center", va="center", fontsize=7,
-                    color="white" if plot_mat.values[i, j] > 0.05 else "black")
+                    color="white" if val > 0.05 else "black")
     fig.colorbar(im, ax=ax, fraction=0.03, label="AUCell")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG_DIR, "42e_hu_only_regulon_heatmap.pdf"),
@@ -187,6 +217,9 @@ print("\nStep 5: Plotting Qiu-only regulon heatmap...")
 
 top_qiu_only = qiu_only_df.head(15).index.tolist()
 if top_qiu_only:
+    # A qiu_only regulon may not have been scored in every cluster
+    # (union-based selection) -- those cells are NaN, not a fabricated 0;
+    # imshow renders them blank and the text loop below skips them.
     plot_mat = qiu_only_df.loc[top_qiu_only, EOS_CLUSTERS]
 
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -199,9 +232,12 @@ if top_qiu_only:
                  fontsize=12, fontweight="bold")
     for i in range(len(top_qiu_only)):
         for j in range(6):
-            ax.text(j, i, f"{plot_mat.values[i, j]:.3f}",
+            val = plot_mat.values[i, j]
+            if np.isnan(val):
+                continue  # regulon not inferred in this cluster -- leave blank
+            ax.text(j, i, f"{val:.3f}",
                     ha="center", va="center", fontsize=7,
-                    color="white" if plot_mat.values[i, j] > 0.05 else "black")
+                    color="white" if val > 0.05 else "black")
     fig.colorbar(im, ax=ax, fraction=0.03, label="AUCell")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG_DIR, "42e_qiu_only_regulon_heatmap.pdf"),

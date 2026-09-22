@@ -52,46 +52,65 @@ print("=" * 60)
 # =============================================================================
 print("\nStep 1: Loading data...")
 
+# This script's Venn/stacked-bar/heatmap panels are fundamentally a
+# presence/absence question ("which regulons are dataset-specific"), so
+# regulon SETS must come from the UNION of what each cluster's/depot's
+# independently fit SCENIC network inferred, not the intersection -- taking
+# the intersection (as this script previously did) silently redefines
+# "Qiu-only" as "present in EVERY Qiu cluster AND absent from EVERY Hu
+# depot," excluding any regulon inferred in only some clusters/depots. Raw
+# per-cluster/per-depot DataFrames are kept in dicts (not concatenated) so a
+# regulon's value can still be looked up wherever it was actually scored;
+# `regulon_value()` below returns NaN, not a fabricated 0, wherever it
+# wasn't.
+
 # Qiu per-cluster
-qiu_parts, qiu_groups = [], []
+qiu_parts = {}
 for cl in EOS_CLUSTERS:
     p = os.path.join(SCENIC_DIR, cl, "auc_matrix.csv")
     if os.path.exists(p):
         df = pd.read_csv(p, index_col=0)
         df.columns = [extract_tf(c) for c in df.columns]
         df = df.T.groupby(level=0).max().T
-        qiu_parts.append(df)
-        qiu_groups.append(pd.Series(cl, index=df.index))
+        qiu_parts[cl] = df
     else:
         raise FileNotFoundError(
             f"Missing auc_matrix.csv for cluster {cl}. Regenerate the "
             f"missing cluster's SCENIC output rather than silently "
             f"continuing with an incomplete analysis.")
 
-# Inner join, not outer + fillna(0): SCENIC is fit independently per
-# cluster, so a regulon absent from one cluster's network is "not inferred,"
-# not a real AUCell score of zero. Keep only regulons scored in every
-# cluster so qiu_regulons genuinely reflects Qiu-wide activity.
-qiu_auc = pd.concat(qiu_parts, join="inner")
-qiu_group = pd.concat(qiu_groups)
-qiu_regulons = set(qiu_auc.columns)
+qiu_regulons = set()
+for df in qiu_parts.values():
+    qiu_regulons |= set(df.columns)
 
 # Hu per-depot
-hu_parts, hu_groups = [], []
+hu_parts = {}
 for depot in HU_DEPOTS:
     p = os.path.join(HU_SCENIC, depot, "auc_matrix.csv")
     if os.path.exists(p):
         df = pd.read_csv(p, index_col=0)
         df.columns = [extract_tf(c) for c in df.columns]
         df = df.T.groupby(level=0).max().T
-        hu_parts.append(df)
-        hu_groups.append(pd.Series(f"Hu_{depot}", index=df.index))
+        hu_parts[depot] = df
+    else:
+        raise FileNotFoundError(
+            f"Missing auc_matrix.csv for Hu depot {depot}. One missing "
+            f"depot changes the regulon union/intersection and every "
+            f"downstream comparison without any other error -- regenerate "
+            f"it, or explicitly support a declared depot subset instead of "
+            f"silently continuing.")
 
-# Same reasoning as qiu_auc above: inner join across independently fitted
-# per-depot networks.
-hu_auc = pd.concat(hu_parts, join="inner")
-hu_group = pd.concat(hu_groups)
-hu_regulons = set(hu_auc.columns)
+hu_regulons = set()
+for df in hu_parts.values():
+    hu_regulons |= set(df.columns)
+
+
+def regulon_value(parts, key, tf):
+    """Mean AUCell for `tf` in group `key` (a cluster or depot name), or NaN
+    if that group's own SCENIC network never inferred `tf`."""
+    df = parts[key]
+    return df[tf].mean() if tf in df.columns else np.nan
+
 
 shared = sorted(qiu_regulons & hu_regulons)
 qiu_only = sorted(qiu_regulons - hu_regulons)
@@ -101,8 +120,8 @@ n_shared = len(shared)
 n_qiu_only = len(qiu_only)
 n_hu_only = len(hu_only)
 
-print(f"  Qiu: {len(qiu_regulons)} regulons")
-print(f"  Hu: {len(hu_regulons)} regulons")
+print(f"  Qiu: {len(qiu_regulons)} regulons (inferred in >=1 cluster)")
+print(f"  Hu: {len(hu_regulons)} regulons (inferred in >=1 depot)")
 print(f"  Shared: {n_shared}, Qiu-only: {n_qiu_only}, Hu-only: {n_hu_only}")
 
 # =============================================================================
@@ -203,73 +222,61 @@ print("  Saved: 42f_regulon_stacked_bar.pdf")
 # =============================================================================
 print("\nStep 4: Side-by-side heatmap (HFD-enriched, both datasets)...")
 
-# Compute means for all groups
 all_columns = EOS_CLUSTERS + ["Hu_eWAT", "Hu_scWAT", "Hu_BAT"]
-group_means = {}
 
-for cl in EOS_CLUSTERS:
-    mask = qiu_group == cl
-    group_means[cl] = qiu_auc.loc[mask].mean()
-
-for depot in HU_DEPOTS:
-    mask = hu_group == f"Hu_{depot}"
-    group_means[f"Hu_{depot}"] = hu_auc.loc[mask].mean()
-
-# For Qiu-only regulons, Hu values are 0 (absent)
-# For shared regulons, find those enriched in Qiu vs Hu
-
-# A) Qiu-only regulons (top 10, excluding housekeeping)
+# A) Qiu-only regulons (top 10, excluding housekeeping). Values are NaN
+# (not 0) in any cluster that didn't score a given qiu_only regulon --
+# union-based selection means not every qiu_only regulon was scored in
+# every cluster.
 qiu_only_filtered = [t for t in qiu_only if t not in EXCLUDE]
-qiu_only_means = {}
-for cl in EOS_CLUSTERS:
-    mask = qiu_group == cl
-    qiu_only_means[cl] = qiu_auc.loc[mask, [t for t in qiu_only_filtered if t in qiu_auc.columns]].mean()
+qiu_only_means = {
+    cl: {tf: regulon_value(qiu_parts, cl, tf) for tf in qiu_only_filtered}
+    for cl in EOS_CLUSTERS
+}
 qiu_only_df = pd.DataFrame(qiu_only_means)
-qiu_only_df["max_auc"] = qiu_only_df.max(axis=1)
+qiu_only_df["max_auc"] = qiu_only_df.max(axis=1, skipna=True)
 top_qiu_only = qiu_only_df.sort_values("max_auc", ascending=False).head(10).index.tolist()
 
-# B) Shared regulons enriched in Qiu (higher in Qiu than Hu)
+# B) Shared regulons enriched in Qiu (higher in Qiu than Hu). shared is
+# union-based, so a given shared regulon is guaranteed a real value in at
+# least one Qiu cluster and at least one Hu depot -- but not necessarily
+# every one, so NaN entries are filtered out before taking the max rather
+# than being read as a real 0.
 shared_filtered = [t for t in shared if t not in EXCLUDE]
 qiu_mean_shared = {}
 hu_mean_shared = {}
 for tf in shared_filtered:
-    qiu_vals = []
-    for cl in EOS_CLUSTERS:
-        mask = qiu_group == cl
-        if tf in qiu_auc.columns:
-            qiu_vals.append(qiu_auc.loc[mask, tf].mean())
-    qiu_mean_shared[tf] = max(qiu_vals) if qiu_vals else 0
+    qiu_vals = [v for v in (regulon_value(qiu_parts, cl, tf) for cl in EOS_CLUSTERS)
+               if not np.isnan(v)]
+    qiu_mean_shared[tf] = max(qiu_vals) if qiu_vals else np.nan
 
-    hu_vals = []
-    for depot in HU_DEPOTS:
-        mask = hu_group == f"Hu_{depot}"
-        if tf in hu_auc.columns:
-            hu_vals.append(hu_auc.loc[mask, tf].mean())
-    hu_mean_shared[tf] = max(hu_vals) if hu_vals else 0
+    hu_vals = [v for v in (regulon_value(hu_parts, depot, tf) for depot in HU_DEPOTS)
+              if not np.isnan(v)]
+    hu_mean_shared[tf] = max(hu_vals) if hu_vals else np.nan
 
 # Fold enrichment in Qiu
 enrichment = {}
 for tf in shared_filtered:
-    if hu_mean_shared[tf] > 0.005:
-        enrichment[tf] = qiu_mean_shared[tf] / hu_mean_shared[tf]
-    elif qiu_mean_shared[tf] > 0.02:
-        enrichment[tf] = qiu_mean_shared[tf] / 0.005
+    qv, hv = qiu_mean_shared[tf], hu_mean_shared[tf]
+    if hv > 0.005:
+        enrichment[tf] = qv / hv
+    elif qv > 0.02:
+        enrichment[tf] = qv / 0.005
 
 top_shared_enriched = sorted(enrichment, key=enrichment.get, reverse=True)[:10]
 
 # Combine: top Qiu-only + top shared-enriched
 hfd_regulons = top_qiu_only + top_shared_enriched
 
-# Build heatmap matrix
+# Build heatmap matrix. NaN cells (regulon not scored in that cluster/depot)
+# are rendered blank below, not as a fabricated zero-activity value.
 heat_data = []
 for tf in hfd_regulons:
     row = {}
     for cl in EOS_CLUSTERS:
-        mask = qiu_group == cl
-        row[cl] = qiu_auc.loc[mask, tf].mean() if tf in qiu_auc.columns else 0
+        row[cl] = regulon_value(qiu_parts, cl, tf)
     for depot in HU_DEPOTS:
-        mask = hu_group == f"Hu_{depot}"
-        row[f"Hu_{depot}"] = hu_auc.loc[mask, tf].mean() if tf in hu_auc.columns else 0
+        row[f"Hu_{depot}"] = regulon_value(hu_parts, depot, tf)
     heat_data.append(row)
 
 heat_df = pd.DataFrame(heat_data, index=hfd_regulons)
@@ -285,7 +292,7 @@ cmap = LinearSegmentedColormap.from_list("white_blue_dark",
     ["#f7f7f7", "#d1e5f0", "#6baed6", "#2171b5", "#08306b"])
 
 im = ax.imshow(heat_df.values, cmap=cmap, aspect="auto", vmin=0,
-               vmax=max(0.2, heat_df.values.max()))
+               vmax=max(0.2, np.nanmax(heat_df.values)))
 
 # Grid lines
 ax.set_xticks(range(len(all_columns)))
@@ -309,10 +316,12 @@ ax.text(len(all_columns) + 0.3, len(top_qiu_only) + len(top_shared_enriched) / 2
         "Shared\n(HFD-enriched)", fontsize=9, fontweight="bold", color="#555555",
         va="center", rotation=270)
 
-# Values in cells
+# Values in cells (NaN = regulon not inferred in that cluster/depot -- leave blank)
 for i in range(len(hfd_regulons)):
     for j in range(len(all_columns)):
         val = heat_df.values[i, j]
+        if np.isnan(val):
+            continue
         color = "white" if val > 0.06 else "black"
         ax.text(j, i, f"{val:.3f}", ha="center", va="center",
                 fontsize=7, color=color)
@@ -339,25 +348,27 @@ print("  Saved: 42f_hfd_enriched_sidebyside.pdf")
 # =============================================================================
 print("\nStep 5: HFD vs Hu_eWAT bar comparison...")
 
-# Top 15 regulons by max Qiu AUC (excluding housekeeping)
-all_tfs = [t for t in sorted(qiu_auc.columns) if t not in EXCLUDE]
+# Top 15 regulons by max Qiu AUC (excluding housekeeping). qiu_regulons is
+# the union across clusters, so a regulon here is guaranteed a real value in
+# at least one cluster, just not necessarily every one.
+all_tfs = [t for t in sorted(qiu_regulons) if t not in EXCLUDE]
 qiu_max = {}
 hu_ewat_val = {}
 tfs_with_hu_ewat_data = []
 for tf in all_tfs:
-    # Max across Qiu clusters (tf is drawn from qiu_auc.columns, so always present)
-    vals = [qiu_auc.loc[qiu_group == cl, tf].mean() for cl in EOS_CLUSTERS]
+    vals = [v for v in (regulon_value(qiu_parts, cl, tf) for cl in EOS_CLUSTERS)
+           if not np.isnan(v)]
     qiu_max[tf] = max(vals)
 
-    # Hu eWAT mean -- only if this regulon was actually scored in Hu's
-    # SCENIC network at all. A regulon not in hu_auc.columns was "not
-    # inferred" in Hu, not measured and found at AUCell 0; defaulting it to
-    # 0 here would fabricate a huge log2FC below (qv / ~0) from missing
-    # data rather than a real Qiu-vs-Hu difference, so such regulons are
+    # Hu eWAT mean -- only if this regulon was actually scored in the eWAT
+    # depot's own SCENIC network. A regulon not scored there was "not
+    # inferred," not measured and found at AUCell 0; defaulting it to 0
+    # would fabricate a huge log2FC below (qv / ~0) from missing data
+    # rather than a real Qiu-vs-Hu difference, so such regulons are
     # excluded from this fold-change comparison entirely.
-    if tf in hu_auc.columns:
-        mask = hu_group == "Hu_eWAT"
-        hu_ewat_val[tf] = hu_auc.loc[mask, tf].mean()
+    val = regulon_value(hu_parts, "eWAT", tf) if "eWAT" in hu_parts else np.nan
+    if not np.isnan(val):
+        hu_ewat_val[tf] = val
         tfs_with_hu_ewat_data.append(tf)
 
 # Sort by fold-change (Qiu / Hu_eWAT), restricted to regulons actually

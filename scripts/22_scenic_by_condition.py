@@ -313,15 +313,19 @@ kw_df = pd.DataFrame(all_kw_results)
 
 if len(kw_df) > 0:
     kw_df["fdr"] = multipletests_bh(kw_df["p_value"].values)
+    # Logging "underpowered" is not enough to stop it being read as a
+    # confirmed result downstream -- sig_kw (which determines "top
+    # significant regulons" AND which pairwise tests get run below) must
+    # itself exclude untestable rows, not just carry a flag alongside them.
+    kw_df["statistically_testable"] = ~kw_df["underpowered"]
 
     # Identify condition-responsive regulons per cluster
-    sig_kw = kw_df[kw_df["fdr"] < 0.05]
-    n_sig_underpowered = int(sig_kw["underpowered"].sum())
+    sig_kw = kw_df[(kw_df["fdr"] < 0.05) & kw_df["statistically_testable"]]
+    n_underpowered_total = int(kw_df["underpowered"].sum())
     print(f"  Total tests: {len(kw_df)}")
-    print(f"  Significant (FDR < 0.05): {len(sig_kw)}"
-          f" ({n_sig_underpowered} flagged underpowered -- smallest group < "
-          f"{MIN_GROUP_N_FOR_INFERENCE} samples; report as descriptive "
-          f"effect-size comparisons, not confirmed significant results)")
+    print(f"  Statistically testable: {len(kw_df) - n_underpowered_total}/{len(kw_df)} "
+          f"(smallest group >= {MIN_GROUP_N_FOR_INFERENCE} samples)")
+    print(f"  Significant (FDR < 0.05, testable only): {len(sig_kw)}")
 
     for cl in clusters:
         cl_sig = sig_kw[sig_kw["cluster"] == cl]
@@ -375,6 +379,7 @@ if len(kw_df) > 0:
     pw_df = pd.DataFrame(pairwise_results)
     if len(pw_df) > 0:
         pw_df["fdr"] = multipletests_bh(pw_df["p_value"].values)
+        pw_df["statistically_testable"] = ~pw_df["underpowered"]
         n_underpowered = int(pw_df["underpowered"].sum())
         pw_path = os.path.join(OUT_DIR, "regulon_condition_pairwise.csv")
         pw_df.to_csv(pw_path, index=False)
@@ -642,14 +647,16 @@ relma_df = pd.DataFrame(relma_results)
 
 if len(relma_df) > 0:
     relma_df["fdr"] = multipletests_bh(relma_df["p_value"].values)
+    # Same principle as kw_df above: "underpowered" must gate sig_relma
+    # itself, not just be a column a reader could ignore.
+    relma_df["statistically_testable"] = ~relma_df["underpowered"]
 
-    sig_relma = relma_df[relma_df["fdr"] < 0.05]
+    sig_relma = relma_df[(relma_df["fdr"] < 0.05) & relma_df["statistically_testable"]]
     n_relma_underpowered = int(relma_df["underpowered"].sum())
     print(f"  Total tests: {len(relma_df)}")
-    print(f"  Significant (FDR < 0.05): {len(sig_relma)}")
-    print(f"  {n_relma_underpowered}/{len(relma_df)} tests are underpowered "
-          f"(exact floor_p > 0.05 regardless of effect size) -- report as "
-          f"descriptive effect-size comparisons, not significance tests")
+    print(f"  Statistically testable: {len(relma_df) - n_relma_underpowered}/{len(relma_df)} "
+          f"(exact floor_p <= 0.05 achievable at this sample size)")
+    print(f"  Significant (FDR < 0.05, testable only): {len(sig_relma)}")
 
     for comp_name in relma_df["comparison"].unique():
         comp_sig = sig_relma[sig_relma["comparison"] == comp_name]
@@ -686,12 +693,14 @@ if len(relma_df) > 0:
 
         sub["neg_log10_fdr"] = -np.log10(sub["fdr"].clip(lower=1e-300))
 
-        # Color by significance
+        # Color by significance -- gated on statistically_testable too, so an
+        # underpowered comparison (floor_p > 0.05, can never reach FDR<0.05
+        # meaningfully) is never drawn as "Up in WT/KO" regardless of its
+        # raw FDR value.
+        sig_mask = (sub["fdr"] < 0.05) & sub["statistically_testable"]
         sub["sig_group"] = "NS"
-        sub.loc[(sub["fdr"] < 0.05) & (sub["log2fc_WT_vs_KO"] > 0),
-                "sig_group"] = "Up in WT"
-        sub.loc[(sub["fdr"] < 0.05) & (sub["log2fc_WT_vs_KO"] < 0),
-                "sig_group"] = "Up in KO"
+        sub.loc[sig_mask & (sub["log2fc_WT_vs_KO"] > 0), "sig_group"] = "Up in WT"
+        sub.loc[sig_mask & (sub["log2fc_WT_vs_KO"] < 0), "sig_group"] = "Up in KO"
 
         color_map = {"NS": "#B3B3B3", "Up in WT": "#E84A5F", "Up in KO": "#2166AC"}
 
@@ -701,8 +710,8 @@ if len(relma_df) > 0:
                        sub.loc[mask, "neg_log10_fdr"],
                        c=color, s=20, alpha=0.7, label=group, edgecolors="none")
 
-        # Label top significant regulons
-        top_sig = sub[sub["fdr"] < 0.05].nsmallest(10, "fdr")
+        # Label top significant regulons (testable only, same gate as sig_group)
+        top_sig = sub[sig_mask].nsmallest(10, "fdr")
         for _, row in top_sig.iterrows():
             ax.annotate(row["regulon"],
                         (row["log2fc_WT_vs_KO"], row["neg_log10_fdr"]),
@@ -815,10 +824,12 @@ print(f"  Clusters:         {len(clusters)}")
 print(f"  Conditions:       {len(conditions)}")
 
 if len(kw_df) > 0:
-    print(f"  KW tests:         {len(kw_df)} (sig: {(kw_df['fdr'] < 0.05).sum()})")
+    n_sig_kw = ((kw_df["fdr"] < 0.05) & kw_df["statistically_testable"]).sum()
+    print(f"  KW tests:         {len(kw_df)} (sig, testable only: {n_sig_kw})")
 if len(relma_df) > 0:
+    n_sig_relma = ((relma_df["fdr"] < 0.05) & relma_df["statistically_testable"]).sum()
     print(f"  RELMa tests:      {len(relma_df)} "
-          f"(sig: {(relma_df['fdr'] < 0.05).sum()})")
+          f"(sig, testable only: {n_sig_relma})")
 
 print()
 print("Output files:")
