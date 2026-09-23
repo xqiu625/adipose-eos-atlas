@@ -22,10 +22,12 @@ set -euo pipefail
 # via `scontrol show job` that WorkDir was the repo checkout, not RERUN_ROOT,
 # and its reports landed next to the raw FASTQs). That run was already 7+
 # hours in when caught and was NOT restarted (killing it would waste real
-# compute for a pure bookkeeping fix); its reports were instead copied
-# post-hoc into RERUN_ROOT with a checksum-verified transfer, recorded as a
-# documented deviation in RERUN_LOG.md. This version fixes the script itself
-# so every subsequent submission writes directly under RERUN_ROOT.
+# compute for a pure bookkeeping fix); as of this fix the job is still
+# RUNNING and no reports have been relocated yet. Its reports will be copied
+# after successful completion into RERUN_ROOT using a checksum-verified
+# transfer; the deviation and the transfer results will be recorded in
+# RERUN_LOG.md once that actually happens. This version fixes the script
+# itself so every subsequent submission writes directly under RERUN_ROOT.
 
 #SBATCH --ntasks=10
 #SBATCH --mem=256gb
