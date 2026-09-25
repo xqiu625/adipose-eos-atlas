@@ -2,6 +2,9 @@
 # ==============================================================================
 # SLURM_COMMANDS.sh
 # Step-by-step SLURM submission commands for the adipose eosinophil atlas
+# For the audited parallel 00a/00 rerun, use submit_preprocessing_array.sh
+# and docs/PARALLEL_PREPROCESSING.md. The commands below remain historical
+# templates; do not execute this entire file or bypass stage QC checkpoints.
 #
 # Run each block manually. Steps within a block can run in parallel.
 # Wait for each block to complete (squeue -u $USER) before proceeding.

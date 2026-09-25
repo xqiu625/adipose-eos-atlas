@@ -2,6 +2,16 @@
 
 ## Instructions for Claude Code on the UCR HPCC
 
+Parallel preprocessing implementation: use
+[`docs/PARALLEL_PREPROCESSING.md`](docs/PARALLEL_PREPROCESSING.md) and
+`scripts/submit_preprocessing_array.sh` for the new per-sample Scrublet and
+DecontX arrays. These replace the serial submission examples in section 4 for
+the parallel rerun. Submit one audited stage at a time; only its collector is
+automatically dependency-chained. Record the scientific checkpoint before
+submitting the next stage. Keep all scientific validation below. This code is
+locally orchestration-tested; pinned-environment scientific smoke/equivalence
+tests on HPCC remain required before production submission.
+
 Treat this section as the execution contract. Claude Code must read this entire
 file before changing or submitting anything. It must work from the repository
 checkout on the HPCC and must not infer success from `sbatch` accepting a job.

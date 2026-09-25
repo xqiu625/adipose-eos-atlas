@@ -9,16 +9,11 @@ requires these calls and excludes predicted doublets before DecontX fitting.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import platform
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-
-import numpy as np
-import pandas as pd
-import scanpy as sc
-import scrublet as scr
-
 
 SAMPLES = [
     (1, "WT_Male_HFD_1", "RR0104"),
@@ -58,17 +53,40 @@ def arguments() -> argparse.Namespace:
         help="Sensitivity parameter; justify against recovered-cell loading metrics",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--sample-id", type=int, choices=range(1, 17),
+                        help="Process only this sample; do not write shared summaries")
+    parser.add_argument("--input-manifest", type=Path,
+                        help="TSV with sample_id, pool, filtered_dir, raw_dir")
     return parser.parse_args()
 
 
 def main() -> None:
     args = arguments()
+    import numpy as np
+    import pandas as pd
+    import scanpy as sc
+    import scrublet as scr
+
+    if not 0 < args.expected_rate < 1:
+        raise ValueError("--expected-rate must be between zero and one")
+    manifest = None
+    if args.input_manifest:
+        with args.input_manifest.open() as handle:
+            rows = list(csv.DictReader(handle, delimiter="\t"))
+        manifest = {int(row["sample_id"]): row for row in rows}
+        if len(rows) != 16 or set(manifest) != set(range(1, 17)):
+            raise ValueError("Input manifest must contain exactly samples 1–16")
+        for sid, _, pool in SAMPLES:
+            if manifest[sid]["pool"] != pool:
+                raise ValueError(f"Wrong pool in input manifest for sample {sid}")
     data_root = Path(args.data_root)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     summaries: list[dict[str, object]] = []
 
     for sample_id, condition, gem in SAMPLES:
+        if args.sample_id is not None and sample_id != args.sample_id:
+            continue
         matrix_dir = (
             data_root
             / gem
@@ -78,6 +96,8 @@ def main() -> None:
             / "count"
             / "sample_filtered_feature_bc_matrix"
         )
+        if manifest is not None:
+            matrix_dir = Path(manifest[sample_id]["filtered_dir"])
         if not matrix_dir.is_dir():
             raise FileNotFoundError(f"Missing Cell Ranger matrix: {matrix_dir}")
 
@@ -108,6 +128,8 @@ def main() -> None:
             }
         )
         call_path = output_dir / f"scrublet_sample_{sample_id}.csv"
+        if args.sample_id is not None and call_path.exists():
+            raise FileExistsError(f"Refusing to overwrite sample output: {call_path}")
         call_table.to_csv(call_path, index=False)
 
         threshold = getattr(detector, "threshold_", None)
@@ -132,9 +154,12 @@ def main() -> None:
         )
 
     summary = pd.DataFrame(summaries)
-    if set(summary["sample_id"]) != set(range(1, 17)):
-        raise RuntimeError("Doublet analysis did not complete for all 16 samples")
-    summary.to_csv(output_dir / "scrublet_summary.csv", index=False)
+    expected = {args.sample_id} if args.sample_id is not None else set(range(1, 17))
+    if set(summary["sample_id"]) != expected:
+        raise RuntimeError("Doublet analysis did not complete for all selected samples")
+    summary_name = (f"scrublet_summary_sample_{args.sample_id}.csv"
+                    if args.sample_id is not None else "scrublet_summary.csv")
+    summary.to_csv(output_dir / summary_name, index=False)
     package_versions = {}
     for package in ("scanpy", "scrublet", "numpy", "pandas", "scipy"):
         try:
@@ -142,14 +167,16 @@ def main() -> None:
         except PackageNotFoundError:
             package_versions[package] = "unknown"
     run_record = {
-        "parameters": vars(args),
+        "parameters": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
         "python": platform.python_version(),
         "packages": package_versions,
     }
-    (output_dir / "scrublet_run_parameters.json").write_text(
+    record_name = (f"scrublet_run_parameters_sample_{args.sample_id}.json"
+                   if args.sample_id is not None else "scrublet_run_parameters.json")
+    (output_dir / record_name).write_text(
         json.dumps(run_record, indent=2) + "\n"
     )
-    print(f"Completed all 16 samples. Outputs: {output_dir}")
+    print(f"Completed {len(expected)} sample(s). Outputs: {output_dir}")
 
 
 if __name__ == "__main__":

@@ -21,12 +21,30 @@ if (nzchar(Sys.getenv("RERUN_R_LIB"))) {
 ## DecontX ambient RNA removal per sample, after pre-DecontX doublet removal
 ## SLURM: --mem=128G --cpus-per-task=8 --time=4:00:00 -p batch
 
+# Single-sample mode is used by the audited array launcher. Scientific settings
+# and decontX defaults are unchanged; aggregation is a separate, validated step.
+cli <- commandArgs(trailingOnly = TRUE)
+sample_id_arg <- NULL
+manifest_path <- NULL
+if (length(cli) %% 2L != 0L) stop("Expected --sample-id N and/or --input-manifest PATH")
+if (length(cli)) for (j in seq.int(1L, length(cli), by = 2L)) {
+  if (cli[j] == "--sample-id") {
+    if (!grepl("^([1-9]|1[0-6])$", cli[j + 1L])) stop("sample-id must be 1–16")
+    sample_id_arg <- as.integer(cli[j + 1L])
+  } else if (cli[j] == "--input-manifest") {
+    manifest_path <- cli[j + 1L]
+  } else stop("Unknown argument: ", cli[j])
+}
+
 # ── Libraries ──────────────────────────────────────────────────────────────────
 suppressPackageStartupMessages({
   library(Seurat)
   library(celda)
   library(Matrix)
 })
+cat("Analysis packages:", paste(c("Seurat", "celda", "Matrix"),
+    vapply(c("Seurat", "celda", "Matrix"), function(p) as.character(packageVersion(p)),
+           character(1)), collapse = "; "), "\n")
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 BASE <- Sys.getenv(
@@ -61,9 +79,26 @@ gem_map <- list(
   "RR0912" = 9:12,
   "RR1316" = 13:16
 )
+input_manifest <- NULL
+if (!is.null(manifest_path)) {
+  input_manifest <- read.delim(manifest_path, stringsAsFactors = FALSE, check.names = FALSE)
+  required <- c("sample_id", "pool", "filtered_dir", "raw_dir")
+  if (!all(required %in% names(input_manifest)) || nrow(input_manifest) != 16L ||
+      anyDuplicated(input_manifest$sample_id) ||
+      !setequal(input_manifest$sample_id, 1:16)) stop("Invalid 16-sample input manifest")
+  for (pool in names(gem_map)) {
+    if (any(input_manifest$pool[match(gem_map[[pool]], input_manifest$sample_id)] != pool)) {
+      stop("Incorrect pool mapping: ", pool)
+    }
+  }
+}
 
 # Build per-sample paths
 get_sample_paths <- function(sample_id) {
+  if (!is.null(input_manifest)) {
+    row <- input_manifest[input_manifest$sample_id == sample_id, ]
+    return(list(filtered = row$filtered_dir, raw = row$raw_dir))
+  }
   gem <- NULL
   for (g in names(gem_map)) {
     if (sample_id %in% gem_map[[g]]) {
@@ -95,11 +130,14 @@ all_scores <- list()
 
 for (i in seq_len(nrow(sample_info))) {
   sid  <- sample_info$sample_id[i]
+  if (!is.null(sample_id_arg) && sid != sample_id_arg) next
   cond <- sample_info$condition[i]
 
   cat(sprintf("[Sample %d/%d] %s (ID: %d)\n", i, nrow(sample_info), cond, sid))
 
   paths <- get_sample_paths(sid)
+  out_file <- file.path(out_dir, sprintf("decontx_sample_%d.rds", sid))
+  if (!is.null(sample_id_arg) && file.exists(out_file)) stop("Refusing to overwrite: ", out_file)
 
   tryCatch({
     # Load filtered counts
@@ -164,6 +202,15 @@ for (i in seq_len(nrow(sample_info))) {
       decon_counts <- decon_result$decontXcounts
       contamination <- decon_result$contamination
     }
+    if (!identical(dim(decon_counts), dim(filtered_counts)) ||
+        !identical(colnames(decon_counts), colnames(filtered_counts)) ||
+        !identical(rownames(decon_counts), rownames(filtered_counts))) {
+      stop("DecontX changed matrix dimensions or cell/feature alignment")
+    }
+    if (length(contamination) != ncol(filtered_counts) ||
+        any(!is.finite(contamination)) || any(contamination < 0 | contamination > 1)) {
+      stop("Invalid DecontX contamination vector")
+    }
 
     cat(sprintf("  Mean contamination: %.4f\n", mean(contamination)))
     cat(sprintf("  Cells above threshold (%.1f): %d / %d (%.1f%%)\n",
@@ -195,6 +242,10 @@ for (i in seq_len(nrow(sample_info))) {
       stringsAsFactors = FALSE
     )
     all_scores[[i]] <- score_df
+    if (!is.null(sample_id_arg)) {
+      write.csv(score_df, file.path(out_dir, sprintf("decontx_scores_sample_%d.csv", sid)),
+                row.names = FALSE)
+    }
 
   }, error = function(e) {
     stop(sprintf("ERROR processing sample %d (%s): %s", sid, cond, e$message),
@@ -202,6 +253,11 @@ for (i in seq_len(nrow(sample_info))) {
   })
 
   cat("\n")
+}
+
+if (!is.null(sample_id_arg)) {
+  cat("Single sample complete; shared summary is withheld until all 16 tasks validate.\n")
+  quit(save = "no", status = 0L)
 }
 
 # ── Combine and save all contamination scores ─────────────────────────────────
