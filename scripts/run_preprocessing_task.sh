@@ -13,8 +13,10 @@ export EOS_ATLAS_BASE="$base"
 if [[ "$stage" == decontx && "$action" == worker ]]; then
   : "${RERUN_R_LIB:?Set the validated pinned R library}"
   : "${CMDSTAN:?Set the validated CmdStan directory}"
+  : "${SCE_FIX_LIB:?Set the validated SCE-dependency-chain fix library (RERUN_LOG.md Checkpoint 26)}"
   test -d "$RERUN_R_LIB"
   test -d "$CMDSTAN"
+  test -d "$SCE_FIX_LIB"
   # sbatch --export=ALL inherits login-shell modules (including R/4.5.2).
   # Clear them before loading the audited compiler/R pair; retain hard checks.
   module purge

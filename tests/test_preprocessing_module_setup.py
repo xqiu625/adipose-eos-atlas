@@ -11,7 +11,8 @@ class ModuleSetupTests(unittest.TestCase):
         runner = Path(__file__).resolve().parents[1] / "scripts/run_preprocessing_task.sh"
         with tempfile.TemporaryDirectory() as base:
             env = dict(os.environ, SLURM_CPUS_PER_TASK="2", SLURM_ARRAY_TASK_ID="1",
-                       RERUN_R_LIB=base, CMDSTAN=base, FAIL_PURGE=str(int(fail_purge)))
+                       RERUN_R_LIB=base, CMDSTAN=base, SCE_FIX_LIB=base,
+                       FAIL_PURGE=str(int(fail_purge)))
             driver = '''
 module() {
   echo "MODULE $*"
@@ -46,3 +47,22 @@ exec bash "$@"
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("MODULE", result.stdout)
         self.assertNotIn("RSCRIPT", result.stdout)
+
+    def test_missing_sce_fix_lib_stops_worker(self):
+        runner = Path(__file__).resolve().parents[1] / "scripts/run_preprocessing_task.sh"
+        with tempfile.TemporaryDirectory() as base:
+            env = dict(os.environ, SLURM_CPUS_PER_TASK="2", SLURM_ARRAY_TASK_ID="1",
+                       RERUN_R_LIB=base, CMDSTAN=base, FAIL_PURGE="0")
+            env.pop("SCE_FIX_LIB", None)
+            driver = '''
+module() { echo "MODULE $*"; return 0; }
+Rscript() { echo "RSCRIPT $*"; }
+export -f module Rscript
+exec bash "$@"
+'''
+            result = subprocess.run(["bash", "-c", driver, "module-test", str(runner),
+                                     "decontx", base, "worker", "/bin/echo"],
+                                    env=env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("MODULE load", result.stdout)
+        self.assertIn("SCE_FIX_LIB", result.stderr)

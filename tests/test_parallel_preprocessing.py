@@ -54,14 +54,16 @@ class ParallelTests(unittest.TestCase):
             self.rows.append(row)
         self.manifest = self.root / "manifest.tsv"
         csv_write(self.manifest, self.rows, "\t")
+        self.captured_envs = []
 
-    def args(self, stage="scrublet", sample_id=None):
+    def args(self, stage="scrublet", sample_id=None, background_policy="historical"):
         return argparse.Namespace(base=self.base, stage=stage, sample_id=sample_id,
                                   manifest=self.manifest, gate=self.root / f"{stage}_gate.json",
-                                  expected_rate=0.06, seed=42)
+                                  expected_rate=0.06, seed=42,
+                                  background_policy=background_policy if stage == "decontx" else None)
 
-    def prepare(self, stage="scrublet", execute=True):
-        args = self.args(stage)
+    def prepare(self, stage="scrublet", execute=True, background_policy="historical"):
+        args = self.args(stage, background_policy=background_policy)
         gate = {"stage": "cellranger_qc_and_00a_audit" if stage == "scrublet" else "scrublet_qc_and_decontx_audit",
                 "status": "PASS", "manifest_sha256": p.digest(self.manifest),
                 "script_sha256": p.digest(SCRIPTS / p.STAGES[stage]),
@@ -73,6 +75,7 @@ class ParallelTests(unittest.TestCase):
             p.prepare(args)
 
     def fake_analysis(self, command, env, check):
+        self.captured_envs.append(env)
         sid = int(command[command.index("--sample-id") + 1])
         stage = "scrublet" if "--output-dir" in command else "decontx"
         if stage == "scrublet":
@@ -149,6 +152,46 @@ class ParallelTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "checksum differs"):
                 p.worker(self.args(sample_id=1))
             run.assert_not_called()
+
+    def test_background_policy_required_for_decontx_prepare(self):
+        self.complete_scrublet()
+        with self.assertRaisesRegex(ValueError, "background-policy"):
+            self.prepare("decontx", background_policy=None)
+
+    def test_background_policy_rejected_if_invalid(self):
+        self.complete_scrublet()
+        with self.assertRaisesRegex(ValueError, "background-policy"):
+            self.prepare("decontx", background_policy="bogus_policy")
+
+    def test_background_policy_frozen_into_run_json(self):
+        self.complete_scrublet()
+        self.prepare("decontx", background_policy="exclude_all_original_called_cells")
+        run_json = p.read_json(p.state_dir(self.base, "decontx") / "run.json")
+        self.assertEqual(run_json["background_policy"], "exclude_all_original_called_cells")
+
+    def test_scrublet_run_json_has_no_background_policy(self):
+        self.prepare("scrublet")
+        run_json = p.read_json(p.state_dir(self.base, "scrublet") / "run.json")
+        self.assertIsNone(run_json["background_policy"])
+
+    def test_worker_injects_frozen_background_policy_overriding_ambient_env(self):
+        self.complete_scrublet()
+        self.prepare("decontx", background_policy="exclude_all_original_called_cells")
+        self.captured_envs = []
+        with patch.dict(os.environ, {"DECONTX_BACKGROUND_POLICY": "historical"}):
+            self.worker(1, "decontx")
+        self.assertEqual(len(self.captured_envs), 1)
+        self.assertEqual(self.captured_envs[0]["DECONTX_BACKGROUND_POLICY"],
+                          "exclude_all_original_called_cells")
+
+    def test_worker_sets_policy_even_with_no_ambient_value(self):
+        self.complete_scrublet()
+        self.prepare("decontx", background_policy="historical")
+        self.captured_envs = []
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DECONTX_BACKGROUND_POLICY", None)
+            self.worker(1, "decontx")
+        self.assertEqual(self.captured_envs[0]["DECONTX_BACKGROUND_POLICY"], "historical")
 
     def test_tampered_output_blocks_decontx(self):
         self.complete_scrublet()

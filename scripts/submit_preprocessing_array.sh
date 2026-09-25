@@ -26,6 +26,8 @@ else
   concurrency="${PREPROCESS_CONCURRENCY:-4}"
   : "${RERUN_R_LIB:?Set the pinned R library}"
   : "${CMDSTAN:?Set the pinned CmdStan directory}"
+  : "${SCE_FIX_LIB:?Set the validated SCE-dependency-chain fix library (RERUN_LOG.md Checkpoint 26)}"
+  : "${DECONTX_BACKGROUND_POLICY:?Set historical or exclude_all_original_called_cells explicitly -- no ambient default for an audited submission}"
 fi
 [[ "$concurrency" =~ ^([1-9]|1[0-6])$ && "$cpus" =~ ^[1-9][0-9]*$ ]] || {
   echo 'Concurrency must be 1–16; CPUs must be a positive integer' >&2; exit 2;
@@ -33,6 +35,9 @@ fi
 prepare=("$PYTHON_EXECUTABLE" "$script_dir/parallel_preprocessing.py" prepare
   --stage "$stage" --base "$EOS_ATLAS_BASE" --manifest "$manifest" --gate "$gate"
   --expected-rate "${SCRUBLET_EXPECTED_RATE:-0.06}" --seed "${SCRUBLET_SEED:-42}")
+if [[ "$stage" == decontx ]]; then
+  prepare+=(--background-policy "$DECONTX_BACKGROUND_POLICY")
+fi
 if [[ "$mode" != --submit ]]; then
   printf 'Preparation command (not executed): '; printf '%q ' "${prepare[@]}"; printf '\n'
   printf 'Plan: %s, array=1-16%%%s, cpus/task=%s, mem/task=%s, time=%s, partition=%s\n' \

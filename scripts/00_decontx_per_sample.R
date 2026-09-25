@@ -1,17 +1,37 @@
 #!/usr/bin/env Rscript
 lib_path <- Sys.getenv("RERUN_R_LIB", "/bigdata/godziklab/shared/Xinru/R")
-.libPaths(c(lib_path, .libPaths()))
+# SCE_FIX_LIB (Checkpoint 26): this cluster's R/4.5.0 module resolves
+# SingleCellExperiment's own dependency chain (SummarizedExperiment,
+# S4Vectors, DelayedArray, S4Arrays, SparseArray, IRanges, GenomicRanges,
+# BiocGenerics, MatrixGenerics) from an admin-managed site library that
+# cannot be excluded from .libPaths() on this installation (verified: neither
+# .libPaths(new, include.site=FALSE) nor an explicit setdiff-reassignment
+# removes it -- see provenance_audit/sce_fix_env_build_v3.R header). Without
+# SCE_FIX_LIB taking search-order priority, SingleCellExperiment construction
+# fails ("superclass 'ExpData' not defined") because that site library was,
+# at the time of Checkpoint 24's diagnosis, associated with the wrong R
+# version/Bioconductor release when module loading was contaminated by a
+# prior module load; SCE_FIX_LIB vendors the exact package versions already
+# validated (real SingleCellExperiment() + validObject() + decontX() under
+# both background policies, job 29095558) so this script's behavior does not
+# depend on that external, unpinned, potentially-drifting library.
+sce_fix_lib <- Sys.getenv("SCE_FIX_LIB", "")
+if (nzchar(Sys.getenv("RERUN_R_LIB")) && !nzchar(sce_fix_lib)) {
+  stop("SCE_FIX_LIB is required alongside RERUN_R_LIB: without it, SingleCellExperiment/celda may resolve a mismatched Bioconductor-release dependency chain from this cluster's R/4.5.0 site library and object construction fails (RERUN_LOG.md Checkpoints 24 and 26). Refusing to proceed.")
+}
+.libPaths(c(sce_fix_lib, lib_path, .libPaths()))
 if (nzchar(Sys.getenv("RERUN_R_LIB"))) {
-  .rerun_r_lib_resolved <- normalizePath(.libPaths()[1], mustWork = FALSE)
-  .rerun_r_lib_expected <- normalizePath(Sys.getenv("RERUN_R_LIB"), mustWork = FALSE)
-  if (!identical(.rerun_r_lib_resolved, .rerun_r_lib_expected)) {
+  .expected_prefix <- normalizePath(c(sce_fix_lib, Sys.getenv("RERUN_R_LIB")), mustWork = FALSE)
+  .resolved_prefix <- normalizePath(.libPaths()[1:2], mustWork = FALSE)
+  if (!identical(.resolved_prefix, .expected_prefix)) {
     stop(sprintf(
-      "RERUN_R_LIB audit guard: .libPaths()[1] resolved to '%s' but RERUN_R_LIB='%s' -- the shared/legacy library would take precedence over the pinned isolated library. Refusing to proceed.",
-      .rerun_r_lib_resolved, .rerun_r_lib_expected))
+      "R library audit guard: .libPaths()[1:2] resolved to (%s) but expected (%s) -- the shared/legacy or site library would take precedence over the pinned isolated libraries. Refusing to proceed.",
+      paste(.resolved_prefix, collapse = ", "), paste(.expected_prefix, collapse = ", ")))
   }
   cat("=== Pinned R environment audit guard ===\n")
   cat("R.version.string:", R.version.string, "\n")
   cat("RERUN_R_LIB:", Sys.getenv("RERUN_R_LIB"), "\n")
+  cat("SCE_FIX_LIB:", sce_fix_lib, "\n")
   cat("CMDSTAN:", Sys.getenv("CMDSTAN"), "\n")
   cat(".libPaths():\n")
   print(.libPaths())
@@ -53,6 +73,34 @@ BASE <- Sys.getenv(
 )
 CONTAM_THRESHOLD <- 0.2
 DOUBLET_DIR <- file.path(BASE, "doublets")
+
+# Ambient-background policy switch (Checkpoint 22 supplement, 2026-09-25).
+# "historical" (default): pass the full raw/unfiltered Cell Ranger matrix as
+#   DecontX's background, unmodified -- matches methods.md's published
+#   description and note.md's execution contract for the official audited
+#   rerun. DecontX's own internal celda:::.checkBackground() still
+#   automatically removes any background barcode present in the post-Scrublet
+#   singlet matrix `x`; it does NOT remove doublet-flagged barcodes, since
+#   those were never in `x` -- confirmed by direct inspection of celda 1.24.0's
+#   source and an empirical synthetic test (see
+#   provenance_audit/CHECKPOINT22_SUPPLEMENT_decontx_background.md).
+# "exclude_all_original_called_cells": additionally, manually pre-remove every
+#   originally Cell-Ranger-called barcode (both predicted singlets AND
+#   predicted doublets) from the background before it ever reaches DecontX.
+#   A candidate improvement for a doublet-aware branch; NOT the official
+#   production default until validated per the investigator's required
+#   comparison on real data and explicitly approved.
+BACKGROUND_POLICY_ALLOWED <- c("historical", "exclude_all_original_called_cells")
+BACKGROUND_POLICY <- Sys.getenv("DECONTX_BACKGROUND_POLICY", unset = "historical")
+if (!BACKGROUND_POLICY %in% BACKGROUND_POLICY_ALLOWED) {
+  stop(sprintf(
+    "DECONTX_BACKGROUND_POLICY='%s' is not one of the allowed policies (%s) -- refusing to guess",
+    BACKGROUND_POLICY, paste(BACKGROUND_POLICY_ALLOWED, collapse = ", ")
+  ))
+}
+cat("Ambient-background policy:", BACKGROUND_POLICY,
+    if (identical(BACKGROUND_POLICY, "historical")) "(official production default, matches methods.md/note.md)"
+    else "(candidate doublet-aware branch, NOT yet validated/approved for production)", "\n")
 
 # Sample-to-condition mapping (16 samples)
 sample_info <- data.frame(
@@ -153,6 +201,37 @@ for (i in seq_len(nrow(sample_info))) {
     cat(sprintf("  Raw: %d genes x %d cells\n",
                 nrow(raw_counts), ncol(raw_counts)))
 
+    # BEGIN audited ambient-background selection (tested without celda)
+    # original_called_barcodes is recorded under BOTH policies, for lineage,
+    # even though only "exclude_all_original_called_cells" actually acts on it.
+    original_called_barcodes <- colnames(filtered_counts)
+    raw_barcodes <- colnames(raw_counts)
+    if (is.null(original_called_barcodes) || is.null(raw_barcodes) ||
+        anyNA(original_called_barcodes) || anyNA(raw_barcodes) ||
+        any(!nzchar(original_called_barcodes)) || any(!nzchar(raw_barcodes)) ||
+        anyDuplicated(original_called_barcodes) || anyDuplicated(raw_barcodes) ||
+        !all(original_called_barcodes %in% raw_barcodes)) {
+      stop("Cannot identify background: called/raw barcodes missing, duplicated, or inconsistent")
+    }
+    if (identical(BACKGROUND_POLICY, "exclude_all_original_called_cells")) {
+      # Remove ALL originally called cells (singlets AND doublets) before
+      # DecontX ever sees the background -- Codex's candidate policy.
+      raw_counts <- raw_counts[, !raw_barcodes %in% original_called_barcodes, drop = FALSE]
+      if (ncol(raw_counts) == 0L || sum(raw_counts) <= 0) {
+        stop("No informative non-called background remains; review input, do not silently change model")
+      }
+    }
+    # Under "historical", raw_counts is passed through unmodified here --
+    # DecontX's own internal celda:::.checkBackground() will still remove any
+    # barcode that overlaps colnames(x) (i.e. post-Scrublet singlets) when
+    # decontX() actually runs below; doublet-flagged barcodes remain in the
+    # background under this policy, matching methods.md/note.md exactly.
+    background_barcodes <- colnames(raw_counts)
+    cat(sprintf("  Ambient background (%s): %d barcodes passed to decontX() (of %d original called cells, %d raw droplets total)\n",
+                BACKGROUND_POLICY, length(background_barcodes),
+                length(original_called_barcodes), length(raw_barcodes)))
+    # END audited ambient-background selection
+
     # Apply Scrublet calls produced from the original, uncorrected filtered matrix.
     doublet_file <- file.path(DOUBLET_DIR, sprintf("scrublet_sample_%d.csv", sid))
     if (!file.exists(doublet_file)) {
@@ -222,6 +301,9 @@ for (i in seq_len(nrow(sample_info))) {
     # Save per-sample results
     result <- list(
       counts        = decon_counts,
+      background_policy = BACKGROUND_POLICY,
+      background_barcodes = background_barcodes,
+      original_called_barcodes = original_called_barcodes,
       contamination = contamination,
       scrublet_score = setNames(doublets$scrublet_score, doublets$barcode),
       doublet_removed_before_decontx = TRUE,

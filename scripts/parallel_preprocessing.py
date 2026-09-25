@@ -18,6 +18,11 @@ import sys
 
 STAGES = {"scrublet": "00a_doublet_detection_per_sample.py",
           "decontx": "00_decontx_per_sample.R"}
+# Must match BACKGROUND_POLICY_ALLOWED in 00_decontx_per_sample.R exactly
+# (Checkpoint 23/26). Frozen into run.json at prepare time and injected into
+# the worker subprocess environment, overriding any ambient shell value, so
+# the audit trail always records the actual reviewed policy that ran.
+BACKGROUND_POLICIES = ("historical", "exclude_all_original_called_cells")
 POOLS = ["RR0104"] * 4 + ["RR0508"] * 4 + ["RR0912"] * 4 + ["RR1316"] * 4
 MATRIX_FILES = {"matrix": "matrix.mtx.gz", "barcodes": "barcodes.tsv.gz",
                 "features": "features.tsv.gz"}
@@ -124,6 +129,10 @@ def prepare(args):
         raise ValueError("RERUN_ROOT cannot be /")
     if not 0 < args.expected_rate < 1:
         raise ValueError("Expected rate must be between zero and one")
+    if args.stage == "decontx" and args.background_policy not in BACKGROUND_POLICIES:
+        raise ValueError(
+            f"--background-policy is required for decontx and must be one of "
+            f"{BACKGROUND_POLICIES}, got {args.background_policy!r}")
     rows = manifest(args.manifest)
     gate = read_json(args.gate)
     required_stage = "cellranger_qc_and_00a_audit" if args.stage == "scrublet" else "scrublet_qc_and_decontx_audit"
@@ -172,6 +181,7 @@ def prepare(args):
                             for row in rows for key in ("filtered_dir", "raw_dir")
                             for name in MATRIX_FILES.values()},
         "expected_rate": args.expected_rate, "seed": args.seed,
+        "background_policy": args.background_policy if args.stage == "decontx" else None,
     })
     print(state)
 
@@ -208,6 +218,11 @@ def worker(args):
         names = [f"doublets/scrublet_sample_{sid}.csv", f"doublets/scrublet_summary_sample_{sid}.csv",
                  f"doublets/scrublet_run_parameters_sample_{sid}.json"]
     else:
+        if config.get("background_policy") not in BACKGROUND_POLICIES:
+            raise ValueError(f"Frozen run.json has no valid background_policy: {config.get('background_policy')!r}")
+        # Overrides any ambient shell value: the policy that actually runs is
+        # always exactly what was reviewed and frozen at prepare time.
+        env["DECONTX_BACKGROUND_POLICY"] = config["background_policy"]
         names = [f"decontx/decontx_sample_{sid}.rds", f"decontx/decontx_scores_sample_{sid}.csv"]
     if any((base / name).exists() for name in names):
         raise FileExistsError("Task outputs already exist; use a new attempt")
@@ -300,9 +315,12 @@ def main():
     parser.add_argument("--sample-id", type=int, choices=range(1, 17))
     parser.add_argument("--expected-rate", type=float, default=0.06)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--background-policy", choices=BACKGROUND_POLICIES)
     args = parser.parse_args()
     if args.action == "prepare" and (not args.manifest or not args.gate):
         parser.error("prepare needs --manifest and --gate")
+    if args.action == "prepare" and args.stage == "decontx" and args.background_policy is None:
+        parser.error("prepare needs --background-policy for stage=decontx")
     if args.action == "worker" and args.sample_id is None:
         parser.error("worker needs --sample-id")
     if args.action == "verify":
