@@ -15,9 +15,13 @@ if [[ "$stage" == decontx && "$action" == worker ]]; then
   : "${CMDSTAN:?Set the validated CmdStan directory}"
   test -d "$RERUN_R_LIB"
   test -d "$CMDSTAN"
+  # sbatch --export=ALL inherits login-shell modules (including R/4.5.2).
+  # Clear them before loading the audited compiler/R pair; retain hard checks.
+  module purge
   module load gcc/12.2.0
   module load R/4.5.0
-  Rscript -e 'stopifnot(as.character(getRversion()) == "4.5.0"); sessionInfo()'
+  module list
+  Rscript --vanilla -e 'stopifnot(as.character(getRversion()) == "4.5.0"); sessionInfo()'
 fi
 args=("$script_dir/parallel_preprocessing.py" "$action" --stage "$stage" --base "$base")
 if [[ "$action" == worker ]]; then
