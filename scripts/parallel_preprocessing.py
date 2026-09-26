@@ -144,6 +144,8 @@ def prepare(args):
             not gate.get("reviewed_by")):
         raise ValueError("Gate must be reviewed PASS and bind this manifest and analysis script")
     if args.stage == "decontx":
+        if gate.get("background_policy") != args.background_policy:
+            raise ValueError("DecontX gate must explicitly approve the requested background_policy")
         verify_collection(base, "scrublet")
         previous = state_dir(base, "scrublet")
         if read_json(previous / "run.json")["manifest_sha256"] != digest(args.manifest):
@@ -276,6 +278,9 @@ def collect(args):
             packages.append((record["python"], record["packages"]))
             combined.append(summary)
         else:
+            if (config.get("background_policy") not in BACKGROUND_POLICIES or
+                    any(r.get("background_policy") != config["background_policy"] for r in rows)):
+                raise ValueError(f"DecontX output background_policy missing or differs from frozen policy: {sid}")
             calls = table(base / f"doublets/scrublet_sample_{sid}.csv")
             expected = {r["barcode"] for r in calls if r["scrublet_doublet"].lower() == "false"}
             if {r["barcode"] for r in rows} != expected:

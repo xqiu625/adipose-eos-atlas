@@ -56,6 +56,16 @@ reviewer's judgment or check the truth of a manually supplied PASS. A
 PASS_WITH_WARNING requires investigator approval and a recorded release before
 providing a PASS gate for execution.
 
+For DecontX, the reviewed gate must additionally contain `background_policy`
+equal to the explicitly requested `DECONTX_BACKGROUND_POLICY` (either
+`historical` or `exclude_all_original_called_cells`). Missing or mismatched
+policy fails before preparation. Worker output score CSVs record the policy
+actually selected by the R script; the collector rejects missing/different
+values before publishing aggregates. The selected policy does not by itself
+constitute scientific approval. Recreate gates using the updated script hash.
+Export `SCE_FIX_LIB` to the validated isolated dependency library before
+submitting DecontX, in addition to `RERUN_R_LIB` and `CMDSTAN`.
+
 ## Submit Scrublet
 
 ```bash

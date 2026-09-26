@@ -69,6 +69,7 @@ class ParallelTests(unittest.TestCase):
                 "script_sha256": p.digest(SCRIPTS / p.STAGES[stage]),
                 "checkpoint": "synthetic-test-only", "reviewed_by": "unit-test"}
         if stage == "decontx":
+            gate["background_policy"] = background_policy
             gate["collection_sha256"] = p.digest(p.state_dir(self.base, "scrublet") / "collection.json")
         args.gate.write_text(json.dumps(gate))
         if execute:
@@ -93,6 +94,7 @@ class ParallelTests(unittest.TestCase):
             (out / f"decontx_sample_{sid}.rds").write_bytes(b"mock RDS, not biological validation")
             csv_write(out / f"decontx_scores_sample_{sid}.csv", [{
                 "barcode": "AA", "sample_id": sid, "condition": "test",
+                "background_policy": getattr(self, "reported_policy", env["DECONTX_BACKGROUND_POLICY"]),
                 "contamination": 0.1, "scrublet_score": 0.01}])
 
     def worker(self, sid, stage="scrublet"):
@@ -168,6 +170,42 @@ class ParallelTests(unittest.TestCase):
         self.prepare("decontx", background_policy="exclude_all_original_called_cells")
         run_json = p.read_json(p.state_dir(self.base, "decontx") / "run.json")
         self.assertEqual(run_json["background_policy"], "exclude_all_original_called_cells")
+
+    def test_gate_cannot_authorize_a_different_policy(self):
+        self.complete_scrublet()
+        self.prepare("decontx", execute=False, background_policy="historical")
+        with self.assertRaisesRegex(ValueError, "explicitly approve"):
+            p.prepare(self.args("decontx", background_policy="exclude_all_original_called_cells"))
+        self.assertFalse(p.state_dir(self.base, "decontx").exists())
+
+    def test_gate_must_record_policy(self):
+        self.complete_scrublet()
+        self.prepare("decontx", execute=False)
+        args = self.args("decontx")
+        gate = p.read_json(args.gate)
+        del gate["background_policy"]
+        args.gate.write_text(json.dumps(gate))
+        with self.assertRaisesRegex(ValueError, "explicitly approve"):
+            p.prepare(args)
+
+    def rejected_output_policy(self, value):
+        self.complete_scrublet()
+        self.prepare("decontx")
+        self.reported_policy = value
+        for sid in range(1, 17):
+            self.worker(sid, "decontx")
+        # Outputs have valid worker receipts/hashes: test semantic checking,
+        # not merely detection of files tampered with after the worker ran.
+        with self.assertRaisesRegex(ValueError, "output background_policy"):
+            p.collect(self.args("decontx"))
+        self.assertFalse((self.base / "decontx/decontx_all_scores.csv").exists())
+        self.assertFalse((p.state_dir(self.base, "decontx") / "collection.json").exists())
+
+    def test_collector_rejects_wrong_output_policy(self):
+        self.rejected_output_policy("exclude_all_original_called_cells")
+
+    def test_collector_rejects_empty_output_policy(self):
+        self.rejected_output_policy("")
 
     def test_scrublet_run_json_has_no_background_policy(self):
         self.prepare("scrublet")

@@ -319,6 +319,7 @@ for (i in seq_len(nrow(sample_info))) {
       barcode       = colnames(filtered_counts),
       sample_id     = sid,
       condition     = cond,
+      background_policy = BACKGROUND_POLICY,
       contamination = contamination,
       scrublet_score = doublets$scrublet_score,
       stringsAsFactors = FALSE
