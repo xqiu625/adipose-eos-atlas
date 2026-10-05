@@ -146,6 +146,17 @@ cat("Step 2: Merge into Seurat object\n")
 cat("========================================\n\n")
 
 # Combine counts from all samples
+# cbind() does not align rows by gene name. Refuse silent gene permutation.
+reference_genes <- rownames(sample_objects[[1]]$counts)
+if (is.null(reference_genes) || anyDuplicated(reference_genes)) {
+  stop("Missing or duplicated reference gene identifiers before sample merge")
+}
+for (sid in names(sample_objects)) {
+  if (!identical(rownames(sample_objects[[sid]]$counts), reference_genes)) {
+    stop("Gene rows differ in identity/order for sample ", sid,
+         "; explicitly align features upstream before merging")
+  }
+}
 all_counts <- do.call(cbind, lapply(sample_objects, function(x) x$counts))
 cat(sprintf("Combined matrix: %d genes x %d cells\n", nrow(all_counts), ncol(all_counts)))
 

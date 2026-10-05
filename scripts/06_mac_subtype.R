@@ -25,19 +25,9 @@ if (nzchar(Sys.getenv("RERUN_R_LIB"))) {
 #SBATCH --job-name=mac_subtype
 #SBATCH --output=mac_subtype_%j.out
 
-# ==============================================================================
-# 06_mac_subtype.R  (v2 — macrophage subtype analysis)
-#
-# Original: M1/M2 module scores + subtype assignment
-# Added:
-#   - Retnla (RELMa) expression across mac subtypes + conditions
-#   - Mac DEG: WT vs KO (RELMa KO impact on macrophages)
-#   - Mac subtype composition stats by condition
-#   - Cross-cell-type marker comparison (MHC-II, LFA-1, CD124, Cd14)
-#   - Mac subtypes mapped onto all-cells UMAP
-#
+# Macrophage subtype assignment, Retnla expression, composition, and pseudobulk DEG.
+# Includes cross-cell-type marker comparisons and all-cell UMAP overlays.
 # SLURM: batch, 128G, 4 CPUs, 4h
-# ==============================================================================
 
 suppressPackageStartupMessages({
   library(Seurat)

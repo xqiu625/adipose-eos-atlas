@@ -18,10 +18,9 @@ if (nzchar(Sys.getenv("RERUN_R_LIB"))) {
   cat("=========================================\n")
 }
 
-## Eosinophil subclustering with comprehensive resolution justification
-## (clustree + silhouette + subsampling stability + sc-SHC significance testing)
 ## Eosinophil subclustering and resolution selection
-## References: Grabski et al. Nat Methods 2023 (sc-SHC); Junttila et al. BIB 2022
+## Clustree, silhouette, subsampling stability, and sc-SHC
+## References: Grabski et al. Nat Methods 2023; Junttila et al. BIB 2022
 ## SLURM: --mem=128G --cpus-per-task=8 --time=6:00:00 -p batch
 
 # ── Libraries ──────────────────────────────────────────────────────────────────
@@ -458,12 +457,7 @@ if (!is.null(scshc_result)) {
   cat("\n  sc-SHC analysis complete.\n")
 
 } else {
-  # README/methods.md present sc-SHC as one of four completed, convergent
-  # lines of evidence for the chosen resolution. Previously this branch just
-  # printed a log line and moved on -- no artifact recorded that the check
-  # never ran, so a downstream reader (or the manuscript) could not tell
-  # "sc-SHC confirmed the clusters" apart from "sc-SHC was never run." Write
-  # an explicit NOT_RUN status file so that gap is auditable instead of silent.
+  # Record skipped sc-SHC explicitly when the package is unavailable.
   cat("\n")
   cat("  ############################################################\n")
   cat("  # WARNING: sc-SHC significance testing did NOT run.        #\n")
@@ -626,28 +620,14 @@ if (!is.null(old_eos_labels) && length(old_eos_labels) > 0) {
     cat("  Saved: cluster_correspondence_new_vs_old.csv\n")
     cat("  Saved: cluster_confusion_matrix.csv\n")
 
-    # Global one-to-one assignment (Hungarian algorithm / linear sum
-    # assignment) on the confusion matrix. dominant_map above is a per-row
-    # greedy pick and can (a) assign two new clusters to the same old
-    # cluster, and (b) have individual rows with low confidence even when an
-    # unambiguous best-overall assignment exists -- the documented historical
-    # correspondence for this dataset includes primary fractions as low as
-    # 34%/43%/44%. solve_LSAP finds the assignment that maximizes total
-    # overlap across ALL clusters simultaneously; per-cluster ambiguity is
-    # reported as a diagnostic (see Step 5c) rather than gating on any single
-    # row's fraction.
+    # Find the one-to-one cluster assignment that maximizes total barcode overlap.
+    # Report per-cluster ambiguity separately.
     cat("\n  Computing globally optimal one-to-one assignment (Hungarian algorithm)...\n")
     count_mat <- as.matrix(conf_mat)  # rows = new, cols = old (raw counts)
     n_new <- nrow(count_mat)
     n_old <- ncol(count_mat)
     n_dim <- max(n_new, n_old)
-    # solve_LSAP requires a nonnegative cost matrix, so cost = max_val - count
-    # (maximizing overlap = minimizing this cost) rather than -count. Padding
-    # rows/cols beyond n_new/n_old are given cost = max_val, i.e. exactly as
-    # unattractive as a real zero-overlap entry (max_val - 0) -- they are
-    # only ever chosen when a real cluster has no better option left, which
-    # is itself informative (assigned_fraction == 0 below), not an
-    # artificially "free" assignment.
+    # Nonnegative assignment cost; padded entries have zero-overlap cost.
     max_val <- max(count_mat)
     cost_mat <- matrix(max_val, n_dim, n_dim)
     cost_mat[seq_len(n_new), seq_len(n_old)] <- max_val - count_mat
@@ -752,24 +732,8 @@ cat("\n========================================\n")
 cat("Step 5c: Rename clusters to match manuscript\n")
 cat("========================================\n\n")
 
-# Renaming must come from THIS run's validated correspondence (optimal_map,
-# the Hungarian-algorithm global one-to-one assignment computed in Step 5b
-# above from barcode matching against the old manuscript object), not a fixed
-# historical permutation. Preprocessing now removes doublets before DecontX,
-# so cluster numbering -- and which old cluster each new cluster corresponds
-# to -- can genuinely change between runs; a stale hardcoded map (as this
-# used to be, e.g. "New C0 -> Old C1 (69%)") could silently mislabel clusters
-# if the correspondence shifted. Abort rather than guess.
-#
-# A per-row minimum-confidence requirement (e.g. every cluster's dominant
-# match >= 50%) is NOT used as a gate: the documented historical
-# correspondence for this exact dataset includes primary fractions as low as
-# 34%/43%/44%, so that gate would abort on a known-good assignment. Instead,
-# the global assignment is validated as complete and one-to-one (guaranteed
-# by construction via solve_LSAP, given every cluster has some
-# correspondence data), and any individual low-confidence or zero-overlap
-# assignment is reported explicitly rather than silently accepted or used to
-# block the run.
+# Rename using this run's complete one-to-one barcode correspondence.
+# Report low-confidence and zero-overlap matches in the diagnostics.
 current_new_clusters <- sort(unique(as.character(eos$eos_cluster)))
 
 if (!exists("optimal_map") || is.null(optimal_map) || nrow(optimal_map) == 0) {

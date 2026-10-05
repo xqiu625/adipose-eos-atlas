@@ -236,12 +236,7 @@ if (use_sccomp) {
     for (cl in clusters) {
       cat(sprintf("  Cluster %s...\n", cl))
 
-      # One row per sample: successes = cells in cluster cl, failures = cells
-      # in every other cluster, so successes + failures = total cells in that
-      # sample (sum-constrained). This is the correct binomial representation
-      # of "cluster cl's share of the sample"; the previous construction gave
-      # each cluster-row its own denominator, which is not sum-constrained and
-      # does not represent cluster count vs. total-minus-cluster count.
+      # Per sample: successes = cluster cells; failures = all other cells.
       cl_data <- data %>%
         group_by(orig.ident) %>%
         summarise(

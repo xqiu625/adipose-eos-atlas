@@ -3,8 +3,9 @@
 41_hu_regulon_comparison.py
 Cross-dataset regulon comparison: Qiu C0-C5 vs Hu eWAT/scWAT/BAT
 
-Scores Hu eosinophils with our per-cluster SCENIC regulons (AUCell),
-then compares regulon activity patterns across datasets.
+Loads eosinophil per-cluster AUCell and scores Hu cells by mean normalized
+expression of selected target sets. Hu scores in this legacy branch are not
+AUCell; the two scoring definitions must be distinguished when interpreting it.
 
 Output:
   - Combined heatmap: regulons x (C0-C5 + eWAT/scWAT/BAT)
@@ -77,11 +78,8 @@ if missing_clusters:
         f"Regenerate the missing cluster's SCENIC output rather than "
         f"silently continuing with an incomplete analysis.")
 
-# TF set = INTERSECTION (not union) of each cluster's independently inferred
-# TFs. A TF absent from one cluster's network was "not inferred" there, not
-# scored and found at AUCell 0 -- filling it as 0.0 would corrupt which TF
-# looks "top" for that cluster and make regulons look artificially
-# cluster-specific.
+# Retain TF columns scored in every cluster; missing scores are not zeros.
+# Matching TF names alone does not establish identical target sets.
 all_tfs = None
 for df in eos_data.values():
     all_tfs = set(df.columns) if all_tfs is None else (all_tfs & set(df.columns))

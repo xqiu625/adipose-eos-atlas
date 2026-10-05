@@ -87,13 +87,7 @@ cat("Loading CellChat objects...\n")
 
 cell_states <- names(cell_colors)
 
-# per_condition[[key]][[cond]] holds one summed value per (pathway, broad
-# source group, broad target group) per condition. A condition in which that
-# pathway/group-pair never appears (pathway undetected entirely, or every
-# underlying fine-subtype edge was zero) is filled with 0 below rather than
-# omitted -- omitting it previously meant mean() divided only by the
-# conditions where SOME signal existed, inflating rare/condition-specific
-# links relative to ones present in every condition.
+# Include zero-signal conditions when averaging each pathway/group pair.
 per_condition <- list()
 loaded_conditions <- character()
 

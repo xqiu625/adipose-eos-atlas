@@ -1,39 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 03_create_multiconfig_csv.sh — Upstream raw-data processing, step 3 of 4
-# Writes the `cellranger multi` config CSVs for all 4 GEM-reaction pools
-# (RR0104, RR0508, RR0912, RR1316) of the 10x FLEX 4x4 multiplexed design,
-# mapping each FLEX probe barcode (BC001-BC004) to its sample and condition.
-# Reference mm10-2020-A, probe set Chromium_Mouse_Transcriptome_Probe_Set_v1.0.1.
-# Paths are HPCC-specific to the GSE311941 run; edit to reproduce.
-#
-# https://www.10xgenomics.com/support/software/cell-ranger/latest/analysis/running-pipelines/cr-flex-multi-frp#mfrp-onebc
-#
-# Previously this file was a transcript of interactive `vi <path>` edits with
-# the CSV blocks pasted in as plain text below each `vi` line -- since that
-# text is not shell syntax, running it as `bash 03_create_multiconfig_csv.sh`
-# would try to execute `[gene-expression]`, `reference,/path/to/...`, etc. as
-# commands and fail (or hang on the first `vi` line actually reached). It now
-# writes each config via a heredoc so the script does what its name says.
+# Write Cell Ranger multi configs for four FLEX pools (BC001-BC004).
+# Reference: mm10-2020-A; mouse transcriptome probe set v1.0.1.
 
 CONFIG_DIR="/bigdata/godziklab/shared/Xinru/302025/dataset/batch3/csv_config"
 mkdir -p "$CONFIG_DIR"
 
-# --- Generic template for reference (not used to generate a file) ------------
-# [gene-expression]
-# reference,/path/to/transcriptome
-# probe-set,/path/to/probe-set.csv  # e.g., cellranger-x.y.z/probe_sets/Chromium_Human_Transcriptome_Probe_Set_v1.0.1_GRCh38-2020-A.csv
-# create-bam,false #do not generate BAM file
-#
-# [libraries]
-# fastq_id,fastqs,feature_types
-# frp_gex,/path/to/fastqs,Gene Expression
-#
-# [samples]
-# sample_id,probe_barcode_ids,description
-# sample1,BC001,Control
-# sample2,BC003,Treated
 
 ## RR1316
 cat > "$CONFIG_DIR/RR1316_config.csv" <<'EOF'

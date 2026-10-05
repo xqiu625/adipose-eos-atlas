@@ -25,12 +25,7 @@ if (nzchar(Sys.getenv("RERUN_R_LIB"))) {
 #SBATCH --job-name=ambient_evidence
 #SBATCH --output=ambient_evidence_%j.out
 
-# ==============================================================================
-# 21_ambient_rna_evidence.R
-# Evidence that DecontX effectively removed ambient RNA and that residual
-# Cd14/macrophage marker expression is not contamination
-# (ambient-RNA evidence and QC)
-# ==============================================================================
+# Ambient-RNA QC: contamination estimates and residual macrophage-marker expression.
 
 suppressPackageStartupMessages({
   library(Seurat)
@@ -92,15 +87,9 @@ cat("\n--- Analysis 1: Contamination by cell type ---\n")
 # contam_scores has barcode and sample_id columns
 # all_cells has barcodes as column names
 
-# The barcodes in contam_scores are raw CellRanger barcodes,
-# while all_cells colnames are condition_barcode format.
-# We need to match them via the cell metadata.
-# The all_cells object should have orig.ident and original barcodes embedded.
+# Match raw Cell Ranger barcodes to condition-prefixed IDs using metadata.
 
-# Strategy: use the all_cells metadata which has contamination info if available,
-# or match by reconstructing the barcode mapping.
-# Since contam_scores has barcode + sample_id, and all_cells colnames are
-# condition_barcode, we can try to match.
+# Use stored contamination values when present; otherwise reconstruct barcode keys.
 
 # Build a lookup from condition+barcode -> celltype
 cell_meta <- all_cells@meta.data
@@ -251,11 +240,7 @@ for (i in seq_len(nrow(sample_info))) {
   after_list[[as.character(sid)]] <- corrected_sub
 }
 
-# For "before" DecontX: use the RNA counts in the current eos object
-# (which ARE post-DecontX), we need original.
-# Alternative approach: re-load raw filtered counts per sample.
-# Actually the Seurat pipeline uses DecontX-corrected counts already.
-# So we need to load the original CellRanger filtered counts.
+# Reload original filtered counts for the pre-DecontX comparison.
 
 # Simpler approach: load per-sample decontx RDS which stores corrected counts,
 # and compare with what is in the current Seurat object's raw RNA counts.

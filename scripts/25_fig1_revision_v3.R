@@ -25,9 +25,7 @@ if (nzchar(Sys.getenv("RERUN_R_LIB"))) {
 #   2. Fig 1D: Updated dotplot with C6 removed
 #   3. GSEA for all DEG comparisons (fig1E-H + multifactor + infection splits)
 #
-# Based on 10_fig1_revision_v2.R — only regenerates panels that need updating.
-# Previously completed panels (fig1B PCA/MDS, volcanos, heatmaps, ORA GO)
-# are NOT re-run here; see 10_fig1_revision_v2.R for those.
+# Selected Figure 1 panels; PCA/MDS, volcano plots, and heatmaps are not generated here.
 #
 # Input:  all_cells_annotated.rds, eos_subclustered.rds, DESeq2 CSVs
 # Output: PDF figures + GSEA CSVs in revision/figures/fig1/
@@ -64,7 +62,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 cat("=== Fig 1C: UMAPs (C6 removed) ===\n")
 
 # Identify C6 barcodes: eosinophils in all_cells_annotated that are NOT in
-# eos_subclustered (which had C6 removed by 04b_rename_clusters.R)
+# eos_subclustered (which had C6 removed by 04_b_rename_clusters.R)
 eos <- readRDS(file.path(BASE, "eos_subclustered.rds"))
 eos_barcodes <- colnames(eos)  # C0-C5 only (C6 already removed by 04b)
 rm(eos); gc()

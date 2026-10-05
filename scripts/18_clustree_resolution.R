@@ -171,11 +171,7 @@ print(p_sil + p_nclust + plot_layout(ncol = 2))
 dev.off()
 
 # ── sc-SHC significance testing on the chosen resolution (0.4) ──────────────
-# The header/README/methods.md all describe sc-SHC (Grabski & Irizarry, Nat
-# Methods 2023) as one of the completed, convergent lines of evidence for the
-# chosen resolution. This step must not be silently skippable if the package
-# is unavailable -- if it can't run, that is treated as a hard failure of this
-# script (not printed as an optional warning while everything else proceeds).
+# sc-SHC is required for this resolution test.
 cat("\nRunning sc-SHC significance testing (resolution 0.4 clusters)...\n")
 if (!requireNamespace("scSHC", quietly = TRUE)) {
   stop("scSHC package is not installed. sc-SHC significance testing is a ",
@@ -188,10 +184,7 @@ library(scSHC)
 res04_labels <- as.character(eos@meta.data[["RNA_snn_res.0.4"]])
 counts_for_shc <- GetAssayData(eos, layer = "counts")
 
-# testClusters() evaluates significance of an existing cluster assignment
-# (as opposed to scSHC()'s own de novo hierarchical clustering). Confirm the
-# exact function name/signature against the installed scSHC version if this
-# errors -- do not silently fall back to skipping the test.
+# Test the existing cluster assignments with testClusters().
 shc_result <- testClusters(counts_for_shc, cluster_ids = res04_labels,
                            num_PCs = 20, alpha = 0.05)
 shc_out_path <- file.path(fig_dir, "scSHC_resolution0.4_significance.csv")

@@ -1,20 +1,6 @@
 #!/usr/bin/env Rscript
 lib_path <- Sys.getenv("RERUN_R_LIB", "/bigdata/godziklab/shared/Xinru/R")
-# SCE_FIX_LIB (Checkpoint 26): this cluster's R/4.5.0 module resolves
-# SingleCellExperiment's own dependency chain (SummarizedExperiment,
-# S4Vectors, DelayedArray, S4Arrays, SparseArray, IRanges, GenomicRanges,
-# BiocGenerics, MatrixGenerics) from an admin-managed site library that
-# cannot be excluded from .libPaths() on this installation (verified: neither
-# .libPaths(new, include.site=FALSE) nor an explicit setdiff-reassignment
-# removes it -- see provenance_audit/sce_fix_env_build_v3.R header). Without
-# SCE_FIX_LIB taking search-order priority, SingleCellExperiment construction
-# fails ("superclass 'ExpData' not defined") because that site library was,
-# at the time of Checkpoint 24's diagnosis, associated with the wrong R
-# version/Bioconductor release when module loading was contaminated by a
-# prior module load; SCE_FIX_LIB vendors the exact package versions already
-# validated (real SingleCellExperiment() + validObject() + decontX() under
-# both background policies, job 29095558) so this script's behavior does not
-# depend on that external, unpinned, potentially-drifting library.
+# Prefer the isolated SingleCellExperiment/Bioconductor library.
 sce_fix_lib <- Sys.getenv("SCE_FIX_LIB", "")
 if (nzchar(Sys.getenv("RERUN_R_LIB")) && !nzchar(sce_fix_lib)) {
   stop("SCE_FIX_LIB is required alongside RERUN_R_LIB: without it, SingleCellExperiment/celda may resolve a mismatched Bioconductor-release dependency chain from this cluster's R/4.5.0 site library and object construction fails (RERUN_LOG.md Checkpoints 24 and 26). Refusing to proceed.")
@@ -41,8 +27,7 @@ if (nzchar(Sys.getenv("RERUN_R_LIB"))) {
 ## DecontX ambient RNA removal per sample, after pre-DecontX doublet removal
 ## SLURM: --mem=128G --cpus-per-task=8 --time=4:00:00 -p batch
 
-# Single-sample mode is used by the audited array launcher. Scientific settings
-# and decontX defaults are unchanged; aggregation is a separate, validated step.
+# Optional single-sample execution and explicit input manifest.
 cli <- commandArgs(trailingOnly = TRUE)
 sample_id_arg <- NULL
 manifest_path <- NULL
@@ -57,6 +42,28 @@ if (length(cli)) for (j in seq.int(1L, length(cli), by = 2L)) {
 }
 
 # ── Libraries ──────────────────────────────────────────────────────────────────
+# Align filtered and background matrices by gene ID.
+align_decontx_features <- function(filtered, raw, features) {
+  ids <- rownames(filtered)
+  raw_ids <- rownames(raw)
+  if (is.null(ids) || is.null(raw_ids) || anyNA(ids) || anyNA(raw_ids) ||
+      anyDuplicated(ids) || anyDuplicated(raw_ids) ||
+      any(!nzchar(ids)) || any(!nzchar(raw_ids)) || ncol(features) < 2L ||
+      anyDuplicated(features[[1]]) || anyNA(features[[2]])) {
+    stop("Missing/duplicate feature IDs or invalid feature metadata")
+  }
+  selected <- match(ids, raw_ids)
+  annotation <- match(ids, features[[1]])
+  if (anyNA(selected) || anyNA(annotation)) stop("Filtered gene ID absent from raw or metadata")
+  symbols <- make.unique(as.character(features[[2]][annotation]))
+  if (any(!nzchar(symbols))) stop("Empty gene symbol")
+  raw <- raw[selected, , drop = FALSE]
+  stopifnot(identical(rownames(raw), ids))
+  rownames(filtered) <- symbols
+  rownames(raw) <- symbols
+  list(filtered = filtered, raw = raw, feature_ids = setNames(ids, symbols))
+}
+
 suppressPackageStartupMessages({
   library(Seurat)
   library(celda)
@@ -74,22 +81,8 @@ BASE <- Sys.getenv(
 CONTAM_THRESHOLD <- 0.2
 DOUBLET_DIR <- file.path(BASE, "doublets")
 
-# Ambient-background policy switch (Checkpoint 22 supplement, 2026-09-25).
-# "historical" (default): pass the full raw/unfiltered Cell Ranger matrix as
-#   DecontX's background, unmodified -- matches methods.md's published
-#   description and note.md's execution contract for the official audited
-#   rerun. DecontX's own internal celda:::.checkBackground() still
-#   automatically removes any background barcode present in the post-Scrublet
-#   singlet matrix `x`; it does NOT remove doublet-flagged barcodes, since
-#   those were never in `x` -- confirmed by direct inspection of celda 1.24.0's
-#   source and an empirical synthetic test (see
-#   provenance_audit/CHECKPOINT22_SUPPLEMENT_decontx_background.md).
-# "exclude_all_original_called_cells": additionally, manually pre-remove every
-#   originally Cell-Ranger-called barcode (both predicted singlets AND
-#   predicted doublets) from the background before it ever reaches DecontX.
-#   A candidate improvement for a doublet-aware branch; NOT the official
-#   production default until validated per the investigator's required
-#   comparison on real data and explicitly approved.
+# historical: use raw counts; DecontX removes barcodes shared with singlets.
+# exclude_all_original_called_cells: also exclude called doublets from background.
 BACKGROUND_POLICY_ALLOWED <- c("historical", "exclude_all_original_called_cells")
 BACKGROUND_POLICY <- Sys.getenv("DECONTX_BACKGROUND_POLICY", unset = "historical")
 if (!BACKGROUND_POLICY %in% BACKGROUND_POLICY_ALLOWED) {
@@ -190,20 +183,30 @@ for (i in seq_len(nrow(sample_info))) {
   tryCatch({
     # Load filtered counts
     cat("  Loading filtered counts:", paths$filtered, "\n")
-    filtered_counts <- Read10X(data.dir = paths$filtered)
+    filtered_counts <- Read10X(data.dir = paths$filtered, gene.column = 1)
 
     # Load raw counts (background)
     cat("  Loading raw counts:", paths$raw, "\n")
-    raw_counts <- Read10X(data.dir = paths$raw)
+    raw_counts <- Read10X(data.dir = paths$raw, gene.column = 1)
 
     cat(sprintf("  Filtered: %d genes x %d cells\n",
                 nrow(filtered_counts), ncol(filtered_counts)))
     cat(sprintf("  Raw: %d genes x %d cells\n",
                 nrow(raw_counts), ncol(raw_counts)))
 
-    # BEGIN audited ambient-background selection (tested without celda)
-    # original_called_barcodes is recorded under BOTH policies, for lineage,
-    # even though only "exclude_all_original_called_cells" actually acts on it.
+    # Raw and filtered have different gene universes. Independent make.unique()
+    # on symbols paired one different Ensembl ID in all 16 historical samples.
+    # Align IDs first, then restore filtered symbols for downstream compatibility.
+    feature_table <- read.delim(gzfile(file.path(paths$filtered, "features.tsv.gz")),
+                               header = FALSE, stringsAsFactors = FALSE)
+    aligned <- align_decontx_features(filtered_counts, raw_counts, feature_table)
+    filtered_counts <- aligned$filtered
+    raw_counts <- aligned$raw
+    feature_ids <- aligned$feature_ids
+    rm(aligned)
+    cat("  Feature alignment: exact gene IDs; restored filtered gene symbols\n")
+
+    # Record called barcodes before selecting the background.
     original_called_barcodes <- colnames(filtered_counts)
     raw_barcodes <- colnames(raw_counts)
     if (is.null(original_called_barcodes) || is.null(raw_barcodes) ||
@@ -214,29 +217,23 @@ for (i in seq_len(nrow(sample_info))) {
       stop("Cannot identify background: called/raw barcodes missing, duplicated, or inconsistent")
     }
     if (identical(BACKGROUND_POLICY, "exclude_all_original_called_cells")) {
-      # Remove ALL originally called cells (singlets AND doublets) before
-      # DecontX ever sees the background -- Codex's candidate policy.
+      # Exclude all called singlets and doublets from the background.
       raw_counts <- raw_counts[, !raw_barcodes %in% original_called_barcodes, drop = FALSE]
       if (ncol(raw_counts) == 0L || sum(raw_counts) <= 0) {
         stop("No informative non-called background remains; review input, do not silently change model")
       }
     }
-    # Under "historical", raw_counts is passed through unmodified here --
-    # DecontX's own internal celda:::.checkBackground() will still remove any
-    # barcode that overlaps colnames(x) (i.e. post-Scrublet singlets) when
-    # decontX() actually runs below; doublet-flagged barcodes remain in the
-    # background under this policy, matching methods.md/note.md exactly.
+    # DecontX removes singlet overlap; called doublets remain in this background.
     background_barcodes <- colnames(raw_counts)
     cat(sprintf("  Ambient background (%s): %d barcodes passed to decontX() (of %d original called cells, %d raw droplets total)\n",
                 BACKGROUND_POLICY, length(background_barcodes),
                 length(original_called_barcodes), length(raw_barcodes)))
-    # END audited ambient-background selection
 
     # Apply Scrublet calls produced from the original, uncorrected filtered matrix.
     doublet_file <- file.path(DOUBLET_DIR, sprintf("scrublet_sample_%d.csv", sid))
     if (!file.exists(doublet_file)) {
       stop("Missing pre-DecontX doublet calls: ", doublet_file,
-           ". Run 00a_doublet_detection_per_sample.py first.")
+           ". Run 00_a_doublet_detection_per_sample.py first.")
     }
     doublets <- read.csv(doublet_file, stringsAsFactors = FALSE)
     required_cols <- c("barcode", "scrublet_score", "scrublet_doublet")
@@ -260,11 +257,8 @@ for (i in seq_len(nrow(sample_info))) {
     filtered_counts <- filtered_counts[, keep_singlet, drop = FALSE]
     doublets <- doublets[keep_singlet, , drop = FALSE]
 
-    # Subset raw to same genes as filtered (DecontX requires matching rows)
-    shared_genes <- intersect(rownames(filtered_counts), rownames(raw_counts))
-    filtered_counts <- filtered_counts[shared_genes, ]
-    raw_counts <- raw_counts[shared_genes, ]
-    cat(sprintf("  Shared genes: %d\n", length(shared_genes)))
+    stopifnot(identical(rownames(filtered_counts), rownames(raw_counts)))
+    cat(sprintf("  ID-aligned shared genes: %d\n", nrow(filtered_counts)))
 
     # Run DecontX
     cat("  Running DecontX...\n")
@@ -301,6 +295,8 @@ for (i in seq_len(nrow(sample_info))) {
     # Save per-sample results
     result <- list(
       counts        = decon_counts,
+      feature_ids   = feature_ids,
+      feature_alignment = "ensembl_id_then_filtered_symbols",
       background_policy = BACKGROUND_POLICY,
       background_barcodes = background_barcodes,
       original_called_barcodes = original_called_barcodes,

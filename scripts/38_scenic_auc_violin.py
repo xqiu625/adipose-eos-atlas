@@ -64,10 +64,7 @@ COND_SHORT = {
 TOP_PER_CLUSTER = 3   # top regulons per cluster to plot
 MIN_AUC         = 0.02
 
-# No hand-picked TF exclusion list here (this script has no regulon
-# target-gene-set sizes available to apply an objective size-based filter,
-# same as 16e_sex_diff_regulons.py) -- selection below is MIN_AUC + uniqueness
-# only.
+# Select regulons by MIN_AUC and uniqueness.
 
 print("=" * 60)
 print("38_scenic_auc_violin.py")
@@ -96,11 +93,7 @@ for cl in EOS_CLUSTERS:
             f"missing cluster's SCENIC output rather than silently "
             f"continuing with an incomplete analysis.")
 
-# Inner join, not outer + fillna(0.0): SCENIC is fit independently per
-# cluster, so a regulon absent from one cluster's network is "not inferred,"
-# not a real AUCell score of zero -- an outer join would make it look like
-# every OTHER cluster's cells were scored and found inactive for that
-# regulon, systematically inflating apparent cluster-specificity.
+# Retain regulons scored in every cluster; missing scores are not zeros.
 auc = pd.concat(auc_parts, join="inner")
 if auc.shape[1] == 0:
     raise ValueError(
@@ -125,12 +118,7 @@ auc = auc.loc[common]
 meta = meta.loc[common]
 print(f"  Aligned: {len(common)} cells")
 
-# Resolve the per-sample identity column: 14_scenic_export.R renames
-# orig.ident -> "sample" in this CSV; fall back to "orig.ident" for older
-# exports. Previously this script referenced "orig.ident" directly with a
-# silent fallback to the literal string "unknown" wherever it was missing,
-# which would collapse the per-sample dot overlay (and any per-sample
-# statistic) into a single group per condition with no warning.
+# Use "sample", or "orig.ident" for older metadata exports.
 if "sample" in meta.columns:
     SAMPLE_COL = "sample"
 elif "orig.ident" in meta.columns:
@@ -315,19 +303,8 @@ if n_total > 0:
 # =============================================================================
 print("\nStep 6: Statistical tests...")
 
-# Per-sample mean AUCell ("pseudobulk" summary), not per-cell values: testing
-# across individual cells treats them as independent biological replicates
-# (pseudoreplication) when there are only a handful of samples per condition,
-# and produces artificially small p-values. The unit of replication is the
-# sample.
-#
-# Critically, each regulon's per-sample mean is computed ONLY over cells in
-# that regulon's home cluster (selected[tf]), not pooled across all
-# eosinophils. `selected` holds each TF's top-scoring cluster; testing a
-# cluster-selected regulon over all clusters combined would confound the
-# condition effect with each sample's cluster composition -- a sample with
-# proportionally fewer cells from that cluster would show a lower "mean
-# AUCell" largely because of composition, not the condition being tested.
+# Compare sample means within each TF's selected cluster.
+# Avoid pooling cluster-composition differences into the condition contrast.
 def cluster_sample_means(tf, cl, cond):
     """Per-sample mean AUCell for `tf`, restricted to cells in cluster `cl`
     and condition `cond`."""
@@ -365,10 +342,7 @@ for tf in all_tfs_ordered:
         "regulon": tf, "cluster": cl,
         "kruskal_H": h_stat, "kruskal_p": p_val,
         "n_samples_per_condition": ",".join(str(n) for n in group_ns),
-        # Heuristic, not an exact combinatorial floor (unlike Mann-Whitney
-        # below): any group below this size cannot support a meaningful
-        # significance claim, so treat as a descriptive effect-size
-        # comparison rather than a confirmed significant result.
+        # Summarize small groups descriptively; this size cutoff is a heuristic.
         "underpowered": (len(groups) < 2
                          or min(group_ns) < MIN_GROUP_N_FOR_INFERENCE),
     })
@@ -394,10 +368,7 @@ for tf in all_tfs_ordered:
 
 stat_df = pd.DataFrame(stat_rows)
 
-# BH-FDR correction, each test family (omnibus Kruskal-Wallis, and each
-# pairwise WT-vs-KO comparison) corrected separately across all regulons
-# tested in that family -- raw p-values alone don't account for the
-# multiple-testing burden of testing every selected regulon.
+# Apply BH separately within each omnibus or pairwise test family.
 def _add_fdr(df, pcol, fdrcol):
     valid = df[pcol].notna()
     df[fdrcol] = np.nan

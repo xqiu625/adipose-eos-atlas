@@ -66,13 +66,7 @@ is_eos <- function(ct) grepl("^Eos_", ct)
 is_mac <- function(ct) grepl("^Mac_", ct)
 
 # --- Run CellChat per condition ----------------------------------------------
-# NOTE: each object below pools ALL biological replicates of a condition into
-# one network, so any pathway/network-level comparison drawn from these
-# objects (including the merged object below) is a descriptive comparison of
-# two point estimates, not a test across replicates. A genuine replicate-level
-# statistical comparison (per-sample CellChat + Wilcoxon test) is added further
-# down and should be what's cited for "does communication differ" claims; use
-# these pooled networks only for which pathways/genes are involved.
+# Pooled condition networks are descriptive; use per-sample networks for inference.
 cellchat_list <- list()
 interaction_summary <- data.frame(condition = character(),
                                   n_eos = integer(),
@@ -191,11 +185,7 @@ for (cond in conditions) {
 }
 
 # --- Replicate-level statistical test (per-sample CellChat) -------------------
-# Runs CellChat once per biological replicate (orig.ident) instead of pooling
-# by condition, then compares conditions on the resulting per-sample summary
-# with a Wilcoxon rank-sum test -- giving actual n=samples-per-condition
-# inference for "does overall Eos<->Mac communication strength differ between
-# conditions," which the pooled per-condition networks above cannot provide.
+# Compare per-sample communication summaries with Wilcoxon rank-sum tests.
 cat("\n========== Replicate-level CellChat (per sample) ==========\n")
 
 samples_all <- unique(obj$orig.ident)
